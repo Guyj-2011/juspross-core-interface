@@ -1,3 +1,4 @@
+import type { ComponentType } from "react";
 import { useJuspross } from "@/lib/juspross/store";
 import type { PanelId } from "@/lib/juspross/types";
 import { HoloWindow } from "./HoloWindow";
@@ -11,7 +12,7 @@ import { ConnectionPanel, SettingsPanel } from "./panels/SettingsPanel";
 
 const META: Record<
   PanelId,
-  { title: string; subtitle: string; x: number; y: number; w: number; Body: () => JSX.Element }
+  { title: string; subtitle: string; x: number; y: number; w: number; Body: ComponentType }
 > = {
   agents: { title: "AGENTES", subtitle: "RED NEURONAL OPERATIVA", x: 96, y: 96, w: 380, Body: AgentsPanel },
   activity: { title: "ACTIVIDAD", subtitle: "FLUJO EN VIVO", x: 96, y: 420, w: 420, Body: ActivityPanel },
