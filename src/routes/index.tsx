@@ -1,24 +1,44 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { CoreCanvas } from "@/components/juspross/CoreCanvas";
+import { Sidebar } from "@/components/juspross/Sidebar";
+import { StatusDeck, Telemetry } from "@/components/juspross/StatusDeck";
+import { CommandBar } from "@/components/juspross/CommandBar";
+import { PanelHost } from "@/components/juspross/PanelHost";
+import { BootSequence } from "@/components/juspross/BootSequence";
 
-// No head() here: the home route inherits title/description/og/twitter from
-// __root.tsx, and ships no og:image so serve-time hosting can inject the
-// project's social preview (explicit og:image or latest screenshot).
 export const Route = createFileRoute("/")({
+  head: () => ({
+    meta: [
+      { title: "Juspross — Sistema operativo de inteligencia artificial" },
+      {
+        name: "description",
+        content:
+          "Juspross: núcleo de IA con voz, agentes autónomos y producción de shorts en un entorno holográfico 3D.",
+      },
+      { property: "og:title", content: "Juspross — Sistema operativo de IA" },
+      {
+        property: "og:description",
+        content: "Núcleo vivo de partículas, agentes autónomos y control por voz en tiempo real.",
+      },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
+    ],
+  }),
   component: Index,
 });
 
-// IMPORTANT: Replace this placeholder. See ./README.md for routing conventions.
 function Index() {
   return (
-    <div
-      className="flex min-h-screen items-center justify-center"
-      style={{ backgroundColor: "#fcfbf8" }}
-    >
-      <img
-        data-lovable-blank-page-placeholder="REMOVE_THIS"
-        src="https://cdn.gpteng.co/blank-app-v1.svg"
-        alt="Your app will live here!"
-      />
-    </div>
+    <main className="relative h-screen w-screen overflow-hidden bg-background">
+      <CoreCanvas />
+      <div className="pointer-events-none absolute inset-0">
+        <Sidebar />
+        <StatusDeck />
+        <Telemetry />
+        <PanelHost />
+        <CommandBar />
+      </div>
+      <BootSequence />
+    </main>
   );
 }
