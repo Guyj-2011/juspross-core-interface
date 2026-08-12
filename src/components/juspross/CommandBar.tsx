@@ -16,8 +16,13 @@ export function CommandBar() {
   const [value, setValue] = useState("");
   const [files, setFiles] = useState<Attachment[]>([]);
   const [dragging, setDragging] = useState(false);
+  const [voiceReady, setVoiceReady] = useState(false);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const stopMicRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    setVoiceReady(speechSupported());
+  }, []);
 
   const { submit, abort } = useRuntime();
   const micEnabled = useJuspross((s) => s.micEnabled);
@@ -196,7 +201,7 @@ export function CommandBar() {
       </div>
 
       <p className="mt-2 text-center font-mono text-[10px] tracking-[0.24em] text-muted-foreground/70">
-        {speechSupported()
+        {voiceReady
           ? 'VOZ Y TEXTO SIMULTÁNEOS · PALABRA DE ACTIVACIÓN "HEY JUSPROSS"'
           : "VOZ NO DISPONIBLE EN ESTE NAVEGADOR · ENTRADA DE TEXTO ACTIVA"}
       </p>
