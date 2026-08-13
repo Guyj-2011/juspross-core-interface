@@ -78,7 +78,7 @@ export const useJuspross = create<JusprossState>((set, get) => ({
   amplitude: 0,
   error: null,
   openPanels: [],
-  sidebarOpen: false,
+  sidebarOpen: true,
   agents: INITIAL_AGENTS,
   activity: [],
   debug: [],
