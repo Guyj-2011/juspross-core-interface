@@ -91,6 +91,8 @@
   --abyss: oklch(0.11 0.03 258);
   --amber: oklch(0.79 0.15 78);
   --emerald: oklch(0.76 0.14 165);
+  --magenta: oklch(0.68 0.26 328);
+  --violet: oklch(0.62 0.24 300);
 
   --glass: oklch(0.17 0.035 256 / 0.62);
   --glass-edge: oklch(0.75 0.13 220 / 0.28);
@@ -171,6 +173,8 @@
   --color-abyss: var(--abyss);
   --color-amber: var(--amber);
   --color-emerald: var(--emerald);
+  --color-magenta: var(--magenta);
+  --color-violet: var(--violet);
   --font-ui: var(--font-ui);
   --font-mono: var(--font-mono);
 }
