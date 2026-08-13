@@ -1,5 +1,4 @@
 import {
-  Activity,
   BrainCircuit,
   Bug,
   ChevronsLeft,
@@ -7,11 +6,9 @@ import {
   Hexagon,
   Home,
   LineChart,
-  PanelsTopLeft,
   PlusSquare,
   Radar,
   Settings2,
-  Film,
 } from "lucide-react";
 import { useJuspross } from "@/lib/juspross/store";
 import type { PanelId } from "@/lib/juspross/types";
