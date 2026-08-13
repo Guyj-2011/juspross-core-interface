@@ -13,19 +13,11 @@ const STATE_TEXT: Record<string, { es: string; en: string; tone: string }> = {
 };
 
 export function StatusDeck() {
-  const state = useJuspross((s) => s.systemState);
   const transcript = useJuspross((s) => s.transcript);
   const interim = useJuspross((s) => s.interim);
-  const info = STATE_TEXT[state]!;
 
   return (
-    <div className="pointer-events-none absolute inset-x-0 top-[16%] z-20 flex flex-col items-center gap-3">
-      <div className="flex items-center gap-3">
-        <span className={cn("size-1.5 rounded-full bg-current animate-blip", info.tone)} />
-        <span className={cn("font-mono text-[11px] tracking-[0.5em]", info.tone)}>{info.en}</span>
-        <span className="hairline h-px w-24" />
-        <span className="label-xs">{info.es}</span>
-      </div>
+    <div className="pointer-events-none absolute inset-x-0 top-[22%] z-20 flex flex-col items-center gap-3">
       {transcript && (
         <p
           className={cn(
@@ -43,6 +35,7 @@ export function StatusDeck() {
 export function Telemetry() {
   const connection = useJuspross((s) => s.connection);
   const agents = useJuspross((s) => s.agents);
+  const state = useJuspross((s) => s.systemState);
   const [clock, setClock] = useState("--:--:--");
 
   useEffect(() => {
@@ -56,39 +49,57 @@ export function Telemetry() {
   const busy = agents.filter((a) => a.status === "ACTIVE" || a.status === "PROCESSING").length;
 
   return (
-    <div className="pointer-events-none absolute top-5 right-6 z-30 flex flex-col items-end gap-1.5 text-right">
-      <div className="flex items-center gap-2">
-        <span className="label-xs">NÚCLEO</span>
-        <span className="font-mono text-[11px] tracking-[0.2em] text-cyan">ONLINE</span>
+    <div className="pointer-events-none absolute top-4 right-5 z-30 flex w-[214px] flex-col items-end gap-2">
+      <div className="flex w-full items-center justify-end gap-3 font-mono text-[11px] tracking-[0.16em] text-muted-foreground">
+        <Cpu className="size-3.5" />
+        <Square className="size-3.5" />
+        <RefreshCw className="size-3.5" />
+        <span className="text-foreground/85">{clock}</span>
       </div>
-      <div className="flex items-center gap-2">
-        <span className="label-xs">N8N</span>
-        <span
-          className={cn(
-            "font-mono text-[11px] tracking-[0.2em]",
+      <div className="holo w-full rounded-md px-3 py-2">
+        <Row label="NÚCLEO" value={state === "error" ? "FALLO" : "ONLINE"} tone="text-cyan" dot />
+        <Row
+          label="N8N"
+          value={
             connection === "online"
-              ? "text-emerald"
+              ? "CONECTADO"
               : connection === "checking"
-                ? "text-cyan"
-                : "text-amber",
-          )}
-        >
-          {connection === "online"
-            ? "CONNECTED"
-            : connection === "checking"
-              ? "HANDSHAKE"
-              : connection === "offline"
-                ? "OFFLINE"
-                : "NO CONFIG"}
-        </span>
+                ? "ENLACE"
+                : connection === "offline"
+                  ? "OFFLINE"
+                  : "SIN CONFIG"
+          }
+          tone={connection === "online" ? "text-emerald" : "text-amber"}
+          dot
+        />
+        <Row
+          label="AGENTES"
+          value={`${String(busy).padStart(2, "0")}/${String(agents.length).padStart(2, "0")}`}
+          tone="text-foreground/85"
+          dot
+        />
+        <Row label="LATENCIA" value="184ms" tone="text-cyan/80" dot />
       </div>
-      <div className="flex items-center gap-2">
-        <span className="label-xs">AGENTES</span>
-        <span className="font-mono text-[11px] tracking-[0.2em] text-foreground/75">
-          {String(busy).padStart(2, "0")}/{String(agents.length).padStart(2, "0")}
-        </span>
-      </div>
-      <span className="font-mono text-[10px] tracking-[0.28em] text-muted-foreground">{clock}</span>
+    </div>
+  );
+}
+
+function Row({
+  label,
+  value,
+  tone,
+  dot,
+}: {
+  label: string;
+  value: string;
+  tone: string;
+  dot?: boolean;
+}) {
+  return (
+    <div className="flex items-center justify-end gap-2 py-[3px]">
+      <span className="label-xs">{label}</span>
+      <span className={cn("font-mono text-[10px] tracking-[0.18em]", tone)}>{value}</span>
+      {dot && <span className={cn("size-1 rounded-full bg-current", tone)} />}
     </div>
   );
 }
