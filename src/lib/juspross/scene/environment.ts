@@ -591,14 +591,14 @@ export function createCubeField(count: number): EnvLayer {
   const cols: number[] = [];
   const seeds: number[] = [];
 
-  const E: [number, number, number][][] = [];
+  const E: { a: [number, number, number]; b: [number, number, number] }[] = [];
   const c = [-0.5, 0.5];
   for (const sx of c)
     for (const sy of c)
       for (const sz of c) {
-        if (sx < 0) E.push([[sx, sy, sz], [0.5, sy, sz]]);
-        if (sy < 0) E.push([[sx, sy, sz], [sx, 0.5, sz]]);
-        if (sz < 0) E.push([[sx, sy, sz], [sx, sy, 0.5]]);
+        if (sx < 0) E.push({ a: [sx, sy, sz], b: [0.5, sy, sz] });
+        if (sy < 0) E.push({ a: [sx, sy, sz], b: [sx, 0.5, sz] });
+        if (sz < 0) E.push({ a: [sx, sy, sz], b: [sx, sy, 0.5] });
       }
 
   for (let i = 0; i < count; i++) {
@@ -613,9 +613,9 @@ export function createCubeField(count: number): EnvLayer {
     const r = magenta ? 0.72 : 0.16;
     const g = magenta ? 0.18 : 0.66;
     const b = 1.0;
-    for (const [a, bb] of E) {
-      verts.push(x + a[0]! * s, y + a[1]! * s, z + a[2]! * s);
-      verts.push(x + bb[0]! * s, y + bb[1]! * s, z + bb[2]! * s);
+    for (const { a, b: bb } of E) {
+      verts.push(x + a[0] * s, y + a[1] * s, z + a[2] * s);
+      verts.push(x + bb[0] * s, y + bb[1] * s, z + bb[2] * s);
       cols.push(r, g, b, r, g, b);
       seeds.push(seed, seed);
     }
