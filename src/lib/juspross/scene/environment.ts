@@ -581,3 +581,85 @@ export function createOrbit(count: number): EnvLayer & { setActive: (v: number) 
     },
   };
 }
+
+/* ------------------------------------------------------------------ */
+/* CUBOS DE DATOS: retícula de cubos luminosos sobre el suelo           */
+/* ------------------------------------------------------------------ */
+export function createCubeField(count: number): EnvLayer {
+  const group = new THREE.Group();
+  const verts: number[] = [];
+  const cols: number[] = [];
+  const seeds: number[] = [];
+
+  const E: [number, number, number][][] = [];
+  const c = [-0.5, 0.5];
+  for (const sx of c)
+    for (const sy of c)
+      for (const sz of c) {
+        if (sx < 0) E.push([[sx, sy, sz], [0.5, sy, sz]]);
+        if (sy < 0) E.push([[sx, sy, sz], [sx, 0.5, sz]]);
+        if (sz < 0) E.push([[sx, sy, sz], [sx, sy, 0.5]]);
+      }
+
+  for (let i = 0; i < count; i++) {
+    const ang = Math.random() * Math.PI * 2;
+    const rad = 24 + Math.pow(Math.random(), 0.7) * 190;
+    const x = Math.cos(ang) * rad;
+    const z = Math.sin(ang) * rad * 0.7 + 40;
+    const s = 5 + Math.random() * 16;
+    const y = -46 + s / 2 + Math.random() * 6;
+    const magenta = Math.random() < 0.22;
+    const seed = Math.random();
+    const r = magenta ? 0.72 : 0.16;
+    const g = magenta ? 0.18 : 0.66;
+    const b = 1.0;
+    for (const [a, bb] of E) {
+      verts.push(x + a[0]! * s, y + a[1]! * s, z + a[2]! * s);
+      verts.push(x + bb[0]! * s, y + bb[1]! * s, z + bb[2]! * s);
+      cols.push(r, g, b, r, g, b);
+      seeds.push(seed, seed);
+    }
+  }
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.Float32BufferAttribute(verts, 3));
+  geo.setAttribute("aColor", new THREE.Float32BufferAttribute(cols, 3));
+  geo.setAttribute("aSeed", new THREE.Float32BufferAttribute(seeds, 1));
+
+  const mat = new THREE.ShaderMaterial({
+    uniforms: { uTime: { value: 0 }, uEnergy: { value: 0 } },
+    vertexShader: /* glsl */ `
+      attribute vec3 aColor; attribute float aSeed;
+      uniform float uTime; uniform float uEnergy;
+      varying vec3 vC; varying float vI;
+      void main(){
+        vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        gl_Position = projectionMatrix * mv;
+        float dist = -mv.z;
+        float pulse = 0.55 + 0.45 * sin(uTime * (0.6 + aSeed) + aSeed * 12.0);
+        vC = aColor;
+        vI = pulse * smoothstep(520.0, 40.0, dist) * (0.45 + uEnergy * 0.6);
+      }
+    `,
+    fragmentShader: /* glsl */ `
+      precision highp float; varying vec3 vC; varying float vI;
+      void main(){ gl_FragColor = vec4(vC * (0.6 + vI), vI * 0.75); }
+    `,
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  });
+
+  const lines = new THREE.LineSegments(geo, mat);
+  lines.frustumCulled = false;
+  group.add(lines);
+
+  return {
+    object: group,
+    parallax: 0.42,
+    update: (t, _dt, energy) => {
+      mat.uniforms["uTime"]!.value = t;
+      mat.uniforms["uEnergy"]!.value = energy;
+    },
+  };
+}
