@@ -37,13 +37,13 @@ const NODE_COLOR: Record<string, string> = {
 
 function AgentMap({ agents }: { agents: Agent[] }) {
   const W = 340;
-  const H = 190;
+  const H = 210;
   const nodes = agents.map((a, i) => {
     const cols = Math.ceil(agents.length / 2);
     const row = i === 1 ? 1 : 0;
     const idx = i === 1 ? 0 : i > 1 ? i - 1 : i;
     const x = 34 + (idx % cols) * ((W - 68) / Math.max(1, cols - 1));
-    const y = row === 1 ? H / 2 : i === 0 ? 30 : H - 40;
+    const y = row === 1 ? 100 : i === 0 ? 30 : 165;
     return { ...a, x: i === 1 ? W / 2 : x, y };
   });
   const find = (id: string) => nodes.find((n) => n.id === id);
