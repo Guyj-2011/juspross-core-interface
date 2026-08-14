@@ -27,15 +27,23 @@ function Glyph({ id, className }: { id: string; className?: string }) {
 }
 
 /** Mapa neuronal del flujo real de agentes. */
+const NODE_COLOR: Record<string, string> = {
+  planificador: "var(--amber)",
+  director: "var(--cyan)",
+  investigador: "var(--violet)",
+  curador: "var(--emerald)",
+  guionista: "var(--amber)",
+};
+
 function AgentMap({ agents }: { agents: Agent[] }) {
   const W = 340;
-  const H = 150;
+  const H = 210;
   const nodes = agents.map((a, i) => {
     const cols = Math.ceil(agents.length / 2);
     const row = i === 1 ? 1 : 0;
     const idx = i === 1 ? 0 : i > 1 ? i - 1 : i;
     const x = 34 + (idx % cols) * ((W - 68) / Math.max(1, cols - 1));
-    const y = row === 1 ? H / 2 : i === 0 ? 26 : H - 26;
+    const y = row === 1 ? 100 : i === 0 ? 30 : 165;
     return { ...a, x: i === 1 ? W / 2 : x, y };
   });
   const find = (id: string) => nodes.find((n) => n.id === id);
@@ -65,27 +73,31 @@ function AgentMap({ agents }: { agents: Agent[] }) {
           <circle
             cx={n.x}
             cy={n.y}
-            r={11}
+            r={15}
             fill="oklch(0.16 0.04 258 / 0.9)"
-            stroke={
-              n.status === "IDLE"
-                ? "var(--glass-edge)"
-                : n.status === "COMPLETED"
-                  ? "var(--emerald)"
-                  : n.status === "ERROR"
-                    ? "var(--amber)"
-                    : "var(--cyan)"
-            }
-            strokeWidth={1}
+            stroke={NODE_COLOR[n.id] ?? "var(--cyan)"}
+            strokeWidth={1.2}
           />
+          <g
+            transform={`translate(${n.x - 7} ${n.y - 7}) scale(0.6)`}
+            style={{ color: NODE_COLOR[n.id] ?? "var(--cyan)" }}
+          >
+            <path
+              d={GLYPH[n.id] ?? "M12 3l7 4v10l-7 4-7-4V7z"}
+              stroke={NODE_COLOR[n.id] ?? "var(--cyan)"}
+              strokeWidth={1.6}
+              fill="none"
+              strokeLinecap="round"
+            />
+          </g>
           <text
             x={n.x}
-            y={n.y + 24}
+            y={n.y + 28}
             textAnchor="middle"
             className="fill-muted-foreground font-mono"
-            style={{ fontSize: 7, letterSpacing: 1.4 }}
+            style={{ fontSize: 8, letterSpacing: 1.2 }}
           >
-            {n.name.slice(0, 4)}
+            {n.name.toUpperCase()}
           </text>
         </g>
       ))}
@@ -93,11 +105,13 @@ function AgentMap({ agents }: { agents: Agent[] }) {
   );
 }
 
-export function AgentsPanel() {
+export function AgentsPanel({ compact = false }: { compact?: boolean } = {}) {
   const agents = useJuspross((s) => s.agents);
   return (
     <div>
       <AgentMap agents={agents} />
+      {compact ? null : (
+        <>
       <ul className="space-y-1.5">
         {agents.map((a) => (
           <li key={a.id} className="rounded-sm border border-border/60 bg-background/25 px-2.5 py-2">
@@ -115,6 +129,8 @@ export function AgentsPanel() {
         ))}
       </ul>
       <p className="label-xs mt-3">ARQUITECTURA EXTENSIBLE · {agents.length} NODOS REGISTRADOS</p>
+        </>
+      )}
     </div>
   );
 }

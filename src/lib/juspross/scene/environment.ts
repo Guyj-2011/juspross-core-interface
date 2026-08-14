@@ -196,8 +196,9 @@ export function createStructures(count: number): EnvLayer {
     m4.setPosition(b.x, -46 + b.h / 2, b.z);
     inst.setMatrixAt(k, m4);
     const t = b.i;
-    colAttr[k * 3] = 0.03 + t * 0.09;
-    colAttr[k * 3 + 1] = 0.16 + t * 0.34;
+    const violet = Math.random() < 0.2;
+    colAttr[k * 3] = violet ? 0.22 + t * 0.34 : 0.03 + t * 0.09;
+    colAttr[k * 3 + 1] = violet ? 0.05 + t * 0.1 : 0.16 + t * 0.34;
     colAttr[k * 3 + 2] = 0.34 + t * 0.5;
   });
   inst.instanceColor = new THREE.InstancedBufferAttribute(colAttr, 3);
@@ -603,12 +604,12 @@ export function createCubeField(count: number): EnvLayer {
 
   for (let i = 0; i < count; i++) {
     const ang = Math.random() * Math.PI * 2;
-    const rad = 24 + Math.pow(Math.random(), 0.7) * 190;
+    const rad = 60 + Math.pow(Math.random(), 0.6) * 190;
     const x = Math.cos(ang) * rad;
-    const z = Math.sin(ang) * rad * 0.7 + 40;
-    const s = 5 + Math.random() * 16;
-    const y = -46 + s / 2 + Math.random() * 6;
-    const magenta = Math.random() < 0.22;
+    const z = Math.sin(ang) * rad * 0.6 - 30;
+    const s = 4 + Math.random() * 10;
+    const y = -46 + s / 2 + Math.random() * 3;
+    const magenta = Math.random() < 0.25;
     const seed = Math.random();
     const r = magenta ? 0.72 : 0.16;
     const g = magenta ? 0.18 : 0.66;

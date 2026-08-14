@@ -80,7 +80,12 @@ export const useJuspross = create<JusprossState>((set, get) => ({
   openPanels: [],
   sidebarOpen: true,
   agents: INITIAL_AGENTS,
-  activity: [],
+  activity: [
+    { id: "a1", time: Date.now(), agent: "NÚCLEO", message: "Sistema iniciado", level: "info" },
+    { id: "a2", time: Date.now(), agent: "NÚCLEO", message: "Esperando activación", level: "info" },
+    { id: "a3", time: Date.now(), agent: "SISTEMA", message: "Escuchando…", level: "info" },
+    { id: "a4", time: Date.now(), agent: "NÚCLEO", message: "Listo para recibir orden", level: "done" },
+  ],
   debug: [],
   shorts: INITIAL_SHORTS,
   reviewShortId: null,

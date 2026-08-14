@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowUp, Mic, MicOff, Paperclip, Square, X } from "lucide-react";
+import { ArrowUp, Keyboard, Mic, Paperclip, Square, X } from "lucide-react";
 import { useJuspross } from "@/lib/juspross/store";
 import { useRuntime } from "@/lib/juspross/useRuntime";
 import { useSpeechRecognition, speechSupported } from "@/lib/juspross/useSpeech";
@@ -97,7 +97,7 @@ export function CommandBar() {
 
   return (
     <div
-      className="pointer-events-auto absolute bottom-7 left-1/2 z-30 w-[min(720px,72vw)] -translate-x-1/2"
+      className="pointer-events-auto absolute bottom-5 left-1/2 z-30 w-[min(760px,58vw)] -translate-x-1/2"
       onDragOver={(e) => {
         e.preventDefault();
         setDragging(true);
@@ -128,13 +128,33 @@ export function CommandBar() {
         </div>
       )}
 
+      {/* Fila de voz */}
       <div
         className={cn(
-          "holo relative flex items-end gap-2 rounded-md px-2.5 py-2 transition-shadow",
-          dragging && "shadow-[0_0_0_1px_var(--cyan)]",
-          micEnabled && "shadow-[0_0_36px_-12px_var(--cyan)]",
+          "holo relative mb-3 flex items-center gap-4 rounded-xl px-5 py-3 transition-shadow",
+          micEnabled && "shadow-[0_0_46px_-14px_var(--cyan)]",
         )}
       >
+        <div className="min-w-0 flex-1">
+          <p className="font-mono text-[13px] tracking-[0.28em] text-foreground/85">
+            {micEnabled ? "ESCUCHANDO…" : "EN ESPERA"}
+          </p>
+          <div className="mt-1.5 flex items-center gap-3">
+            <div className="flex h-4 items-center gap-[2px]">
+              {[6, 10, 14, 8, 16, 11, 5, 13, 9, 15, 7, 12, 6, 14, 10, 8, 13, 6].map((h, i) => (
+                <span
+                  key={i}
+                  className="w-[2px] rounded-full bg-cyan/70"
+                  style={{ height: `${h}px`, opacity: micEnabled ? 0.9 : 0.35 }}
+                />
+              ))}
+            </div>
+            <span className="truncate font-mono text-[10px] tracking-[0.14em] text-muted-foreground/80">
+              Di “Hey Juspross” para activar
+            </span>
+          </div>
+        </div>
+
         <button
           onClick={() => {
             setMic(!micEnabled);
@@ -142,18 +162,28 @@ export function CommandBar() {
           }}
           aria-label={micEnabled ? "Desactivar escucha" : "Activar escucha por voz"}
           className={cn(
-            "relative flex size-9 shrink-0 items-center justify-center rounded-sm transition-colors",
-            micEnabled ? "bg-primary/15 text-cyan" : "text-muted-foreground hover:text-foreground",
+            "relative flex size-14 shrink-0 items-center justify-center rounded-full border transition-colors",
+            micEnabled
+              ? "border-cyan bg-cyan/15 text-cyan shadow-[0_0_30px_-6px_var(--cyan)]"
+              : "border-cyan/40 text-cyan/70 hover:bg-cyan/10",
           )}
         >
-          {micEnabled ? <Mic className="size-4" /> : <MicOff className="size-4" />}
+          <Mic className="size-6" strokeWidth={1.5} />
           {micEnabled && (
-            <span className="absolute inset-0 animate-blip rounded-sm ring-1 ring-cyan/40" />
+            <span className="absolute inset-0 animate-blip rounded-full ring-1 ring-cyan/50" />
           )}
         </button>
 
-        <label className="flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-sm text-muted-foreground transition-colors hover:text-foreground">
-          <Paperclip className="size-4" />
+        <button
+          onClick={() => taRef.current?.focus()}
+          aria-label="Escribir instrucción"
+          className="flex size-11 shrink-0 items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:text-cyan"
+        >
+          <Keyboard className="size-5" strokeWidth={1.4} />
+        </button>
+
+        <label className="flex size-11 shrink-0 cursor-pointer items-center justify-center rounded-md border border-border text-muted-foreground transition-colors hover:text-cyan">
+          <Paperclip className="size-5" strokeWidth={1.4} />
           <input
             type="file"
             multiple
@@ -162,7 +192,15 @@ export function CommandBar() {
             accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.txt,.md"
           />
         </label>
+      </div>
 
+      {/* Fila de texto */}
+      <div
+        className={cn(
+          "holo relative flex items-end gap-2 rounded-lg px-4 py-2 transition-shadow",
+          dragging && "shadow-[0_0_0_1px_var(--cyan)]",
+        )}
+      >
         <textarea
           ref={taRef}
           rows={1}
@@ -174,9 +212,7 @@ export function CommandBar() {
               send();
             }
           }}
-          placeholder={
-            micEnabled ? 'Di "Hey Juspross" o escribe una instrucción' : "Escribe una instrucción para Juspross"
-          }
+          placeholder="Escribe una instrucción para Juspross..."
           className="max-h-40 min-h-9 flex-1 resize-none bg-transparent py-2 text-sm text-foreground placeholder:text-muted-foreground/70 focus:outline-none"
         />
 
@@ -193,18 +229,17 @@ export function CommandBar() {
             onClick={send}
             disabled={!value.trim()}
             aria-label="Enviar"
-            className="flex size-9 shrink-0 items-center justify-center rounded-sm bg-primary/15 text-cyan transition-colors hover:bg-primary/25 disabled:opacity-30"
+            className="flex size-9 shrink-0 items-center justify-center rounded-sm text-cyan transition-colors hover:bg-cyan/15 disabled:opacity-40"
           >
-            <ArrowUp className="size-4" />
+            <ArrowUp className="size-5" />
           </button>
         )}
       </div>
-
-      <p className="mt-2 text-center font-mono text-[10px] tracking-[0.24em] text-muted-foreground/70">
-        {voiceReady
-          ? 'VOZ Y TEXTO SIMULTÁNEOS · PALABRA DE ACTIVACIÓN "HEY JUSPROSS"'
-          : "VOZ NO DISPONIBLE EN ESTE NAVEGADOR · ENTRADA DE TEXTO ACTIVA"}
-      </p>
+      {!voiceReady && (
+        <p className="mt-2 text-center font-mono text-[10px] tracking-[0.2em] text-muted-foreground/70">
+          VOZ NO DISPONIBLE EN ESTE NAVEGADOR · ENTRADA DE TEXTO ACTIVA
+        </p>
+      )}
     </div>
   );
 }

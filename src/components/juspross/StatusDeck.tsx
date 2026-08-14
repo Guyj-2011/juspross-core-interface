@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Cpu, RefreshCw, Square } from "lucide-react";
 import { useJuspross } from "@/lib/juspross/store";
 import { cn } from "@/lib/utils";
 
