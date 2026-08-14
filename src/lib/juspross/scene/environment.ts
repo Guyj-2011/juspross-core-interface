@@ -604,10 +604,10 @@ export function createCubeField(count: number): EnvLayer {
 
   for (let i = 0; i < count; i++) {
     const ang = Math.random() * Math.PI * 2;
-    const rad = 26 + Math.pow(Math.random(), 0.6) * 150;
+    const rad = 60 + Math.pow(Math.random(), 0.6) * 190;
     const x = Math.cos(ang) * rad;
-    const z = Math.sin(ang) * rad * 0.65 + 46;
-    const s = 3.5 + Math.random() * 8.5;
+    const z = Math.sin(ang) * rad * 0.6 - 30;
+    const s = 4 + Math.random() * 10;
     const y = -46 + s / 2 + Math.random() * 3;
     const magenta = Math.random() < 0.25;
     const seed = Math.random();
