@@ -93,11 +93,13 @@ function AgentMap({ agents }: { agents: Agent[] }) {
   );
 }
 
-export function AgentsPanel() {
+export function AgentsPanel({ compact = false }: { compact?: boolean } = {}) {
   const agents = useJuspross((s) => s.agents);
   return (
     <div>
       <AgentMap agents={agents} />
+      {compact ? null : (
+        <>
       <ul className="space-y-1.5">
         {agents.map((a) => (
           <li key={a.id} className="rounded-sm border border-border/60 bg-background/25 px-2.5 py-2">
@@ -115,6 +117,8 @@ export function AgentsPanel() {
         ))}
       </ul>
       <p className="label-xs mt-3">ARQUITECTURA EXTENSIBLE · {agents.length} NODOS REGISTRADOS</p>
+        </>
+      )}
     </div>
   );
 }
