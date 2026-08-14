@@ -27,9 +27,17 @@ function Glyph({ id, className }: { id: string; className?: string }) {
 }
 
 /** Mapa neuronal del flujo real de agentes. */
+const NODE_COLOR: Record<string, string> = {
+  planificador: "var(--amber)",
+  director: "var(--cyan)",
+  investigador: "var(--violet)",
+  curador: "var(--emerald)",
+  guionista: "var(--amber)",
+};
+
 function AgentMap({ agents }: { agents: Agent[] }) {
   const W = 340;
-  const H = 150;
+  const H = 190;
   const nodes = agents.map((a, i) => {
     const cols = Math.ceil(agents.length / 2);
     const row = i === 1 ? 1 : 0;
@@ -65,27 +73,31 @@ function AgentMap({ agents }: { agents: Agent[] }) {
           <circle
             cx={n.x}
             cy={n.y}
-            r={11}
+            r={15}
             fill="oklch(0.16 0.04 258 / 0.9)"
-            stroke={
-              n.status === "IDLE"
-                ? "var(--glass-edge)"
-                : n.status === "COMPLETED"
-                  ? "var(--emerald)"
-                  : n.status === "ERROR"
-                    ? "var(--amber)"
-                    : "var(--cyan)"
-            }
-            strokeWidth={1}
+            stroke={NODE_COLOR[n.id] ?? "var(--cyan)"}
+            strokeWidth={1.2}
           />
+          <g
+            transform={`translate(${n.x - 7} ${n.y - 7}) scale(0.6)`}
+            style={{ color: NODE_COLOR[n.id] ?? "var(--cyan)" }}
+          >
+            <path
+              d={GLYPH[n.id] ?? "M12 3l7 4v10l-7 4-7-4V7z"}
+              stroke={NODE_COLOR[n.id] ?? "var(--cyan)"}
+              strokeWidth={1.6}
+              fill="none"
+              strokeLinecap="round"
+            />
+          </g>
           <text
             x={n.x}
-            y={n.y + 24}
+            y={n.y + 28}
             textAnchor="middle"
             className="fill-muted-foreground font-mono"
-            style={{ fontSize: 7, letterSpacing: 1.4 }}
+            style={{ fontSize: 8, letterSpacing: 1.2 }}
           >
-            {n.name.slice(0, 4)}
+            {n.name.toUpperCase()}
           </text>
         </g>
       ))}
