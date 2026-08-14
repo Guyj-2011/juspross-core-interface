@@ -86,7 +86,7 @@ export class JusprossScene {
     this.layers.push(createAtmosphere());
     this.layers.push(createDust(this.preset.dustFar, "far"));
     this.layers.push(createStructures(this.preset.struct));
-    this.layers.push(createCubeField(quality === "low" ? 30 : quality === "balanced" ? 55 : 85));
+    this.layers.push(createCubeField(quality === "low" ? 60 : quality === "balanced" ? 120 : 190));
     this.layers.push(createCircuits(this.preset.circuits));
     this.layers.push(createWaveField(this.preset.wave));
     this.layers.push(createDust(this.preset.dustMid, "mid"));

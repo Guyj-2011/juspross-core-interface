@@ -43,7 +43,7 @@ function AgentMap({ agents }: { agents: Agent[] }) {
     const row = i === 1 ? 1 : 0;
     const idx = i === 1 ? 0 : i > 1 ? i - 1 : i;
     const x = 34 + (idx % cols) * ((W - 68) / Math.max(1, cols - 1));
-    const y = row === 1 ? H / 2 : i === 0 ? 26 : H - 26;
+    const y = row === 1 ? H / 2 : i === 0 ? 30 : H - 40;
     return { ...a, x: i === 1 ? W / 2 : x, y };
   });
   const find = (id: string) => nodes.find((n) => n.id === id);
