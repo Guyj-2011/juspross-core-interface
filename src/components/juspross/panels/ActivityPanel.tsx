@@ -22,7 +22,7 @@ export function ActivityPanel() {
       <ul className="space-y-1">
         {activity.map((e) => (
           <li key={e.id} className="grid grid-cols-[68px_92px_1fr] items-start gap-2">
-            <span className="text-muted-foreground/70">
+            <span className="text-muted-foreground/70" suppressHydrationWarning>
               {new Date(e.time).toLocaleTimeString("es-MX", { hour12: false })}
             </span>
             <span className="tracking-[0.12em] text-cyan/80">{e.agent}</span>

@@ -141,14 +141,11 @@ export function CommandBar() {
           </p>
           <div className="mt-1.5 flex items-center gap-3">
             <div className="flex h-4 items-center gap-[2px]">
-              {Array.from({ length: 18 }).map((_, i) => (
+              {[6, 10, 14, 8, 16, 11, 5, 13, 9, 15, 7, 12, 6, 14, 10, 8, 13, 6].map((h, i) => (
                 <span
                   key={i}
                   className="w-[2px] rounded-full bg-cyan/70"
-                  style={{
-                    height: `${4 + Math.abs(Math.sin((i + 1) * 1.1)) * 12}px`,
-                    opacity: micEnabled ? 0.9 : 0.35,
-                  }}
+                  style={{ height: `${h}px`, opacity: micEnabled ? 0.9 : 0.35 }}
                 />
               ))}
             </div>
