@@ -169,101 +169,100 @@ export function createWaveField(density: number): EnvLayer {
 /* ------------------------------------------------------------------ */
 export function createStructures(count: number): EnvLayer {
   const group = new THREE.Group();
+  const FLOOR = -9.5;
 
-  type Box = { x: number; z: number; w: number; d: number; h: number; i: number };
-  const boxes: Box[] = [];
-  for (let i = 0; i < count; i++) {
+  type Bar = { x: number; z: number; w: number; h: number; c: THREE.Color };
+  const bars: Bar[] = [];
+  const cyan = new THREE.Color(0x2ea6ff);
+  const ice = new THREE.Color(0x7fe6ff);
+  const magenta = new THREE.Color(0xc23bff);
+  const total = count * 6;
+  for (let i = 0; i < total; i++) {
     const ang = Math.random() * Math.PI * 2;
-    const rad = 95 + Math.pow(Math.random(), 0.55) * 400;
+    const rad = 55 + Math.pow(Math.random(), 0.5) * 210;
     const x = Math.cos(ang) * rad;
-    const z = Math.sin(ang) * rad - 40;
-    if (Math.abs(x) < 58 && Math.abs(z) < 58) continue;
-    // corredor central despejado: el camino del suelo pasa entre las torres
-    if (Math.abs(x) < 66) continue;
-    const w = 8 + Math.random() * 26;
-    const d = 8 + Math.random() * 26;
-    const h = 14 + Math.pow(Math.random(), 1.8) * 150;
-    boxes.push({ x, z, w, d, h, i: 1 - Math.min(1, rad / 520) });
+    const z = Math.sin(ang) * rad - 30;
+    if (z > 30) continue;                    // nada delante de la cámara
+    if (Math.abs(x) < 22 && z > -60) continue; // corredor central despejado
+    const w = 0.4 + Math.random() * 1.9;
+    const h = 6 + Math.pow(Math.random(), 1.7) * 78;
+    const r = Math.random();
+    const c = r < 0.14 ? magenta : r < 0.42 ? ice : cyan;
+    bars.push({ x, z, w, h, c });
   }
 
-  /* volúmenes semitransparentes con instancing */
-  const boxGeo = new THREE.BoxGeometry(1, 1, 1);
-  const volMat = new THREE.MeshBasicMaterial({
+  // torres finas y luminosas: la "ciudad de datos" del horizonte
+  const geo = new THREE.BoxGeometry(1, 1, 1);
+  const mat = new THREE.MeshBasicMaterial({
     transparent: true,
-    opacity: 0.3,
+    opacity: 0.85,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
     vertexColors: true,
+    fog: true,
   });
-  const inst = new THREE.InstancedMesh(boxGeo, volMat, boxes.length);
+  const inst = new THREE.InstancedMesh(geo, mat, bars.length);
   const m4 = new THREE.Matrix4();
-  const colAttr = new Float32Array(boxes.length * 3);
-  boxes.forEach((b, k) => {
-    m4.makeScale(b.w, b.h, b.d);
-    m4.setPosition(b.x, -46 + b.h / 2, b.z);
+  const col = new Float32Array(bars.length * 3);
+  bars.forEach((b, k) => {
+    m4.makeScale(b.w, b.h, b.w);
+    m4.setPosition(b.x, FLOOR + b.h / 2, b.z);
     inst.setMatrixAt(k, m4);
-    const t = b.i;
-    const violet = Math.random() < 0.2;
-    colAttr[k * 3] = violet ? 0.22 + t * 0.34 : 0.03 + t * 0.09;
-    colAttr[k * 3 + 1] = violet ? 0.05 + t * 0.1 : 0.16 + t * 0.34;
-    colAttr[k * 3 + 2] = 0.34 + t * 0.5;
+    const dim = 0.25 + 0.75 * (1 - Math.min(1, Math.hypot(b.x, b.z) / 280));
+    col[k * 3] = b.c.r * dim;
+    col[k * 3 + 1] = b.c.g * dim;
+    col[k * 3 + 2] = b.c.b * dim;
   });
-  inst.instanceColor = new THREE.InstancedBufferAttribute(colAttr, 3);
+  inst.instanceColor = new THREE.InstancedBufferAttribute(col, 3);
   inst.frustumCulled = false;
   group.add(inst);
 
-  /* nube de partículas que da volumen a cada estructura */
-  const per = 46;
-  const total = boxes.length * per;
-  const ppos = new Float32Array(total * 3);
-  const pseed = new Float32Array(total);
-  const pint = new Float32Array(total);
+  // ventanas / píxeles de datos que recorren las torres
+  const per = 10;
+  const n = bars.length * per;
+  const ppos = new Float32Array(n * 3);
+  const pcol = new Float32Array(n * 3);
+  const pseed = new Float32Array(n);
   let p = 0;
-  for (const b of boxes) {
+  for (const b of bars) {
     for (let k = 0; k < per; k++) {
-      const face = Math.random();
-      let px = b.x + (Math.random() - 0.5) * b.w;
-      let pz = b.z + (Math.random() - 0.5) * b.d;
-      const py = -46 + Math.random() * b.h;
-      if (face < 0.5) px = b.x + (Math.random() < 0.5 ? -0.5 : 0.5) * b.w;
-      else pz = b.z + (Math.random() < 0.5 ? -0.5 : 0.5) * b.d;
-      ppos[p * 3] = px;
-      ppos[p * 3 + 1] = py;
-      ppos[p * 3 + 2] = pz;
+      ppos[p * 3] = b.x + (Math.random() - 0.5) * b.w;
+      ppos[p * 3 + 1] = FLOOR + Math.random() * b.h;
+      ppos[p * 3 + 2] = b.z + (Math.random() - 0.5) * b.w;
+      pcol[p * 3] = b.c.r;
+      pcol[p * 3 + 1] = b.c.g;
+      pcol[p * 3 + 2] = b.c.b;
       pseed[p] = Math.random();
-      pint[p] = b.i;
       p++;
     }
   }
   const pgeo = new THREE.BufferGeometry();
   pgeo.setAttribute("position", new THREE.BufferAttribute(ppos, 3));
+  pgeo.setAttribute("aColor", new THREE.BufferAttribute(pcol, 3));
   pgeo.setAttribute("aSeed", new THREE.BufferAttribute(pseed, 1));
-  pgeo.setAttribute("aI", new THREE.BufferAttribute(pint, 1));
   const pmat = new THREE.ShaderMaterial({
     uniforms: { uTime: { value: 0 }, uDpr: { value: DPR() }, uEnergy: { value: 0 } },
     vertexShader: /* glsl */ `
-      attribute float aSeed; attribute float aI;
+      attribute float aSeed; attribute vec3 aColor;
       uniform float uTime; uniform float uDpr; uniform float uEnergy;
-      varying float vI; varying float vP;
+      varying float vI; varying vec3 vC;
       void main(){
-        vec3 pos = position;
-        vec4 mv = modelViewMatrix * vec4(pos, 1.0);
+        vec4 mv = modelViewMatrix * vec4(position, 1.0);
         gl_Position = projectionMatrix * mv;
         float dist = -mv.z;
-        float scan = 0.45 + 0.55 * sin(pos.y * 0.22 - uTime * 1.1 + aSeed * 6.0);
-        vP = scan;
-        vI = (0.3 + aI) * (0.5 + aSeed * 0.8) * smoothstep(700.0, 90.0, dist) * (0.8 + uEnergy * 0.5);
-        gl_PointSize = (1.3 + aSeed * 1.9) * uDpr * (75.0 / max(0.001, dist));
+        float blink = 0.35 + 0.65 * step(0.35, fract(aSeed * 17.0 + uTime * (0.15 + aSeed * 0.4)));
+        vC = aColor;
+        vI = blink * smoothstep(320.0, 20.0, dist) * (0.7 + uEnergy * 0.5);
+        gl_PointSize = (1.0 + aSeed * 1.4) * uDpr * (24.0 / max(0.001, dist));
       }
     `,
     fragmentShader: /* glsl */ `
-      precision highp float; varying float vI; varying float vP;
+      precision highp float; varying float vI; varying vec3 vC;
       void main(){
         vec2 uv = gl_PointCoord - 0.5; float d = length(uv);
         if (d > 0.5) discard;
         float a = smoothstep(0.5, 0.0, d);
-        vec3 c = mix(vec3(0.10,0.42,0.86), vec3(0.55,0.90,1.0), vP);
-        gl_FragColor = vec4(c * (0.5 + vI * 0.6), a * vI * (0.22 + vP * 0.45));
+        gl_FragColor = vec4(mix(vC, vec3(1.0), 0.35) * (0.7 + vI), a * vI * 0.9);
       }
     `,
     transparent: true,
@@ -274,33 +273,13 @@ export function createStructures(count: number): EnvLayer {
   pts.frustumCulled = false;
   group.add(pts);
 
-  /* capa secundaria muy tenue de aristas verticales */
-  const edges: number[] = [];
-  for (const b of boxes) {
-    if (Math.random() > 0.45) continue;
-    edges.push(b.x - b.w / 2, -46, b.z - b.d / 2, b.x - b.w / 2, -46 + b.h, b.z - b.d / 2);
-    edges.push(b.x + b.w / 2, -46, b.z + b.d / 2, b.x + b.w / 2, -46 + b.h, b.z + b.d / 2);
-  }
-  const egeo = new THREE.BufferGeometry();
-  egeo.setAttribute("position", new THREE.Float32BufferAttribute(edges, 3));
-  const emat = new THREE.LineBasicMaterial({
-    color: new THREE.Color(0x2a86d8),
-    transparent: true,
-    opacity: 0.16,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false,
-  });
-  const lines = new THREE.LineSegments(egeo, emat);
-  lines.frustumCulled = false;
-  group.add(lines);
-
   return {
     object: group,
-    parallax: 0.22,
+    parallax: 0.18,
     update: (t, _dt, energy) => {
       pmat.uniforms["uTime"]!.value = t;
       pmat.uniforms["uEnergy"]!.value = energy;
-      volMat.opacity = 0.10 + energy * 0.06 + 0.015 * Math.sin(t * 0.8);
+      mat.opacity = 0.6 + energy * 0.2 + 0.05 * Math.sin(t * 0.7);
     },
   };
 }
