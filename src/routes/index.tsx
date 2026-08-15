@@ -1,7 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { CoreCanvas } from "@/components/juspross/CoreCanvas";
 import { Brand } from "@/components/juspross/Brand";
-import { HudDeck } from "@/components/juspross/HudDeck";
 import { Sidebar } from "@/components/juspross/Sidebar";
 import { StatusDeck, Telemetry } from "@/components/juspross/StatusDeck";
 import { CommandBar } from "@/components/juspross/CommandBar";
@@ -36,7 +35,6 @@ function Index() {
       <div className="pointer-events-none absolute inset-0">
         <Brand />
         <Sidebar />
-        <HudDeck />
         <StatusDeck />
         <Telemetry />
         <PanelHost />

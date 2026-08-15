@@ -173,6 +173,8 @@ export function createStructures(count: number): EnvLayer {
     const x = Math.cos(ang) * rad;
     const z = Math.sin(ang) * rad - 40;
     if (Math.abs(x) < 58 && Math.abs(z) < 58) continue;
+    // corredor central despejado: el camino del suelo pasa entre las torres
+    if (Math.abs(x) < 66) continue;
     const w = 8 + Math.random() * 26;
     const d = 8 + Math.random() * 26;
     const h = 14 + Math.pow(Math.random(), 1.8) * 150;
@@ -607,6 +609,7 @@ export function createCubeField(count: number): EnvLayer {
     const rad = 60 + Math.pow(Math.random(), 0.6) * 190;
     const x = Math.cos(ang) * rad;
     const z = Math.sin(ang) * rad * 0.6 - 30;
+    if (Math.abs(x) < 62) continue;
     const s = 4 + Math.random() * 10;
     const y = -46 + s / 2 + Math.random() * 3;
     const magenta = Math.random() < 0.25;
