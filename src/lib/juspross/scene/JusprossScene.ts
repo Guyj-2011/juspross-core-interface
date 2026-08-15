@@ -7,6 +7,7 @@ import {
   createCubeField,
   createDust,
   createOrbit,
+  createMirrorFloor,
   createStructures,
   createWaveField,
   type EnvLayer,
