@@ -68,15 +68,15 @@ export function createAtmosphere(): EnvLayer {
 /* ------------------------------------------------------------------ */
 export function createWaveField(density: number): EnvLayer {
   const N = density;
-  const spread = 620;
+  const spread = 260;
   const count = N * N;
   const pos = new Float32Array(count * 3);
   const seed = new Float32Array(count);
   let i = 0;
   for (let x = 0; x < N; x++) {
     for (let z = 0; z < N; z++) {
-      const jx = (Math.random() - 0.5) * (spread / N) * 0.9;
-      const jz = (Math.random() - 0.5) * (spread / N) * 0.9;
+      const jx = (Math.random() - 0.5) * (spread / N) * 1.1;
+      const jz = (Math.random() - 0.5) * (spread / N) * 1.1;
       pos[i * 3] = (x / (N - 1) - 0.5) * spread + jx;
       pos[i * 3 + 1] = 0;
       pos[i * 3 + 2] = (z / (N - 1) - 0.5) * spread + jz;
@@ -98,45 +98,50 @@ export function createWaveField(density: number): EnvLayer {
     vertexShader: /* glsl */ `
       attribute float aSeed;
       uniform float uTime; uniform float uEnergy; uniform float uAmp; uniform float uDpr;
-      varying float vI; varying float vH; varying float vNear;
+      varying float vI; varying float vH; varying float vSide; varying float vSeed;
       void main(){
         vec3 p = position;
         float d = length(p.xz);
-        // montañas, valles y crestas: varias octavas
-        float w  = sin(p.x * 0.0125 + uTime * 0.22) * 15.0;
-        w += cos(p.z * 0.0098 - uTime * 0.17) * 13.0;
-        w += sin((p.x + p.z) * 0.026 + uTime * 0.34) * 6.0;
-        w += cos(p.x * 0.052 - uTime * 0.5) * 2.4;
-        w += sin(d * 0.030 - uTime * 0.75) * (4.0 + uEnergy * 7.0 + uAmp * 14.0);
-        // cráter suave alrededor del núcleo
-        w *= smoothstep(20.0, 130.0, d);
+        // dunas de datos: crestas largas que suben a izquierda y derecha
+        float w  = sin(p.x * 0.085 + uTime * 0.22) * 3.4;
+        w += cos(p.z * 0.062 - uTime * 0.17) * 2.8;
+        w += sin((p.x * 0.7 + p.z) * 0.13 + uTime * 0.31) * 1.5;
+        w += cos(p.x * 0.24 - uTime * 0.45) * 0.6;
+        w += sin(d * 0.20 - uTime * 0.8) * (0.5 + uEnergy * 0.9 + uAmp * 2.0);
+        // las laderas crecen al alejarse del núcleo (valle central despejado)
+        float rise = smoothstep(6.0, 46.0, abs(p.x)) * 5.5 + smoothstep(10.0, 70.0, abs(p.z)) * 2.5;
+        w = w * smoothstep(5.0, 26.0, d) + rise;
         p.y += w;
         vec4 mv = modelViewMatrix * vec4(p, 1.0);
         gl_Position = projectionMatrix * mv;
         float dist = -mv.z;
-        float fade = smoothstep(640.0, 70.0, d);
-        vH = smoothstep(-20.0, 24.0, w);
-        vNear = smoothstep(420.0, 40.0, dist);
-        vI = fade * (0.30 + 0.70 * vH) * (0.55 + aSeed * 0.75);
-        gl_PointSize = (1.5 + aSeed * 2.0 + vH * 1.2) * uDpr * (80.0 / max(0.001, dist));
+        float fade = smoothstep(300.0, 20.0, d);
+        vH = smoothstep(-2.0, 9.0, w);
+        vSide = smoothstep(10.0, 90.0, abs(p.x));
+        vSeed = aSeed;
+        vI = fade * (0.42 + 0.75 * vH) * (0.6 + aSeed * 0.8);
+        gl_PointSize = (1.1 + aSeed * 1.6 + vH * 1.0) * uDpr * (26.0 / max(0.001, dist));
       }
     `,
     fragmentShader: /* glsl */ `
       precision highp float;
-      varying float vI; varying float vH; varying float vNear;
+      varying float vI; varying float vH; varying float vSide; varying float vSeed;
       void main(){
         vec2 uv = gl_PointCoord - 0.5;
         float d = length(uv);
         if (d > 0.5) discard;
-        float core = smoothstep(0.5, 0.06, d);
+        float core = smoothstep(0.5, 0.05, d);
         float halo = smoothstep(0.5, 0.0, d);
-        vec3 low  = vec3(0.04, 0.22, 0.55);
-        vec3 mid  = vec3(0.16, 0.62, 1.00);
-        vec3 hi   = vec3(0.62, 0.92, 1.00);
-        vec3 c = mix(low, mid, vH);
-        c = mix(c, hi, smoothstep(0.72, 1.0, vH) * 0.8);
-        float a = (halo * 0.16 + core * 0.34) * (0.25 + vI * 0.8) * (0.35 + vNear * 0.5);
-        gl_FragColor = vec4(c * (0.5 + vI * 0.7), a);
+        vec3 deepBlue = vec3(0.03, 0.20, 0.72);
+        vec3 cyan     = vec3(0.16, 0.78, 1.00);
+        vec3 white    = vec3(0.78, 0.96, 1.00);
+        vec3 magenta  = vec3(0.85, 0.22, 0.95);
+        vec3 c = mix(deepBlue, cyan, vH);
+        c = mix(c, white, smoothstep(0.75, 1.0, vH) * 0.85);
+        // vetas magenta en las laderas exteriores, como en la referencia
+        c = mix(c, magenta, vSide * step(0.82, vSeed) * 0.9);
+        float a = (halo * 0.30 + core * 0.72) * (0.30 + vI * 0.95);
+        gl_FragColor = vec4(c * (0.8 + vI * 1.1), a);
       }
     `,
     transparent: true,
@@ -145,12 +150,12 @@ export function createWaveField(density: number): EnvLayer {
   });
 
   const points = new THREE.Points(geo, mat);
-  points.position.y = -46;
+  points.position.y = -9.5;
   points.frustumCulled = false;
 
   return {
     object: points,
-    parallax: 0.55,
+    parallax: 0.35,
     update: (t, _dt, energy, amp) => {
       mat.uniforms["uTime"]!.value = t;
       mat.uniforms["uEnergy"]!.value = energy;
