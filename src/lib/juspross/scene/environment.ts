@@ -574,6 +574,7 @@ export function createOrbit(count: number): EnvLayer & { setActive: (v: number) 
 /* ------------------------------------------------------------------ */
 export function createCubeField(count: number): EnvLayer {
   const group = new THREE.Group();
+  const FLOOR = -9.5;
   const verts: number[] = [];
   const cols: number[] = [];
   const seeds: number[] = [];
@@ -588,24 +589,30 @@ export function createCubeField(count: number): EnvLayer {
         if (sz < 0) E.push({ a: [sx, sy, sz], b: [sx, sy, 0.5] });
       }
 
+  type Cube = { x: number; y: number; z: number; s: number; r: number; g: number; b: number; seed: number };
+  const cubes: Cube[] = [];
   for (let i = 0; i < count; i++) {
-    const ang = Math.random() * Math.PI * 2;
-    const rad = 60 + Math.pow(Math.random(), 0.6) * 190;
-    const x = Math.cos(ang) * rad;
-    const z = Math.sin(ang) * rad * 0.6 - 30;
-    if (Math.abs(x) < 62) continue;
-    const s = 4 + Math.random() * 10;
-    const y = -46 + s / 2 + Math.random() * 3;
-    const magenta = Math.random() < 0.25;
-    const seed = Math.random();
-    const r = magenta ? 0.72 : 0.16;
-    const g = magenta ? 0.18 : 0.66;
-    const b = 1.0;
+    const x = (Math.random() - 0.5) * 90;
+    const z = -6 - Math.pow(Math.random(), 0.7) * 90;
+    if (Math.abs(x) < 5 && z > -26) continue;
+    const s = 1.1 + Math.random() * 3.4;
+    const y = FLOOR + s / 2 + Math.random() * 1.2;
+    const magenta = Math.random() < 0.18;
+    cubes.push({
+      x, y, z, s,
+      r: magenta ? 0.82 : 0.14,
+      g: magenta ? 0.2 : 0.72,
+      b: 1.0,
+      seed: Math.random(),
+    });
+  }
+
+  for (const cu of cubes) {
     for (const { a, b: bb } of E) {
-      verts.push(x + a[0] * s, y + a[1] * s, z + a[2] * s);
-      verts.push(x + bb[0] * s, y + bb[1] * s, z + bb[2] * s);
-      cols.push(r, g, b, r, g, b);
-      seeds.push(seed, seed);
+      verts.push(cu.x + a[0] * cu.s, cu.y + a[1] * cu.s, cu.z + a[2] * cu.s);
+      verts.push(cu.x + bb[0] * cu.s, cu.y + bb[1] * cu.s, cu.z + bb[2] * cu.s);
+      cols.push(cu.r, cu.g, cu.b, cu.r, cu.g, cu.b);
+      seeds.push(cu.seed, cu.seed);
     }
   }
 
@@ -624,14 +631,14 @@ export function createCubeField(count: number): EnvLayer {
         vec4 mv = modelViewMatrix * vec4(position, 1.0);
         gl_Position = projectionMatrix * mv;
         float dist = -mv.z;
-        float pulse = 0.55 + 0.45 * sin(uTime * (0.6 + aSeed) + aSeed * 12.0);
+        float pulse = 0.6 + 0.4 * sin(uTime * (0.5 + aSeed) + aSeed * 12.0);
         vC = aColor;
-        vI = pulse * smoothstep(520.0, 40.0, dist) * (0.45 + uEnergy * 0.6);
+        vI = pulse * smoothstep(160.0, 8.0, dist) * (0.7 + uEnergy * 0.6);
       }
     `,
     fragmentShader: /* glsl */ `
       precision highp float; varying vec3 vC; varying float vI;
-      void main(){ gl_FragColor = vec4(vC * (0.6 + vI), vI * 0.75); }
+      void main(){ gl_FragColor = vec4(mix(vC, vec3(1.0), 0.25) * (0.9 + vI * 1.2), vI * 0.95); }
     `,
     transparent: true,
     depthWrite: false,
@@ -642,21 +649,46 @@ export function createCubeField(count: number): EnvLayer {
   lines.frustumCulled = false;
   group.add(lines);
 
+  // caras internas translúcidas: los cubos se ven como volúmenes de luz
+  const faceGeo = new THREE.BoxGeometry(1, 1, 1);
+  const faceMat = new THREE.MeshBasicMaterial({
+    transparent: true,
+    opacity: 0.18,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    vertexColors: true,
+  });
+  const inst = new THREE.InstancedMesh(faceGeo, faceMat, cubes.length);
+  const m4 = new THREE.Matrix4();
+  const icol = new Float32Array(cubes.length * 3);
+  cubes.forEach((cu, k) => {
+    m4.makeScale(cu.s, cu.s, cu.s);
+    m4.setPosition(cu.x, cu.y, cu.z);
+    inst.setMatrixAt(k, m4);
+    icol[k * 3] = cu.r * 0.6;
+    icol[k * 3 + 1] = cu.g * 0.6;
+    icol[k * 3 + 2] = cu.b * 0.6;
+  });
+  inst.instanceColor = new THREE.InstancedBufferAttribute(icol, 3);
+  inst.frustumCulled = false;
+  group.add(inst);
+
   return {
     object: group,
     parallax: 0.42,
     update: (t, _dt, energy) => {
       mat.uniforms["uTime"]!.value = t;
       mat.uniforms["uEnergy"]!.value = energy;
+      faceMat.opacity = 0.12 + energy * 0.08;
     },
   };
 }
 
 /* ------------------------------------------------------------------ */
-/* SUELO ESPEJO: plano reflectante con camino central entre estructuras */
+/* SUELO: base oscura con reflejos difusos bajo las dunas               */
 /* ------------------------------------------------------------------ */
 export function createMirrorFloor(): EnvLayer {
-  const geo = new THREE.PlaneGeometry(1600, 1600, 1, 1);
+  const geo = new THREE.PlaneGeometry(1400, 1400, 1, 1);
   const mat = new THREE.ShaderMaterial({
     transparent: true,
     depthWrite: false,
@@ -675,55 +707,31 @@ export function createMirrorFloor(): EnvLayer {
       precision highp float;
       varying vec3 vW;
       uniform float uTime; uniform float uEnergy;
-
       float hash(vec2 p){ return fract(sin(dot(p, vec2(41.3, 289.1))) * 43758.5453); }
       float noise(vec2 p){
         vec2 i = floor(p), f = fract(p);
         f = f*f*(3.0-2.0*f);
         return mix(mix(hash(i), hash(i+vec2(1,0)), f.x), mix(hash(i+vec2(0,1)), hash(i+vec2(1,1)), f.x), f.y);
       }
-
       void main(){
-        float x = vW.x;
-        float z = vW.z;
         float dist = length(vW.xz);
-        float fade = smoothstep(620.0, 40.0, dist);
-
-        // barniz húmedo: base azul profunda
-        vec3 col = vec3(0.010, 0.045, 0.095) * (0.25 + fade * 0.8);
-
-        // camino central reflectante que se abre entre las estructuras
-        float path = exp(-pow(x / 58.0, 2.0));
-        col += vec3(0.045, 0.155, 0.34) * path * (0.55 + uEnergy * 0.5) * fade;
-
-        // reflejo vertical del núcleo derramado sobre el suelo
-        float coreRef = exp(-pow(x / 26.0, 2.0)) * exp(-pow((z + 10.0) / 150.0, 2.0));
-        col += vec3(0.10, 0.42, 0.95) * coreRef * (0.55 + uEnergy * 0.8);
-
-        // reflejos difusos y estirados de las torres del fondo
-        float streak = noise(vec2(x * 0.045, z * 0.006 + uTime * 0.02));
-        streak = smoothstep(0.62, 1.0, streak);
-        float side = smoothstep(60.0, 220.0, abs(x)) * smoothstep(560.0, 120.0, dist);
-        col += mix(vec3(0.05, 0.30, 0.70), vec3(0.34, 0.10, 0.72), step(0.86, noise(vec2(x*0.02, 7.3))))
-             * streak * side * 0.55;
-
-        // retícula del pavimento
-        vec2 g = abs(fract(vW.xz / 26.0) - 0.5);
-        float grid = 1.0 - smoothstep(0.0, 0.035, min(g.x, g.y));
-        col += vec3(0.06, 0.24, 0.45) * grid * fade * 0.55;
-
-        // pulso de luz que recorre el camino
-        float sweep = exp(-pow(mod(z * 0.5 + uTime * 26.0, 420.0) / 46.0, 2.0));
-        col += vec3(0.08, 0.34, 0.72) * sweep * path * 0.7;
-
-        float a = clamp(fade * (0.42 + path * 0.55), 0.0, 1.0);
-        gl_FragColor = vec4(col, a);
+        float fade = smoothstep(240.0, 10.0, dist);
+        vec3 col = vec3(0.010, 0.045, 0.11) * fade;
+        // reflejo derramado del núcleo
+        float coreRef = exp(-pow(vW.x / 12.0, 2.0)) * exp(-pow((vW.z + 6.0) / 60.0, 2.0));
+        col += vec3(0.08, 0.34, 0.85) * coreRef * (0.5 + uEnergy * 0.7);
+        // reflejos verticales difusos de las torres
+        float streak = smoothstep(0.6, 1.0, noise(vec2(vW.x * 0.22, vW.z * 0.02 + uTime * 0.03)));
+        float side = smoothstep(14.0, 90.0, abs(vW.x)) * smoothstep(260.0, 40.0, dist);
+        col += mix(vec3(0.05, 0.26, 0.60), vec3(0.32, 0.08, 0.66), step(0.86, noise(vec2(vW.x * 0.09, 7.3))))
+             * streak * side * 0.5;
+        gl_FragColor = vec4(col, clamp(fade * 0.75, 0.0, 1.0));
       }
     `,
   });
   const mesh = new THREE.Mesh(geo, mat);
   mesh.rotation.x = -Math.PI / 2;
-  mesh.position.y = -46.2;
+  mesh.position.y = -9.7;
   mesh.frustumCulled = false;
   return {
     object: mesh,
