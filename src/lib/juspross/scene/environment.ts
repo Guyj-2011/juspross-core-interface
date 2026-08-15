@@ -68,15 +68,15 @@ export function createAtmosphere(): EnvLayer {
 /* ------------------------------------------------------------------ */
 export function createWaveField(density: number): EnvLayer {
   const N = density;
-  const spread = 620;
+  const spread = 260;
   const count = N * N;
   const pos = new Float32Array(count * 3);
   const seed = new Float32Array(count);
   let i = 0;
   for (let x = 0; x < N; x++) {
     for (let z = 0; z < N; z++) {
-      const jx = (Math.random() - 0.5) * (spread / N) * 0.9;
-      const jz = (Math.random() - 0.5) * (spread / N) * 0.9;
+      const jx = (Math.random() - 0.5) * (spread / N) * 1.1;
+      const jz = (Math.random() - 0.5) * (spread / N) * 1.1;
       pos[i * 3] = (x / (N - 1) - 0.5) * spread + jx;
       pos[i * 3 + 1] = 0;
       pos[i * 3 + 2] = (z / (N - 1) - 0.5) * spread + jz;
@@ -98,45 +98,50 @@ export function createWaveField(density: number): EnvLayer {
     vertexShader: /* glsl */ `
       attribute float aSeed;
       uniform float uTime; uniform float uEnergy; uniform float uAmp; uniform float uDpr;
-      varying float vI; varying float vH; varying float vNear;
+      varying float vI; varying float vH; varying float vSide; varying float vSeed;
       void main(){
         vec3 p = position;
         float d = length(p.xz);
-        // montañas, valles y crestas: varias octavas
-        float w  = sin(p.x * 0.0125 + uTime * 0.22) * 15.0;
-        w += cos(p.z * 0.0098 - uTime * 0.17) * 13.0;
-        w += sin((p.x + p.z) * 0.026 + uTime * 0.34) * 6.0;
-        w += cos(p.x * 0.052 - uTime * 0.5) * 2.4;
-        w += sin(d * 0.030 - uTime * 0.75) * (4.0 + uEnergy * 7.0 + uAmp * 14.0);
-        // cráter suave alrededor del núcleo
-        w *= smoothstep(20.0, 130.0, d);
+        // dunas de datos: crestas largas que suben a izquierda y derecha
+        float w  = sin(p.x * 0.085 + uTime * 0.22) * 3.4;
+        w += cos(p.z * 0.062 - uTime * 0.17) * 2.8;
+        w += sin((p.x * 0.7 + p.z) * 0.13 + uTime * 0.31) * 1.5;
+        w += cos(p.x * 0.24 - uTime * 0.45) * 0.6;
+        w += sin(d * 0.20 - uTime * 0.8) * (0.5 + uEnergy * 0.9 + uAmp * 2.0);
+        // las laderas crecen al alejarse del núcleo (valle central despejado)
+        float rise = smoothstep(6.0, 46.0, abs(p.x)) * 5.5 + smoothstep(10.0, 70.0, abs(p.z)) * 2.5;
+        w = w * smoothstep(5.0, 26.0, d) + rise;
         p.y += w;
         vec4 mv = modelViewMatrix * vec4(p, 1.0);
         gl_Position = projectionMatrix * mv;
         float dist = -mv.z;
-        float fade = smoothstep(640.0, 70.0, d);
-        vH = smoothstep(-20.0, 24.0, w);
-        vNear = smoothstep(420.0, 40.0, dist);
-        vI = fade * (0.30 + 0.70 * vH) * (0.55 + aSeed * 0.75);
-        gl_PointSize = (1.5 + aSeed * 2.0 + vH * 1.2) * uDpr * (80.0 / max(0.001, dist));
+        float fade = smoothstep(300.0, 20.0, d);
+        vH = smoothstep(-2.0, 9.0, w);
+        vSide = smoothstep(10.0, 90.0, abs(p.x));
+        vSeed = aSeed;
+        vI = fade * (0.42 + 0.75 * vH) * (0.6 + aSeed * 0.8);
+        gl_PointSize = (1.1 + aSeed * 1.6 + vH * 1.0) * uDpr * (26.0 / max(0.001, dist));
       }
     `,
     fragmentShader: /* glsl */ `
       precision highp float;
-      varying float vI; varying float vH; varying float vNear;
+      varying float vI; varying float vH; varying float vSide; varying float vSeed;
       void main(){
         vec2 uv = gl_PointCoord - 0.5;
         float d = length(uv);
         if (d > 0.5) discard;
-        float core = smoothstep(0.5, 0.06, d);
+        float core = smoothstep(0.5, 0.05, d);
         float halo = smoothstep(0.5, 0.0, d);
-        vec3 low  = vec3(0.04, 0.22, 0.55);
-        vec3 mid  = vec3(0.16, 0.62, 1.00);
-        vec3 hi   = vec3(0.62, 0.92, 1.00);
-        vec3 c = mix(low, mid, vH);
-        c = mix(c, hi, smoothstep(0.72, 1.0, vH) * 0.8);
-        float a = (halo * 0.16 + core * 0.34) * (0.25 + vI * 0.8) * (0.35 + vNear * 0.5);
-        gl_FragColor = vec4(c * (0.5 + vI * 0.7), a);
+        vec3 deepBlue = vec3(0.03, 0.20, 0.72);
+        vec3 cyan     = vec3(0.16, 0.78, 1.00);
+        vec3 white    = vec3(0.78, 0.96, 1.00);
+        vec3 magenta  = vec3(0.85, 0.22, 0.95);
+        vec3 c = mix(deepBlue, cyan, vH);
+        c = mix(c, white, smoothstep(0.75, 1.0, vH) * 0.85);
+        // vetas magenta en las laderas exteriores, como en la referencia
+        c = mix(c, magenta, vSide * step(0.82, vSeed) * 0.9);
+        float a = (halo * 0.30 + core * 0.72) * (0.30 + vI * 0.95);
+        gl_FragColor = vec4(c * (0.8 + vI * 1.1), a);
       }
     `,
     transparent: true,
@@ -145,12 +150,12 @@ export function createWaveField(density: number): EnvLayer {
   });
 
   const points = new THREE.Points(geo, mat);
-  points.position.y = -46;
+  points.position.y = -9.5;
   points.frustumCulled = false;
 
   return {
     object: points,
-    parallax: 0.55,
+    parallax: 0.35,
     update: (t, _dt, energy, amp) => {
       mat.uniforms["uTime"]!.value = t;
       mat.uniforms["uEnergy"]!.value = energy;
@@ -164,101 +169,100 @@ export function createWaveField(density: number): EnvLayer {
 /* ------------------------------------------------------------------ */
 export function createStructures(count: number): EnvLayer {
   const group = new THREE.Group();
+  const FLOOR = -9.5;
 
-  type Box = { x: number; z: number; w: number; d: number; h: number; i: number };
-  const boxes: Box[] = [];
-  for (let i = 0; i < count; i++) {
+  type Bar = { x: number; z: number; w: number; h: number; c: THREE.Color };
+  const bars: Bar[] = [];
+  const cyan = new THREE.Color(0x2ea6ff);
+  const ice = new THREE.Color(0x7fe6ff);
+  const magenta = new THREE.Color(0xc23bff);
+  const total = count * 6;
+  for (let i = 0; i < total; i++) {
     const ang = Math.random() * Math.PI * 2;
-    const rad = 95 + Math.pow(Math.random(), 0.55) * 400;
+    const rad = 55 + Math.pow(Math.random(), 0.5) * 210;
     const x = Math.cos(ang) * rad;
-    const z = Math.sin(ang) * rad - 40;
-    if (Math.abs(x) < 58 && Math.abs(z) < 58) continue;
-    // corredor central despejado: el camino del suelo pasa entre las torres
-    if (Math.abs(x) < 66) continue;
-    const w = 8 + Math.random() * 26;
-    const d = 8 + Math.random() * 26;
-    const h = 14 + Math.pow(Math.random(), 1.8) * 150;
-    boxes.push({ x, z, w, d, h, i: 1 - Math.min(1, rad / 520) });
+    const z = Math.sin(ang) * rad - 30;
+    if (z > 30) continue;                    // nada delante de la cámara
+    if (Math.abs(x) < 22 && z > -60) continue; // corredor central despejado
+    const w = 0.4 + Math.random() * 1.9;
+    const h = 6 + Math.pow(Math.random(), 1.7) * 78;
+    const r = Math.random();
+    const c = r < 0.14 ? magenta : r < 0.42 ? ice : cyan;
+    bars.push({ x, z, w, h, c });
   }
 
-  /* volúmenes semitransparentes con instancing */
-  const boxGeo = new THREE.BoxGeometry(1, 1, 1);
-  const volMat = new THREE.MeshBasicMaterial({
+  // torres finas y luminosas: la "ciudad de datos" del horizonte
+  const geo = new THREE.BoxGeometry(1, 1, 1);
+  const mat = new THREE.MeshBasicMaterial({
     transparent: true,
-    opacity: 0.3,
+    opacity: 0.85,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
     vertexColors: true,
+    fog: true,
   });
-  const inst = new THREE.InstancedMesh(boxGeo, volMat, boxes.length);
+  const inst = new THREE.InstancedMesh(geo, mat, bars.length);
   const m4 = new THREE.Matrix4();
-  const colAttr = new Float32Array(boxes.length * 3);
-  boxes.forEach((b, k) => {
-    m4.makeScale(b.w, b.h, b.d);
-    m4.setPosition(b.x, -46 + b.h / 2, b.z);
+  const col = new Float32Array(bars.length * 3);
+  bars.forEach((b, k) => {
+    m4.makeScale(b.w, b.h, b.w);
+    m4.setPosition(b.x, FLOOR + b.h / 2, b.z);
     inst.setMatrixAt(k, m4);
-    const t = b.i;
-    const violet = Math.random() < 0.2;
-    colAttr[k * 3] = violet ? 0.22 + t * 0.34 : 0.03 + t * 0.09;
-    colAttr[k * 3 + 1] = violet ? 0.05 + t * 0.1 : 0.16 + t * 0.34;
-    colAttr[k * 3 + 2] = 0.34 + t * 0.5;
+    const dim = 0.25 + 0.75 * (1 - Math.min(1, Math.hypot(b.x, b.z) / 280));
+    col[k * 3] = b.c.r * dim;
+    col[k * 3 + 1] = b.c.g * dim;
+    col[k * 3 + 2] = b.c.b * dim;
   });
-  inst.instanceColor = new THREE.InstancedBufferAttribute(colAttr, 3);
+  inst.instanceColor = new THREE.InstancedBufferAttribute(col, 3);
   inst.frustumCulled = false;
   group.add(inst);
 
-  /* nube de partículas que da volumen a cada estructura */
-  const per = 46;
-  const total = boxes.length * per;
-  const ppos = new Float32Array(total * 3);
-  const pseed = new Float32Array(total);
-  const pint = new Float32Array(total);
+  // ventanas / píxeles de datos que recorren las torres
+  const per = 10;
+  const n = bars.length * per;
+  const ppos = new Float32Array(n * 3);
+  const pcol = new Float32Array(n * 3);
+  const pseed = new Float32Array(n);
   let p = 0;
-  for (const b of boxes) {
+  for (const b of bars) {
     for (let k = 0; k < per; k++) {
-      const face = Math.random();
-      let px = b.x + (Math.random() - 0.5) * b.w;
-      let pz = b.z + (Math.random() - 0.5) * b.d;
-      const py = -46 + Math.random() * b.h;
-      if (face < 0.5) px = b.x + (Math.random() < 0.5 ? -0.5 : 0.5) * b.w;
-      else pz = b.z + (Math.random() < 0.5 ? -0.5 : 0.5) * b.d;
-      ppos[p * 3] = px;
-      ppos[p * 3 + 1] = py;
-      ppos[p * 3 + 2] = pz;
+      ppos[p * 3] = b.x + (Math.random() - 0.5) * b.w;
+      ppos[p * 3 + 1] = FLOOR + Math.random() * b.h;
+      ppos[p * 3 + 2] = b.z + (Math.random() - 0.5) * b.w;
+      pcol[p * 3] = b.c.r;
+      pcol[p * 3 + 1] = b.c.g;
+      pcol[p * 3 + 2] = b.c.b;
       pseed[p] = Math.random();
-      pint[p] = b.i;
       p++;
     }
   }
   const pgeo = new THREE.BufferGeometry();
   pgeo.setAttribute("position", new THREE.BufferAttribute(ppos, 3));
+  pgeo.setAttribute("aColor", new THREE.BufferAttribute(pcol, 3));
   pgeo.setAttribute("aSeed", new THREE.BufferAttribute(pseed, 1));
-  pgeo.setAttribute("aI", new THREE.BufferAttribute(pint, 1));
   const pmat = new THREE.ShaderMaterial({
     uniforms: { uTime: { value: 0 }, uDpr: { value: DPR() }, uEnergy: { value: 0 } },
     vertexShader: /* glsl */ `
-      attribute float aSeed; attribute float aI;
+      attribute float aSeed; attribute vec3 aColor;
       uniform float uTime; uniform float uDpr; uniform float uEnergy;
-      varying float vI; varying float vP;
+      varying float vI; varying vec3 vC;
       void main(){
-        vec3 pos = position;
-        vec4 mv = modelViewMatrix * vec4(pos, 1.0);
+        vec4 mv = modelViewMatrix * vec4(position, 1.0);
         gl_Position = projectionMatrix * mv;
         float dist = -mv.z;
-        float scan = 0.45 + 0.55 * sin(pos.y * 0.22 - uTime * 1.1 + aSeed * 6.0);
-        vP = scan;
-        vI = (0.3 + aI) * (0.5 + aSeed * 0.8) * smoothstep(700.0, 90.0, dist) * (0.8 + uEnergy * 0.5);
-        gl_PointSize = (1.3 + aSeed * 1.9) * uDpr * (75.0 / max(0.001, dist));
+        float blink = 0.35 + 0.65 * step(0.35, fract(aSeed * 17.0 + uTime * (0.15 + aSeed * 0.4)));
+        vC = aColor;
+        vI = blink * smoothstep(320.0, 20.0, dist) * (0.7 + uEnergy * 0.5);
+        gl_PointSize = (1.0 + aSeed * 1.4) * uDpr * (24.0 / max(0.001, dist));
       }
     `,
     fragmentShader: /* glsl */ `
-      precision highp float; varying float vI; varying float vP;
+      precision highp float; varying float vI; varying vec3 vC;
       void main(){
         vec2 uv = gl_PointCoord - 0.5; float d = length(uv);
         if (d > 0.5) discard;
         float a = smoothstep(0.5, 0.0, d);
-        vec3 c = mix(vec3(0.10,0.42,0.86), vec3(0.55,0.90,1.0), vP);
-        gl_FragColor = vec4(c * (0.5 + vI * 0.6), a * vI * (0.22 + vP * 0.45));
+        gl_FragColor = vec4(mix(vC, vec3(1.0), 0.35) * (0.7 + vI), a * vI * 0.9);
       }
     `,
     transparent: true,
@@ -269,33 +273,13 @@ export function createStructures(count: number): EnvLayer {
   pts.frustumCulled = false;
   group.add(pts);
 
-  /* capa secundaria muy tenue de aristas verticales */
-  const edges: number[] = [];
-  for (const b of boxes) {
-    if (Math.random() > 0.45) continue;
-    edges.push(b.x - b.w / 2, -46, b.z - b.d / 2, b.x - b.w / 2, -46 + b.h, b.z - b.d / 2);
-    edges.push(b.x + b.w / 2, -46, b.z + b.d / 2, b.x + b.w / 2, -46 + b.h, b.z + b.d / 2);
-  }
-  const egeo = new THREE.BufferGeometry();
-  egeo.setAttribute("position", new THREE.Float32BufferAttribute(edges, 3));
-  const emat = new THREE.LineBasicMaterial({
-    color: new THREE.Color(0x2a86d8),
-    transparent: true,
-    opacity: 0.16,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false,
-  });
-  const lines = new THREE.LineSegments(egeo, emat);
-  lines.frustumCulled = false;
-  group.add(lines);
-
   return {
     object: group,
-    parallax: 0.22,
+    parallax: 0.18,
     update: (t, _dt, energy) => {
       pmat.uniforms["uTime"]!.value = t;
       pmat.uniforms["uEnergy"]!.value = energy;
-      volMat.opacity = 0.10 + energy * 0.06 + 0.015 * Math.sin(t * 0.8);
+      mat.opacity = 0.6 + energy * 0.2 + 0.05 * Math.sin(t * 0.7);
     },
   };
 }
@@ -590,6 +574,7 @@ export function createOrbit(count: number): EnvLayer & { setActive: (v: number) 
 /* ------------------------------------------------------------------ */
 export function createCubeField(count: number): EnvLayer {
   const group = new THREE.Group();
+  const FLOOR = -9.5;
   const verts: number[] = [];
   const cols: number[] = [];
   const seeds: number[] = [];
@@ -604,24 +589,30 @@ export function createCubeField(count: number): EnvLayer {
         if (sz < 0) E.push({ a: [sx, sy, sz], b: [sx, sy, 0.5] });
       }
 
+  type Cube = { x: number; y: number; z: number; s: number; r: number; g: number; b: number; seed: number };
+  const cubes: Cube[] = [];
   for (let i = 0; i < count; i++) {
-    const ang = Math.random() * Math.PI * 2;
-    const rad = 60 + Math.pow(Math.random(), 0.6) * 190;
-    const x = Math.cos(ang) * rad;
-    const z = Math.sin(ang) * rad * 0.6 - 30;
-    if (Math.abs(x) < 62) continue;
-    const s = 4 + Math.random() * 10;
-    const y = -46 + s / 2 + Math.random() * 3;
-    const magenta = Math.random() < 0.25;
-    const seed = Math.random();
-    const r = magenta ? 0.72 : 0.16;
-    const g = magenta ? 0.18 : 0.66;
-    const b = 1.0;
+    const x = (Math.random() - 0.5) * 90;
+    const z = -6 - Math.pow(Math.random(), 0.7) * 90;
+    if (Math.abs(x) < 5 && z > -26) continue;
+    const s = 1.1 + Math.random() * 3.4;
+    const y = FLOOR + s / 2 + Math.random() * 1.2;
+    const magenta = Math.random() < 0.18;
+    cubes.push({
+      x, y, z, s,
+      r: magenta ? 0.82 : 0.14,
+      g: magenta ? 0.2 : 0.72,
+      b: 1.0,
+      seed: Math.random(),
+    });
+  }
+
+  for (const cu of cubes) {
     for (const { a, b: bb } of E) {
-      verts.push(x + a[0] * s, y + a[1] * s, z + a[2] * s);
-      verts.push(x + bb[0] * s, y + bb[1] * s, z + bb[2] * s);
-      cols.push(r, g, b, r, g, b);
-      seeds.push(seed, seed);
+      verts.push(cu.x + a[0] * cu.s, cu.y + a[1] * cu.s, cu.z + a[2] * cu.s);
+      verts.push(cu.x + bb[0] * cu.s, cu.y + bb[1] * cu.s, cu.z + bb[2] * cu.s);
+      cols.push(cu.r, cu.g, cu.b, cu.r, cu.g, cu.b);
+      seeds.push(cu.seed, cu.seed);
     }
   }
 
@@ -640,14 +631,14 @@ export function createCubeField(count: number): EnvLayer {
         vec4 mv = modelViewMatrix * vec4(position, 1.0);
         gl_Position = projectionMatrix * mv;
         float dist = -mv.z;
-        float pulse = 0.55 + 0.45 * sin(uTime * (0.6 + aSeed) + aSeed * 12.0);
+        float pulse = 0.6 + 0.4 * sin(uTime * (0.5 + aSeed) + aSeed * 12.0);
         vC = aColor;
-        vI = pulse * smoothstep(520.0, 40.0, dist) * (0.45 + uEnergy * 0.6);
+        vI = pulse * smoothstep(160.0, 8.0, dist) * (0.7 + uEnergy * 0.6);
       }
     `,
     fragmentShader: /* glsl */ `
       precision highp float; varying vec3 vC; varying float vI;
-      void main(){ gl_FragColor = vec4(vC * (0.6 + vI), vI * 0.75); }
+      void main(){ gl_FragColor = vec4(mix(vC, vec3(1.0), 0.25) * (0.9 + vI * 1.2), vI * 0.95); }
     `,
     transparent: true,
     depthWrite: false,
@@ -658,21 +649,46 @@ export function createCubeField(count: number): EnvLayer {
   lines.frustumCulled = false;
   group.add(lines);
 
+  // caras internas translúcidas: los cubos se ven como volúmenes de luz
+  const faceGeo = new THREE.BoxGeometry(1, 1, 1);
+  const faceMat = new THREE.MeshBasicMaterial({
+    transparent: true,
+    opacity: 0.18,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    vertexColors: true,
+  });
+  const inst = new THREE.InstancedMesh(faceGeo, faceMat, cubes.length);
+  const m4 = new THREE.Matrix4();
+  const icol = new Float32Array(cubes.length * 3);
+  cubes.forEach((cu, k) => {
+    m4.makeScale(cu.s, cu.s, cu.s);
+    m4.setPosition(cu.x, cu.y, cu.z);
+    inst.setMatrixAt(k, m4);
+    icol[k * 3] = cu.r * 0.6;
+    icol[k * 3 + 1] = cu.g * 0.6;
+    icol[k * 3 + 2] = cu.b * 0.6;
+  });
+  inst.instanceColor = new THREE.InstancedBufferAttribute(icol, 3);
+  inst.frustumCulled = false;
+  group.add(inst);
+
   return {
     object: group,
     parallax: 0.42,
     update: (t, _dt, energy) => {
       mat.uniforms["uTime"]!.value = t;
       mat.uniforms["uEnergy"]!.value = energy;
+      faceMat.opacity = 0.12 + energy * 0.08;
     },
   };
 }
 
 /* ------------------------------------------------------------------ */
-/* SUELO ESPEJO: plano reflectante con camino central entre estructuras */
+/* SUELO: base oscura con reflejos difusos bajo las dunas               */
 /* ------------------------------------------------------------------ */
 export function createMirrorFloor(): EnvLayer {
-  const geo = new THREE.PlaneGeometry(1600, 1600, 1, 1);
+  const geo = new THREE.PlaneGeometry(1400, 1400, 1, 1);
   const mat = new THREE.ShaderMaterial({
     transparent: true,
     depthWrite: false,
@@ -691,55 +707,31 @@ export function createMirrorFloor(): EnvLayer {
       precision highp float;
       varying vec3 vW;
       uniform float uTime; uniform float uEnergy;
-
       float hash(vec2 p){ return fract(sin(dot(p, vec2(41.3, 289.1))) * 43758.5453); }
       float noise(vec2 p){
         vec2 i = floor(p), f = fract(p);
         f = f*f*(3.0-2.0*f);
         return mix(mix(hash(i), hash(i+vec2(1,0)), f.x), mix(hash(i+vec2(0,1)), hash(i+vec2(1,1)), f.x), f.y);
       }
-
       void main(){
-        float x = vW.x;
-        float z = vW.z;
         float dist = length(vW.xz);
-        float fade = smoothstep(620.0, 40.0, dist);
-
-        // barniz húmedo: base azul profunda
-        vec3 col = vec3(0.010, 0.045, 0.095) * (0.25 + fade * 0.8);
-
-        // camino central reflectante que se abre entre las estructuras
-        float path = exp(-pow(x / 58.0, 2.0));
-        col += vec3(0.045, 0.155, 0.34) * path * (0.55 + uEnergy * 0.5) * fade;
-
-        // reflejo vertical del núcleo derramado sobre el suelo
-        float coreRef = exp(-pow(x / 26.0, 2.0)) * exp(-pow((z + 10.0) / 150.0, 2.0));
-        col += vec3(0.10, 0.42, 0.95) * coreRef * (0.55 + uEnergy * 0.8);
-
-        // reflejos difusos y estirados de las torres del fondo
-        float streak = noise(vec2(x * 0.045, z * 0.006 + uTime * 0.02));
-        streak = smoothstep(0.62, 1.0, streak);
-        float side = smoothstep(60.0, 220.0, abs(x)) * smoothstep(560.0, 120.0, dist);
-        col += mix(vec3(0.05, 0.30, 0.70), vec3(0.34, 0.10, 0.72), step(0.86, noise(vec2(x*0.02, 7.3))))
-             * streak * side * 0.55;
-
-        // retícula del pavimento
-        vec2 g = abs(fract(vW.xz / 26.0) - 0.5);
-        float grid = 1.0 - smoothstep(0.0, 0.035, min(g.x, g.y));
-        col += vec3(0.06, 0.24, 0.45) * grid * fade * 0.55;
-
-        // pulso de luz que recorre el camino
-        float sweep = exp(-pow(mod(z * 0.5 + uTime * 26.0, 420.0) / 46.0, 2.0));
-        col += vec3(0.08, 0.34, 0.72) * sweep * path * 0.7;
-
-        float a = clamp(fade * (0.42 + path * 0.55), 0.0, 1.0);
-        gl_FragColor = vec4(col, a);
+        float fade = smoothstep(240.0, 10.0, dist);
+        vec3 col = vec3(0.010, 0.045, 0.11) * fade;
+        // reflejo derramado del núcleo
+        float coreRef = exp(-pow(vW.x / 12.0, 2.0)) * exp(-pow((vW.z + 6.0) / 60.0, 2.0));
+        col += vec3(0.08, 0.34, 0.85) * coreRef * (0.5 + uEnergy * 0.7);
+        // reflejos verticales difusos de las torres
+        float streak = smoothstep(0.6, 1.0, noise(vec2(vW.x * 0.22, vW.z * 0.02 + uTime * 0.03)));
+        float side = smoothstep(14.0, 90.0, abs(vW.x)) * smoothstep(260.0, 40.0, dist);
+        col += mix(vec3(0.05, 0.26, 0.60), vec3(0.32, 0.08, 0.66), step(0.86, noise(vec2(vW.x * 0.09, 7.3))))
+             * streak * side * 0.5;
+        gl_FragColor = vec4(col, clamp(fade * 0.75, 0.0, 1.0));
       }
     `,
   });
   const mesh = new THREE.Mesh(geo, mat);
   mesh.rotation.x = -Math.PI / 2;
-  mesh.position.y = -46.2;
+  mesh.position.y = -9.7;
   mesh.frustumCulled = false;
   return {
     object: mesh,
