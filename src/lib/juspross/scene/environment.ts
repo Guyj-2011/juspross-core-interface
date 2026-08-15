@@ -173,6 +173,8 @@ export function createStructures(count: number): EnvLayer {
     const x = Math.cos(ang) * rad;
     const z = Math.sin(ang) * rad - 40;
     if (Math.abs(x) < 58 && Math.abs(z) < 58) continue;
+    // corredor central despejado: el camino del suelo pasa entre las torres
+    if (Math.abs(x) < 66) continue;
     const w = 8 + Math.random() * 26;
     const d = 8 + Math.random() * 26;
     const h = 14 + Math.pow(Math.random(), 1.8) * 150;
@@ -607,6 +609,7 @@ export function createCubeField(count: number): EnvLayer {
     const rad = 60 + Math.pow(Math.random(), 0.6) * 190;
     const x = Math.cos(ang) * rad;
     const z = Math.sin(ang) * rad * 0.6 - 30;
+    if (Math.abs(x) < 62) continue;
     const s = 4 + Math.random() * 10;
     const y = -46 + s / 2 + Math.random() * 3;
     const magenta = Math.random() < 0.25;
@@ -658,6 +661,89 @@ export function createCubeField(count: number): EnvLayer {
   return {
     object: group,
     parallax: 0.42,
+    update: (t, _dt, energy) => {
+      mat.uniforms["uTime"]!.value = t;
+      mat.uniforms["uEnergy"]!.value = energy;
+    },
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/* SUELO ESPEJO: plano reflectante con camino central entre estructuras */
+/* ------------------------------------------------------------------ */
+export function createMirrorFloor(): EnvLayer {
+  const geo = new THREE.PlaneGeometry(1600, 1600, 1, 1);
+  const mat = new THREE.ShaderMaterial({
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    fog: false,
+    uniforms: { uTime: { value: 0 }, uEnergy: { value: 0 } },
+    vertexShader: /* glsl */ `
+      varying vec3 vW;
+      void main(){
+        vec4 w = modelMatrix * vec4(position, 1.0);
+        vW = w.xyz;
+        gl_Position = projectionMatrix * viewMatrix * w;
+      }
+    `,
+    fragmentShader: /* glsl */ `
+      precision highp float;
+      varying vec3 vW;
+      uniform float uTime; uniform float uEnergy;
+
+      float hash(vec2 p){ return fract(sin(dot(p, vec2(41.3, 289.1))) * 43758.5453); }
+      float noise(vec2 p){
+        vec2 i = floor(p), f = fract(p);
+        f = f*f*(3.0-2.0*f);
+        return mix(mix(hash(i), hash(i+vec2(1,0)), f.x), mix(hash(i+vec2(0,1)), hash(i+vec2(1,1)), f.x), f.y);
+      }
+
+      void main(){
+        float x = vW.x;
+        float z = vW.z;
+        float dist = length(vW.xz);
+        float fade = smoothstep(620.0, 40.0, dist);
+
+        // barniz húmedo: base azul profunda
+        vec3 col = vec3(0.010, 0.045, 0.095) * (0.25 + fade * 0.8);
+
+        // camino central reflectante que se abre entre las estructuras
+        float path = exp(-pow(x / 58.0, 2.0));
+        col += vec3(0.045, 0.155, 0.34) * path * (0.55 + uEnergy * 0.5) * fade;
+
+        // reflejo vertical del núcleo derramado sobre el suelo
+        float coreRef = exp(-pow(x / 26.0, 2.0)) * exp(-pow((z + 10.0) / 150.0, 2.0));
+        col += vec3(0.10, 0.42, 0.95) * coreRef * (0.55 + uEnergy * 0.8);
+
+        // reflejos difusos y estirados de las torres del fondo
+        float streak = noise(vec2(x * 0.045, z * 0.006 + uTime * 0.02));
+        streak = smoothstep(0.62, 1.0, streak);
+        float side = smoothstep(60.0, 220.0, abs(x)) * smoothstep(560.0, 120.0, dist);
+        col += mix(vec3(0.05, 0.30, 0.70), vec3(0.34, 0.10, 0.72), step(0.86, noise(vec2(x*0.02, 7.3))))
+             * streak * side * 0.55;
+
+        // retícula del pavimento
+        vec2 g = abs(fract(vW.xz / 26.0) - 0.5);
+        float grid = 1.0 - smoothstep(0.0, 0.035, min(g.x, g.y));
+        col += vec3(0.06, 0.24, 0.45) * grid * fade * 0.55;
+
+        // pulso de luz que recorre el camino
+        float sweep = exp(-pow(mod(z * 0.5 + uTime * 26.0, 420.0) / 46.0, 2.0));
+        col += vec3(0.08, 0.34, 0.72) * sweep * path * 0.7;
+
+        float a = clamp(fade * (0.42 + path * 0.55), 0.0, 1.0);
+        gl_FragColor = vec4(col, a);
+      }
+    `,
+  });
+  const mesh = new THREE.Mesh(geo, mat);
+  mesh.rotation.x = -Math.PI / 2;
+  mesh.position.y = -46.2;
+  mesh.frustumCulled = false;
+  return {
+    object: mesh,
+    parallax: 0,
     update: (t, _dt, energy) => {
       mat.uniforms["uTime"]!.value = t;
       mat.uniforms["uEnergy"]!.value = energy;

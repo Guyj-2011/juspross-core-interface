@@ -7,6 +7,7 @@ import {
   createCubeField,
   createDust,
   createOrbit,
+  createMirrorFloor,
   createStructures,
   createWaveField,
   type EnvLayer,
@@ -84,6 +85,7 @@ export class JusprossScene {
 
     // capas del entorno (orden = profundidad conceptual)
     this.layers.push(createAtmosphere());
+    this.layers.push(createMirrorFloor());
     this.layers.push(createDust(this.preset.dustFar, "far"));
     this.layers.push(createStructures(this.preset.struct));
     this.layers.push(createCubeField(quality === "low" ? 60 : quality === "balanced" ? 120 : 190));
