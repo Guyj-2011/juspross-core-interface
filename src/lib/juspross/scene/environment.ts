@@ -717,9 +717,9 @@ export function createMirrorFloor(): EnvLayer {
         float dist = length(vW.xz);
         float fade = smoothstep(240.0, 10.0, dist);
         vec3 col = vec3(0.006, 0.028, 0.07) * fade;
-        // reflejo derramado del núcleo
+        // reflejo derramado del núcleo más oscuro y contenido
         float coreRef = exp(-pow(vW.x / 12.0, 2.0)) * exp(-pow((vW.z + 6.0) / 60.0, 2.0));
-        col += vec3(0.06, 0.28, 0.72) * coreRef * (0.45 + uEnergy * 0.6);
+        col += vec3(0.035, 0.18, 0.48) * coreRef * (0.35 + uEnergy * 0.45);
         // reflejos verticales difusos de las torres
         float streak = smoothstep(0.6, 1.0, noise(vec2(vW.x * 0.22, vW.z * 0.02 + uTime * 0.03)));
         float side = smoothstep(14.0, 90.0, abs(vW.x)) * smoothstep(260.0, 40.0, dist);
