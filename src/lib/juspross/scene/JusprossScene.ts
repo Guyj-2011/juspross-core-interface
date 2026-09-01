@@ -43,8 +43,6 @@ export class JusprossScene {
   private aura = createAura(1);
   private coreGroup = new THREE.Group();
   private coreMat: THREE.ShaderMaterial;
-  private rings: THREE.Mesh[] = [];
-  private ringPhase = [0.0, 0.45, 0.8];
   private coreGlow: THREE.Mesh | null = null;
   private raf = 0;
   private clock = new THREE.Clock();
@@ -121,26 +119,6 @@ export class JusprossScene {
     coreLight.position.set(0, 1.2, 0);
     this.scene.add(coreLight);
     this.scene.add(new THREE.AmbientLight(0x0a1f33, 0.45));
-
-    // ondas de energía que se propagan hacia el entorno
-    for (let i = 0; i < 3; i++) {
-      const ringGeo = new THREE.RingGeometry(3.4, 3.62, 160);
-      const ringMat = new THREE.MeshBasicMaterial({
-        color: 0x6fd8ff,
-        transparent: true,
-        opacity: 0,
-        side: THREE.DoubleSide,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false,
-        fog: false,
-      });
-      const ring = new THREE.Mesh(ringGeo, ringMat);
-      ring.position.copy(this.coreGroup.position);
-      ring.rotation.x = Math.PI / 2.1;
-      this.scene.add(ring);
-      this.rings.push(ring);
-    }
-
 
     const glowMat = new THREE.ShaderMaterial({
       transparent: true,
@@ -229,21 +207,6 @@ export class JusprossScene {
     this.aura.object.position.set(0, floatY, this.coreZ);
     this.orbit.object.position.set(0, floatY, this.coreZ);
     this.aura.setEnergy(this.cur.energy);
-
-    // ondas de energía escalonadas
-    for (let i = 0; i < this.rings.length; i++) {
-      const ring = this.rings[i]!;
-      const rmat = ring.material as THREE.MeshBasicMaterial;
-      const phase = (t * 0.26 + this.ringPhase[i]!) % 1;
-      const boost = this.wave * 0.8;
-      const life = 1 - phase;
-      rmat.opacity = Math.min(0.55, life * life * (0.09 + this.cur.energy * 0.22 + boost));
-      const s = 1 + phase * (5.5 + this.cur.energy * 4.0);
-      ring.scale.setScalar(s);
-      ring.rotation.x = Math.PI / 2.1 + this.mouseSmooth.y * 0.12;
-      ring.rotation.z = t * 0.05;
-      ring.position.set(0, floatY, this.coreZ);
-    }
 
     this.orbit.setActive(this.cur.orbit);
 
