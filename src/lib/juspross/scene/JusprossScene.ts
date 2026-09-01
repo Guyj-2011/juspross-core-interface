@@ -117,10 +117,10 @@ export class JusprossScene {
     this.orbit.object.position.copy(this.coreGroup.position);
 
     // el núcleo ilumina el espacio a su alrededor
-    const coreLight = new THREE.PointLight(0x49b9ff, 2.0, 220, 1.8);
+    const coreLight = new THREE.PointLight(0x49b9ff, 1.6, 220, 1.8);
     coreLight.position.set(0, 1.2, 0);
     this.scene.add(coreLight);
-    this.scene.add(new THREE.AmbientLight(0x123a5e, 0.7));
+    this.scene.add(new THREE.AmbientLight(0x0a1f33, 0.45));
 
     // ondas de energía que se propagan hacia el entorno
     for (let i = 0; i < 3; i++) {
