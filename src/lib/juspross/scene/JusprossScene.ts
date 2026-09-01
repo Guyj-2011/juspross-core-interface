@@ -3,8 +3,6 @@ import { makeCoreMaterial, sampleLogo } from "./core";
 import {
   createAtmosphere,
   createAura,
-  createCircuits,
-  createCubeField,
   createDust,
   createOrbit,
   createMirrorFloor,
