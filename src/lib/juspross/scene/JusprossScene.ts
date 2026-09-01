@@ -242,6 +242,7 @@ export class JusprossScene {
       ring.scale.setScalar(s);
       ring.rotation.x = Math.PI / 2.1 + this.mouseSmooth.y * 0.12;
       ring.rotation.z = t * 0.05;
+      ring.position.set(0, floatY, this.coreZ);
     }
 
     this.orbit.setActive(this.cur.orbit);
