@@ -35,18 +35,18 @@ export function createAtmosphere(): EnvLayer {
       void main(){
         vec3 d = normalize(vP);
         float h = d.y * 0.5 + 0.5;
-        // azul petróleo abajo -> azul profundo arriba
-        vec3 deep   = vec3(0.002, 0.008, 0.020);
-        vec3 teal   = vec3(0.004, 0.024, 0.048);
-        vec3 upper  = vec3(0.002, 0.010, 0.030);
+        // fondo más oscuro: azul casi negro abajo -> azul profundo arriba
+        vec3 deep   = vec3(0.001, 0.003, 0.010);
+        vec3 teal   = vec3(0.002, 0.012, 0.028);
+        vec3 upper  = vec3(0.001, 0.006, 0.018);
         vec3 c = mix(deep, teal, smoothstep(0.18, 0.52, h));
         c = mix(c, upper, smoothstep(0.52, 0.95, h));
-        // resplandor de horizonte cian
+        // resplandor de horizonte cian más contenido
         float hor = exp(-pow((h - 0.47) * 7.5, 2.0));
-        c += vec3(0.008, 0.036, 0.072) * hor * (0.7 + uEnergy * 0.4);
+        c += vec3(0.004, 0.018, 0.040) * hor * (0.5 + uEnergy * 0.3);
         // nubes de energía muy sutiles
         float n = noise(d.xz * 3.2 + uTime * 0.012) * noise(d.xy * 2.1 - uTime * 0.008);
-        c += vec3(0.005, 0.018, 0.036) * smoothstep(0.5, 0.95, n);
+        c += vec3(0.002, 0.010, 0.022) * smoothstep(0.5, 0.95, n);
         gl_FragColor = vec4(c, 1.0);
       }
     `,
