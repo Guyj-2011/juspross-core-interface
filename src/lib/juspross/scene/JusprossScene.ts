@@ -273,6 +273,7 @@ export class JusprossScene {
 
     if (this.coreGlow) {
       this.coreGlow.quaternion.copy(this.camera.quaternion);
+      this.coreGlow.position.set(0, floatY, this.coreZ);
       (this.coreGlow.material as THREE.ShaderMaterial).uniforms["uEnergy"]!.value = this.cur.energy;
     }
     this.renderer.render(this.scene, this.camera);
