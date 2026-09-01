@@ -208,21 +208,6 @@ export class JusprossScene {
     this.orbit.object.position.set(0, floatY, this.coreZ);
     this.aura.setEnergy(this.cur.energy);
 
-    // ondas de energía escalonadas
-    for (let i = 0; i < this.rings.length; i++) {
-      const ring = this.rings[i]!;
-      const rmat = ring.material as THREE.MeshBasicMaterial;
-      const phase = (t * 0.26 + this.ringPhase[i]!) % 1;
-      const boost = this.wave * 0.8;
-      const life = 1 - phase;
-      rmat.opacity = Math.min(0.55, life * life * (0.09 + this.cur.energy * 0.22 + boost));
-      const s = 1 + phase * (5.5 + this.cur.energy * 4.0);
-      ring.scale.setScalar(s);
-      ring.rotation.x = Math.PI / 2.1 + this.mouseSmooth.y * 0.12;
-      ring.rotation.z = t * 0.05;
-      ring.position.set(0, floatY, this.coreZ);
-    }
-
     this.orbit.setActive(this.cur.orbit);
 
     // parallax por capas: cada capa se desplaza a distinta velocidad
