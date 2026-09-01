@@ -223,6 +223,11 @@ export class JusprossScene {
 
     this.coreGroup.rotation.y = Math.sin(t * 0.16) * 0.22 + this.mouseSmooth.x * 0.34;
     this.coreGroup.rotation.x = Math.sin(t * 0.12) * 0.06 + this.mouseSmooth.y * 0.16;
+    // flotación suave del núcleo
+    const floatY = this.coreBaseY + Math.sin(t * 0.5) * 0.55 + Math.sin(t * 0.87) * 0.16;
+    this.coreGroup.position.y = floatY;
+    this.aura.object.position.set(0, floatY, this.coreZ);
+    this.orbit.object.position.set(0, floatY, this.coreZ);
     this.aura.setEnergy(this.cur.energy);
 
     // ondas de energía escalonadas
