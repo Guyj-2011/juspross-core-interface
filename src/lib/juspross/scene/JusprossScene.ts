@@ -120,26 +120,6 @@ export class JusprossScene {
     this.scene.add(coreLight);
     this.scene.add(new THREE.AmbientLight(0x0a1f33, 0.45));
 
-    // ondas de energía que se propagan hacia el entorno
-    for (let i = 0; i < 3; i++) {
-      const ringGeo = new THREE.RingGeometry(3.4, 3.62, 160);
-      const ringMat = new THREE.MeshBasicMaterial({
-        color: 0x6fd8ff,
-        transparent: true,
-        opacity: 0,
-        side: THREE.DoubleSide,
-        blending: THREE.AdditiveBlending,
-        depthWrite: false,
-        fog: false,
-      });
-      const ring = new THREE.Mesh(ringGeo, ringMat);
-      ring.position.copy(this.coreGroup.position);
-      ring.rotation.x = Math.PI / 2.1;
-      this.scene.add(ring);
-      this.rings.push(ring);
-    }
-
-
     const glowMat = new THREE.ShaderMaterial({
       transparent: true,
       depthWrite: false,
