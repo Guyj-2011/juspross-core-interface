@@ -43,8 +43,6 @@ export class JusprossScene {
   private aura = createAura(1);
   private coreGroup = new THREE.Group();
   private coreMat: THREE.ShaderMaterial;
-  private rings: THREE.Mesh[] = [];
-  private ringPhase = [0.0, 0.45, 0.8];
   private coreGlow: THREE.Mesh | null = null;
   private raf = 0;
   private clock = new THREE.Clock();
