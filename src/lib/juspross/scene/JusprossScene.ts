@@ -109,7 +109,7 @@ export class JusprossScene {
     const core = new THREE.Points(geo, this.coreMat);
     core.frustumCulled = false;
     this.coreGroup.add(core);
-    this.coreGroup.position.set(0, 0.6, 0);
+    this.coreGroup.position.set(0, this.coreBaseY, this.coreZ);
     this.scene.add(this.coreGroup);
     this.aura.object.position.copy(this.coreGroup.position);
     this.orbit.object.position.copy(this.coreGroup.position);
