@@ -55,7 +55,7 @@ export class JusprossScene {
   private wave = 0;
   private disposed = false;
   private coreBaseY = 3.4;
-  private coreZ = -8;
+  private coreZ = -4.2;
   private preset: (typeof PRESET)[Quality];
 
   constructor(
@@ -212,7 +212,8 @@ export class JusprossScene {
 
     // parallax por capas: cada capa se desplaza a distinta velocidad
     for (const l of this.layers) {
-      l.update(t, dt, this.cur.energy, this.ampSmooth);
+      // el entorno reacciona a la voz de forma muy suave (sin sacudidas)
+      l.update(t, dt, this.cur.energy, this.ampSmooth * 0.18);
       const p = l.parallax ?? 0;
       if (p > 0) {
         const base = this.basePos.get(l.object);

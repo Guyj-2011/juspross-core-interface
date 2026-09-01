@@ -107,7 +107,7 @@ void main() {
   float breathe = 1.0 + 0.018 * sin(uTime * 0.7 + s);
 
   // deformación por voz: el logo completo se expande con la amplitud
-  float voice = uAmp * (0.10 + 0.16 * sin(uTime * 6.0 + s * 3.0));
+  float voice = uAmp * (0.05 + 0.07 * sin(uTime * 4.2 + s * 3.0));
 
   // reorganización al pensar
   vec3 drift = vec3(
@@ -116,7 +116,7 @@ void main() {
     sin(uTime * 0.43 + s * 2.3)
   );
 
-  float jitter = 0.012 + uThink * 0.075 + uAmp * 0.05 + uEnergy * 0.01;
+  float jitter = 0.005 + uThink * 0.045 + uAmp * 0.018 + uEnergy * 0.005;
   p *= breathe + voice + uEnergy * 0.02 + uWave * 0.16;
   p += drift * jitter * length(position) * 0.9;
   p += dir * uWave * 0.35;
@@ -139,7 +139,7 @@ void main() {
   vColor = c;
   vGlow = glow;
 
-  gl_PointSize = aSize * uDpr * (34.0 / max(0.001, -mv.z)) * (1.0 + uAmp * 0.35 + uWave * 0.5);
+  gl_PointSize = aSize * uDpr * (30.0 / max(0.001, -mv.z)) * (1.0 + uAmp * 0.16 + uWave * 0.3);
 }
 `;
 
@@ -152,10 +152,12 @@ void main() {
   vec2 uv = gl_PointCoord - 0.5;
   float d = length(uv);
   if (d > 0.5) discard;
-  float core = smoothstep(0.5, 0.0, d);
-  float halo = pow(core, 3.0);
-  vec3 c = vColor * (0.35 + vGlow * 0.9) * (0.35 + halo * 1.6);
-  gl_FragColor = vec4(c, core * 0.95);
+  // borde marcado: punto compacto con caída rápida -> el logo se lee mejor
+  float core = smoothstep(0.5, 0.22, d);
+  float dot = smoothstep(0.30, 0.10, d);
+  float halo = pow(core, 2.0);
+  vec3 c = vColor * (0.4 + vGlow * 0.85) * (0.3 + halo * 1.3 + dot * 0.9);
+  gl_FragColor = vec4(c, min(1.0, core * 0.55 + dot * 0.75));
 }
 `;
 
