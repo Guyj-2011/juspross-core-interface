@@ -57,7 +57,7 @@ export class JusprossScene {
   private wave = 0;
   private disposed = false;
   private coreBaseY = 3.4;
-  private coreZ = -13;
+  private coreZ = -8;
   private preset: (typeof PRESET)[Quality];
 
   constructor(
@@ -71,9 +71,9 @@ export class JusprossScene {
     this.renderer = new THREE.WebGLRenderer({ antialias: quality !== "low", alpha: false, powerPreference: "high-performance" });
     this.renderer.setPixelRatio(dpr);
     this.renderer.setSize(container.clientWidth, container.clientHeight);
-    this.renderer.setClearColor(0x01060d, 1);
+    this.renderer.setClearColor(0x000205, 1);
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 0.92;
+    this.renderer.toneMappingExposure = 0.88;
     container.appendChild(this.renderer.domElement);
 
     this.camera = new THREE.PerspectiveCamera(52, container.clientWidth / container.clientHeight, 0.1, 2000);
@@ -81,7 +81,7 @@ export class JusprossScene {
     this.camera.lookAt(0, 0.6, 0);
 
     // niebla atmosférica azul: las estructuras lejanas se disuelven en el azul
-    this.scene.fog = new THREE.FogExp2(0x02090f, 0.0018);
+    this.scene.fog = new THREE.FogExp2(0x010308, 0.0022);
 
     // capas del entorno (orden = profundidad conceptual)
     this.layers.push(createAtmosphere());
@@ -117,10 +117,10 @@ export class JusprossScene {
     this.orbit.object.position.copy(this.coreGroup.position);
 
     // el núcleo ilumina el espacio a su alrededor
-    const coreLight = new THREE.PointLight(0x49b9ff, 2.0, 220, 1.8);
+    const coreLight = new THREE.PointLight(0x49b9ff, 1.6, 220, 1.8);
     coreLight.position.set(0, 1.2, 0);
     this.scene.add(coreLight);
-    this.scene.add(new THREE.AmbientLight(0x123a5e, 0.7));
+    this.scene.add(new THREE.AmbientLight(0x0a1f33, 0.45));
 
     // ondas de energía que se propagan hacia el entorno
     for (let i = 0; i < 3; i++) {

@@ -35,18 +35,18 @@ export function createAtmosphere(): EnvLayer {
       void main(){
         vec3 d = normalize(vP);
         float h = d.y * 0.5 + 0.5;
-        // azul petróleo abajo -> azul profundo arriba
-        vec3 deep   = vec3(0.002, 0.008, 0.020);
-        vec3 teal   = vec3(0.004, 0.024, 0.048);
-        vec3 upper  = vec3(0.002, 0.010, 0.030);
+        // fondo más oscuro: azul casi negro abajo -> azul profundo arriba
+        vec3 deep   = vec3(0.001, 0.003, 0.010);
+        vec3 teal   = vec3(0.002, 0.012, 0.028);
+        vec3 upper  = vec3(0.001, 0.006, 0.018);
         vec3 c = mix(deep, teal, smoothstep(0.18, 0.52, h));
         c = mix(c, upper, smoothstep(0.52, 0.95, h));
-        // resplandor de horizonte cian
+        // resplandor de horizonte cian más contenido
         float hor = exp(-pow((h - 0.47) * 7.5, 2.0));
-        c += vec3(0.008, 0.036, 0.072) * hor * (0.7 + uEnergy * 0.4);
+        c += vec3(0.004, 0.018, 0.040) * hor * (0.5 + uEnergy * 0.3);
         // nubes de energía muy sutiles
         float n = noise(d.xz * 3.2 + uTime * 0.012) * noise(d.xy * 2.1 - uTime * 0.008);
-        c += vec3(0.005, 0.018, 0.036) * smoothstep(0.5, 0.95, n);
+        c += vec3(0.002, 0.010, 0.022) * smoothstep(0.5, 0.95, n);
         gl_FragColor = vec4(c, 1.0);
       }
     `,
@@ -132,16 +132,16 @@ export function createWaveField(density: number): EnvLayer {
         if (d > 0.5) discard;
         float core = smoothstep(0.5, 0.05, d);
         float halo = smoothstep(0.5, 0.0, d);
-        vec3 deepBlue = vec3(0.03, 0.20, 0.72);
-        vec3 cyan     = vec3(0.16, 0.78, 1.00);
-        vec3 white    = vec3(0.78, 0.96, 1.00);
-        vec3 magenta  = vec3(0.85, 0.22, 0.95);
+        vec3 deepBlue = vec3(0.02, 0.14, 0.52);
+        vec3 cyan     = vec3(0.10, 0.55, 0.82);
+        vec3 white    = vec3(0.60, 0.85, 0.95);
+        vec3 magenta  = vec3(0.65, 0.16, 0.72);
         vec3 c = mix(deepBlue, cyan, vH);
-        c = mix(c, white, smoothstep(0.75, 1.0, vH) * 0.85);
+        c = mix(c, white, smoothstep(0.75, 1.0, vH) * 0.70);
         // vetas magenta en las laderas exteriores, como en la referencia
-        c = mix(c, magenta, vSide * step(0.82, vSeed) * 0.9);
-        float a = (halo * 0.30 + core * 0.72) * (0.30 + vI * 0.95);
-        gl_FragColor = vec4(c * (0.8 + vI * 1.1), a);
+        c = mix(c, magenta, vSide * step(0.82, vSeed) * 0.8);
+        float a = (halo * 0.24 + core * 0.60) * (0.25 + vI * 0.85);
+        gl_FragColor = vec4(c * (0.7 + vI * 0.95), a);
       }
     `,
     transparent: true,
@@ -716,16 +716,16 @@ export function createMirrorFloor(): EnvLayer {
       void main(){
         float dist = length(vW.xz);
         float fade = smoothstep(240.0, 10.0, dist);
-        vec3 col = vec3(0.010, 0.045, 0.11) * fade;
+        vec3 col = vec3(0.006, 0.028, 0.07) * fade;
         // reflejo derramado del núcleo
         float coreRef = exp(-pow(vW.x / 12.0, 2.0)) * exp(-pow((vW.z + 6.0) / 60.0, 2.0));
-        col += vec3(0.08, 0.34, 0.85) * coreRef * (0.5 + uEnergy * 0.7);
+        col += vec3(0.06, 0.28, 0.72) * coreRef * (0.45 + uEnergy * 0.6);
         // reflejos verticales difusos de las torres
         float streak = smoothstep(0.6, 1.0, noise(vec2(vW.x * 0.22, vW.z * 0.02 + uTime * 0.03)));
         float side = smoothstep(14.0, 90.0, abs(vW.x)) * smoothstep(260.0, 40.0, dist);
-        col += mix(vec3(0.05, 0.26, 0.60), vec3(0.32, 0.08, 0.66), step(0.86, noise(vec2(vW.x * 0.09, 7.3))))
-             * streak * side * 0.5;
-        gl_FragColor = vec4(col, clamp(fade * 0.75, 0.0, 1.0));
+        col += mix(vec3(0.04, 0.20, 0.48), vec3(0.26, 0.06, 0.55), step(0.86, noise(vec2(vW.x * 0.09, 7.3))))
+             * streak * side * 0.42;
+        gl_FragColor = vec4(col, clamp(fade * 0.68, 0.0, 1.0));
       }
     `,
   });
