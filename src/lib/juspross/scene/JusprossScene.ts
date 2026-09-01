@@ -3,8 +3,6 @@ import { makeCoreMaterial, sampleLogo } from "./core";
 import {
   createAtmosphere,
   createAura,
-  createCircuits,
-  createCubeField,
   createDust,
   createOrbit,
   createMirrorFloor,
@@ -58,6 +56,8 @@ export class JusprossScene {
   private ampSmooth = 0;
   private wave = 0;
   private disposed = false;
+  private coreBaseY = 3.4;
+  private coreZ = -13;
   private preset: (typeof PRESET)[Quality];
 
   constructor(
@@ -88,8 +88,6 @@ export class JusprossScene {
     this.layers.push(createMirrorFloor());
     this.layers.push(createDust(this.preset.dustFar, "far"));
     this.layers.push(createStructures(this.preset.struct));
-    this.layers.push(createCubeField(quality === "low" ? 60 : quality === "balanced" ? 120 : 190));
-    this.layers.push(createCircuits(this.preset.circuits));
     this.layers.push(createWaveField(this.preset.wave));
     this.layers.push(createDust(this.preset.dustMid, "mid"));
     this.layers.push(createDust(this.preset.dustNear, "near"));
@@ -113,7 +111,7 @@ export class JusprossScene {
     const core = new THREE.Points(geo, this.coreMat);
     core.frustumCulled = false;
     this.coreGroup.add(core);
-    this.coreGroup.position.set(0, 0.6, 0);
+    this.coreGroup.position.set(0, this.coreBaseY, this.coreZ);
     this.scene.add(this.coreGroup);
     this.aura.object.position.copy(this.coreGroup.position);
     this.orbit.object.position.copy(this.coreGroup.position);
@@ -225,6 +223,11 @@ export class JusprossScene {
 
     this.coreGroup.rotation.y = Math.sin(t * 0.16) * 0.22 + this.mouseSmooth.x * 0.34;
     this.coreGroup.rotation.x = Math.sin(t * 0.12) * 0.06 + this.mouseSmooth.y * 0.16;
+    // flotación suave del núcleo
+    const floatY = this.coreBaseY + Math.sin(t * 0.5) * 0.55 + Math.sin(t * 0.87) * 0.16;
+    this.coreGroup.position.y = floatY;
+    this.aura.object.position.set(0, floatY, this.coreZ);
+    this.orbit.object.position.set(0, floatY, this.coreZ);
     this.aura.setEnergy(this.cur.energy);
 
     // ondas de energía escalonadas
@@ -239,6 +242,7 @@ export class JusprossScene {
       ring.scale.setScalar(s);
       ring.rotation.x = Math.PI / 2.1 + this.mouseSmooth.y * 0.12;
       ring.rotation.z = t * 0.05;
+      ring.position.set(0, floatY, this.coreZ);
     }
 
     this.orbit.setActive(this.cur.orbit);
@@ -264,11 +268,12 @@ export class JusprossScene {
     this.camera.position.x += (camX - this.camera.position.x) * ease;
     this.camera.position.y += (camY - this.camera.position.y) * ease;
     this.camera.position.z += (camZ - this.camera.position.z) * ease;
-    this.camera.lookAt(this.mouseSmooth.x * 1.2, 0.6 - this.mouseSmooth.y * 0.6, 0);
+    this.camera.lookAt(this.mouseSmooth.x * 1.2, 2.2 - this.mouseSmooth.y * 0.6, this.coreZ * 0.35);
     this.camera.rotation.z = -this.mouseSmooth.x * 0.02;
 
     if (this.coreGlow) {
       this.coreGlow.quaternion.copy(this.camera.quaternion);
+      this.coreGlow.position.set(0, floatY, this.coreZ);
       (this.coreGlow.material as THREE.ShaderMaterial).uniforms["uEnergy"]!.value = this.cur.energy;
     }
     this.renderer.render(this.scene, this.camera);
