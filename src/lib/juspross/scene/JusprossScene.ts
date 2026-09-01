@@ -57,7 +57,7 @@ export class JusprossScene {
   private wave = 0;
   private disposed = false;
   private coreBaseY = 3.4;
-  private coreZ = -13;
+  private coreZ = -8;
   private preset: (typeof PRESET)[Quality];
 
   constructor(
