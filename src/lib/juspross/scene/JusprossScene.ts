@@ -268,7 +268,7 @@ export class JusprossScene {
     this.camera.position.x += (camX - this.camera.position.x) * ease;
     this.camera.position.y += (camY - this.camera.position.y) * ease;
     this.camera.position.z += (camZ - this.camera.position.z) * ease;
-    this.camera.lookAt(this.mouseSmooth.x * 1.2, 0.6 - this.mouseSmooth.y * 0.6, 0);
+    this.camera.lookAt(this.mouseSmooth.x * 1.2, 2.2 - this.mouseSmooth.y * 0.6, this.coreZ * 0.35);
     this.camera.rotation.z = -this.mouseSmooth.x * 0.02;
 
     if (this.coreGlow) {
