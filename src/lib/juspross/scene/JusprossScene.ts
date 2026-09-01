@@ -71,9 +71,9 @@ export class JusprossScene {
     this.renderer = new THREE.WebGLRenderer({ antialias: quality !== "low", alpha: false, powerPreference: "high-performance" });
     this.renderer.setPixelRatio(dpr);
     this.renderer.setSize(container.clientWidth, container.clientHeight);
-    this.renderer.setClearColor(0x01060d, 1);
+    this.renderer.setClearColor(0x000205, 1);
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 0.92;
+    this.renderer.toneMappingExposure = 0.88;
     container.appendChild(this.renderer.domElement);
 
     this.camera = new THREE.PerspectiveCamera(52, container.clientWidth / container.clientHeight, 0.1, 2000);
@@ -81,7 +81,7 @@ export class JusprossScene {
     this.camera.lookAt(0, 0.6, 0);
 
     // niebla atmosférica azul: las estructuras lejanas se disuelven en el azul
-    this.scene.fog = new THREE.FogExp2(0x02090f, 0.0018);
+    this.scene.fog = new THREE.FogExp2(0x010308, 0.0022);
 
     // capas del entorno (orden = profundidad conceptual)
     this.layers.push(createAtmosphere());
