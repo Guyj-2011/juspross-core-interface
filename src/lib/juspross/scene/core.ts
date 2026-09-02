@@ -130,10 +130,10 @@ void main() {
   float hx = clamp(position.x / 3.0 * 0.5 + 0.5, 0.0, 1.0);
   float hz = clamp(position.z / 1.6 * 0.5 + 0.5, 0.0, 1.0);
   float h = clamp(hx * 0.78 + hz * 0.22, 0.0, 1.0);
-  vec3 deepBlue = vec3(0.05, 0.55, 1.0);
-  vec3 electricBlue = vec3(0.12, 0.78, 1.0);
-  c = mix(c, deepBlue,     smoothstep(0.48, 0.80, h) * 0.55);
-  c = mix(c, electricBlue, smoothstep(0.66, 1.0, h) * 0.85);
+  vec3 deepBlue = vec3(0.02, 0.22, 0.65);
+  vec3 darkCyan = vec3(0.04, 0.42, 0.82);
+  c = mix(c, deepBlue,  smoothstep(0.48, 0.80, h) * 0.55);
+  c = mix(c, darkCyan,  smoothstep(0.66, 1.0, h) * 0.85);
   c = mix(c, vec3(1.0, 0.45, 0.12), uErr * 0.75);
   c = mix(c, c * vec3(0.75, 1.05, 1.25), uThink * 0.5);
   vColor = c;
