@@ -9,6 +9,7 @@ import {
   PlusSquare,
   Radar,
   Settings2,
+  Webhook,
 } from "lucide-react";
 import { useJuspross } from "@/lib/juspross/store";
 import type { PanelId } from "@/lib/juspross/types";
@@ -23,6 +24,7 @@ const NAV: { id: PanelId | "home"; label: string; Icon: typeof Hexagon }[] = [
   { id: "activity", label: "ACTIVIDAD", Icon: Radar },
   { id: "history", label: "MEMORIA", Icon: Grid2x2 },
   { id: "settings", label: "CONFIG", Icon: Settings2 },
+  { id: "connection", label: "n8n", Icon: Webhook },
   { id: "debug", label: "DEBUG", Icon: Bug },
 ];
 
