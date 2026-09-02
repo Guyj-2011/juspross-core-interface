@@ -1,3 +1,5 @@
+import { useState } from "react";
+import { Plus, Trash2 } from "lucide-react";
 import { useJuspross } from "@/lib/juspross/store";
 import type { Agent, AgentStatus } from "@/lib/juspross/types";
 import { cn } from "@/lib/utils";
@@ -38,18 +40,35 @@ const NODE_COLOR: Record<string, string> = {
 function AgentMap({ agents }: { agents: Agent[] }) {
   const W = 340;
   const H = 210;
+  const cx = W / 2;
+  const cy = H / 2;
   const nodes = agents.map((a, i) => {
-    const cols = Math.ceil(agents.length / 2);
-    const row = i === 1 ? 1 : 0;
-    const idx = i === 1 ? 0 : i > 1 ? i - 1 : i;
-    const x = 34 + (idx % cols) * ((W - 68) / Math.max(1, cols - 1));
-    const y = row === 1 ? 100 : i === 0 ? 30 : 165;
-    return { ...a, x: i === 1 ? W / 2 : x, y };
+    if (agents.length <= 1) return { ...a, x: cx, y: cy };
+    const ang = (i / agents.length) * Math.PI * 2 - Math.PI / 2;
+    return { ...a, x: cx + Math.cos(ang) * 118, y: cy + Math.sin(ang) * 68 };
   });
   const find = (id: string) => nodes.find((n) => n.id === id);
+  const color = (id: string) => NODE_COLOR[id] ?? "var(--cyan)";
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="mb-3 w-full">
+      <defs>
+        <radialGradient id="jp-map-core">
+          <stop offset="0%" stopColor="var(--cyan)" stopOpacity="0.35" />
+          <stop offset="100%" stopColor="var(--cyan)" stopOpacity="0" />
+        </radialGradient>
+      </defs>
+      <circle cx={cx} cy={cy} r={92} fill="url(#jp-map-core)" />
+      <ellipse
+        cx={cx}
+        cy={cy}
+        rx={118}
+        ry={68}
+        fill="none"
+        stroke="var(--glass-edge)"
+        strokeWidth={0.6}
+        strokeDasharray="3 5"
+      />
       {nodes.flatMap((n) =>
         n.links.map((l) => {
           const t = find(l);
@@ -70,34 +89,31 @@ function AgentMap({ agents }: { agents: Agent[] }) {
       )}
       {nodes.map((n) => (
         <g key={n.id}>
+          <circle cx={n.x} cy={n.y} r={19} fill={color(n.id)} opacity={0.1} />
           <circle
             cx={n.x}
             cy={n.y}
-            r={15}
-            fill="oklch(0.16 0.04 258 / 0.9)"
-            stroke={NODE_COLOR[n.id] ?? "var(--cyan)"}
+            r={14}
+            fill="oklch(0.12 0.03 258 / 0.92)"
+            stroke={color(n.id)}
             strokeWidth={1.2}
           />
-          <g
+          <path
+            d={GLYPH[n.id] ?? "M12 3l7 4v10l-7 4-7-4V7z"}
             transform={`translate(${n.x - 7} ${n.y - 7}) scale(0.6)`}
-            style={{ color: NODE_COLOR[n.id] ?? "var(--cyan)" }}
-          >
-            <path
-              d={GLYPH[n.id] ?? "M12 3l7 4v10l-7 4-7-4V7z"}
-              stroke={NODE_COLOR[n.id] ?? "var(--cyan)"}
-              strokeWidth={1.6}
-              fill="none"
-              strokeLinecap="round"
-            />
-          </g>
+            stroke={color(n.id)}
+            strokeWidth={1.6}
+            fill="none"
+            strokeLinecap="round"
+          />
           <text
             x={n.x}
-            y={n.y + 28}
+            y={n.y + 26}
             textAnchor="middle"
             className="fill-muted-foreground font-mono"
-            style={{ fontSize: 8, letterSpacing: 1.2 }}
+            style={{ fontSize: 7.5, letterSpacing: 1 }}
           >
-            {n.name.toUpperCase()}
+            {n.name.toUpperCase().slice(0, 14)}
           </text>
         </g>
       ))}
@@ -107,28 +123,126 @@ function AgentMap({ agents }: { agents: Agent[] }) {
 
 export function AgentsPanel({ compact = false }: { compact?: boolean } = {}) {
   const agents = useJuspross((s) => s.agents);
+  const addAgent = useJuspross((s) => s.addAgent);
+  const removeAgent = useJuspross((s) => s.removeAgent);
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [role, setRole] = useState("");
+  const [links, setLinks] = useState<string[]>([]);
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) return;
+    addAgent({ name, role, links });
+    setName("");
+    setRole("");
+    setLinks([]);
+    setOpen(false);
+  };
+
   return (
     <div>
       <AgentMap agents={agents} />
       {compact ? null : (
         <>
-      <ul className="space-y-1.5">
-        {agents.map((a) => (
-          <li key={a.id} className="rounded-sm border border-border/60 bg-background/25 px-2.5 py-2">
-            <div className="flex items-center gap-2.5">
-              <Glyph id={a.id} className={TONE[a.status]} />
-              <span className="font-mono text-[11px] tracking-[0.18em] text-foreground/90">
-                {a.name}
-              </span>
-              <span className={cn("ml-auto font-mono text-[9px] tracking-[0.2em]", TONE[a.status])}>
-                {a.status}
-              </span>
-            </div>
-            <p className="mt-1 pl-6.5 text-[11px] text-muted-foreground">{a.activity}</p>
-          </li>
-        ))}
-      </ul>
-      <p className="label-xs mt-3">ARQUITECTURA EXTENSIBLE · {agents.length} NODOS REGISTRADOS</p>
+          <ul className="space-y-1.5">
+            {agents.map((a) => (
+              <li
+                key={a.id}
+                className="holo-bracket group relative overflow-hidden border border-border/60 bg-[linear-gradient(100deg,color-mix(in_oklab,var(--cyan)_7%,transparent),transparent_60%)] px-2.5 py-2"
+              >
+                <span
+                  className="absolute inset-y-0 left-0 w-px"
+                  style={{ background: NODE_COLOR[a.id] ?? "var(--cyan)" }}
+                />
+                <div className="flex items-center gap-2.5">
+                  <Glyph id={a.id} className={TONE[a.status]} />
+                  <span className="truncate font-mono text-[11px] tracking-[0.18em] text-foreground/90">
+                    {a.name}
+                  </span>
+                  <span className={cn("ml-auto font-mono text-[9px] tracking-[0.2em]", TONE[a.status])}>
+                    {a.status}
+                  </span>
+                  <button
+                    onClick={() => removeAgent(a.id)}
+                    aria-label={`Eliminar ${a.name}`}
+                    className="rounded-sm p-0.5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100 hover:text-amber"
+                  >
+                    <Trash2 className="size-3" />
+                  </button>
+                </div>
+                <p className="mt-1 pl-6.5 text-[11px] text-muted-foreground">{a.activity}</p>
+              </li>
+            ))}
+          </ul>
+
+          {open ? (
+            <form
+              onSubmit={submit}
+              className="mt-3 space-y-2 border border-cyan/30 bg-background/40 p-2.5"
+            >
+              <p className="label-xs text-cyan">REGISTRAR NUEVO NODO</p>
+              <input
+                autoFocus
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="NOMBRE DEL AGENTE"
+                className="w-full border border-border/60 bg-background/50 px-2 py-1.5 font-mono text-[11px] tracking-[0.14em] text-foreground outline-none focus:border-cyan"
+              />
+              <input
+                value={role}
+                onChange={(e) => setRole(e.target.value)}
+                placeholder="Función / rol"
+                className="w-full border border-border/60 bg-background/50 px-2 py-1.5 text-[11px] text-foreground outline-none focus:border-cyan"
+              />
+              <div className="flex flex-wrap gap-1">
+                {agents.map((a) => {
+                  const on = links.includes(a.id);
+                  return (
+                    <button
+                      type="button"
+                      key={a.id}
+                      onClick={() =>
+                        setLinks((l) => (on ? l.filter((x) => x !== a.id) : [...l, a.id]))
+                      }
+                      className={cn(
+                        "border px-1.5 py-0.5 font-mono text-[9px] tracking-[0.16em] transition-colors",
+                        on
+                          ? "border-cyan/70 bg-cyan/15 text-cyan"
+                          : "border-border/60 text-muted-foreground hover:text-foreground",
+                      )}
+                    >
+                      {a.name}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="submit"
+                  className="flex-1 border border-cyan/60 bg-cyan/10 py-1.5 font-mono text-[10px] tracking-[0.2em] text-cyan hover:bg-cyan/20"
+                >
+                  AÑADIR
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setOpen(false)}
+                  className="border border-border/60 px-3 py-1.5 font-mono text-[10px] tracking-[0.2em] text-muted-foreground hover:text-foreground"
+                >
+                  CANCELAR
+                </button>
+              </div>
+            </form>
+          ) : (
+            <button
+              onClick={() => setOpen(true)}
+              className="mt-3 flex w-full items-center justify-center gap-2 border border-dashed border-cyan/40 py-2 font-mono text-[10px] tracking-[0.22em] text-cyan/80 transition-colors hover:border-cyan hover:bg-cyan/10 hover:text-cyan"
+            >
+              <Plus className="size-3.5" /> AÑADIR AGENTE
+            </button>
+          )}
+
+          <p className="label-xs mt-3">ARQUITECTURA EXTENSIBLE · {agents.length} NODOS REGISTRADOS</p>
         </>
       )}
     </div>
