@@ -9,6 +9,7 @@ import {
   PlusSquare,
   Radar,
   Settings2,
+  Webhook,
 } from "lucide-react";
 import { useJuspross } from "@/lib/juspross/store";
 import type { PanelId } from "@/lib/juspross/types";
