@@ -52,6 +52,8 @@ interface JusprossState {
   setSidebar: (v: boolean) => void;
   updateAgent: (id: string, patch: Partial<Agent>) => void;
   resetAgents: () => void;
+  addAgent: (a: { name: string; role: string; links: string[] }) => void;
+  removeAgent: (id: string) => void;
   log: (agent: string, message: string, level?: ActivityEntry["level"]) => void;
   pushDebug: (e: Omit<DebugEvent, "id" | "time">) => void;
   addMessage: (m: Omit<ChatMessage, "id" | "time">) => void;
@@ -121,6 +123,39 @@ export const useJuspross = create<JusprossState>((set, get) => ({
   resetAgents: () =>
     set((s) => ({
       agents: s.agents.map((a) => ({ ...a, status: "IDLE", activity: "En espera", elapsedMs: 0 })),
+    })),
+  addAgent: ({ name, role, links }) =>
+    set((s) => {
+      const base = name
+        .trim()
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "");
+      let id = base || uid();
+      while (s.agents.some((a) => a.id === id)) id = `${base || "agente"}-${uid().slice(0, 3)}`;
+      return {
+        agents: [
+          ...s.agents,
+          {
+            id,
+            name: name.trim().toUpperCase(),
+            role: role.trim() || "Agente personalizado",
+            status: "IDLE" as const,
+            activity: "En espera",
+            updatedAt: Date.now(),
+            elapsedMs: 0,
+            links,
+          },
+        ],
+      };
+    }),
+  removeAgent: (id) =>
+    set((s) => ({
+      agents: s.agents
+        .filter((a) => a.id !== id)
+        .map((a) => ({ ...a, links: a.links.filter((l) => l !== id) })),
     })),
   log: (agent, message, level = "info") =>
     set((s) => ({
