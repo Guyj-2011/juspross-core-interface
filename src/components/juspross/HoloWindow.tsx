@@ -38,19 +38,32 @@ export function HoloWindow({ title, subtitle, initial, width = 380, onClose, chi
   return (
     <section
       className={cn(
-        "holo scan-line pointer-events-auto absolute z-30 animate-rise overflow-hidden rounded-md",
+        "holo holo-bracket scan-line pointer-events-auto absolute z-30 animate-rise overflow-hidden rounded-none",
         className,
       )}
       style={{ left: pos.x, top: pos.y, width }}
     >
+      {/* barrido de escaneo vertical */}
+      <div
+        aria-hidden
+        className="animate-scan pointer-events-none absolute inset-x-0 top-0 z-10 h-16 opacity-40"
+        style={{
+          background:
+            "linear-gradient(to bottom, transparent, color-mix(in oklab, var(--cyan) 22%, transparent), transparent)",
+        }}
+      />
       <header
-        className="flex cursor-grab items-center justify-between gap-3 border-b border-border/60 px-3 py-2 active:cursor-grabbing"
+        className="relative flex cursor-grab items-center justify-between gap-3 border-b border-border/60 px-3 py-2 active:cursor-grabbing"
+        style={{
+          background:
+            "linear-gradient(90deg, color-mix(in oklab, var(--cyan) 14%, transparent), transparent 55%, color-mix(in oklab, var(--violet) 12%, transparent))",
+        }}
         onPointerDown={(e) => {
           drag.current = { dx: e.clientX - pos.x, dy: e.clientY - pos.y };
         }}
       >
         <div className="flex min-w-0 items-center gap-2">
-          <span className="size-1.5 rounded-full bg-cyan shadow-[0_0_10px_var(--cyan)]" />
+          <span className="animate-blip size-1.5 rounded-full bg-cyan shadow-[0_0_12px_var(--cyan)]" />
           <h2 className="truncate font-mono text-[11px] tracking-[0.22em] text-foreground/90 uppercase">
             {title}
           </h2>
@@ -64,7 +77,8 @@ export function HoloWindow({ title, subtitle, initial, width = 380, onClose, chi
           <X className="size-3.5" />
         </button>
       </header>
-      <div className="max-h-[62vh] overflow-y-auto px-3 py-3">{children}</div>
+      <div className="hairline h-px w-full" />
+      <div className="relative max-h-[62vh] overflow-y-auto px-3 py-3">{children}</div>
       <div className="hairline h-px w-full opacity-60" />
     </section>
   );

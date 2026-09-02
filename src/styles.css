@@ -180,18 +180,86 @@
 }
 
 @utility holo {
+  position: relative;
   background:
+    radial-gradient(
+      120% 90% at 0% 0%,
+      oklch(0.42 0.11 220 / 0.28),
+      transparent 60%
+    ),
+    radial-gradient(
+      110% 80% at 100% 100%,
+      oklch(0.38 0.13 300 / 0.2),
+      transparent 62%
+    ),
     linear-gradient(
       160deg,
-      oklch(0.24 0.05 250 / 0.55),
-      oklch(0.13 0.03 258 / 0.72)
+      oklch(0.22 0.05 250 / 0.62),
+      oklch(0.1 0.03 258 / 0.8)
     );
-  backdrop-filter: blur(18px) saturate(130%);
+  backdrop-filter: blur(22px) saturate(150%);
   border: 1px solid var(--glass-edge);
+  clip-path: polygon(
+    14px 0,
+    100% 0,
+    100% calc(100% - 14px),
+    calc(100% - 14px) 100%,
+    0 100%,
+    0 14px
+  );
   box-shadow:
-    0 20px 60px -20px oklch(0.05 0.02 258 / 0.9),
-    inset 0 1px 0 oklch(0.85 0.12 215 / 0.12);
+    0 26px 70px -22px oklch(0.02 0.02 258 / 0.95),
+    0 0 0 1px oklch(0.8 0.13 215 / 0.06),
+    0 0 44px -18px oklch(0.75 0.15 215 / 0.55),
+    inset 0 1px 0 oklch(0.85 0.12 215 / 0.16);
 }
+
+@utility holo-bracket {
+  position: relative;
+  &::before,
+  &::after {
+    content: "";
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    pointer-events: none;
+    border-color: oklch(0.85 0.14 215 / 0.75);
+  }
+  &::before {
+    top: 0;
+    right: 0;
+    border-top: 1px solid;
+    border-right: 1px solid;
+  }
+  &::after {
+    bottom: 0;
+    left: 0;
+    border-bottom: 1px solid;
+    border-left: 1px solid;
+  }
+}
+
+@keyframes jp-scan {
+  0% {
+    transform: translateY(0);
+    opacity: 0;
+  }
+  12% {
+    opacity: 1;
+  }
+  88% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(var(--scan-distance, 380px));
+    opacity: 0;
+  }
+}
+
+@utility animate-scan {
+  animation: jp-scan 5.5s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
 
 @utility hairline {
   background: linear-gradient(
