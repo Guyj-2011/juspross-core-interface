@@ -24,6 +24,7 @@ const NAV: { id: PanelId | "home"; label: string; Icon: typeof Hexagon }[] = [
   { id: "activity", label: "ACTIVIDAD", Icon: Radar },
   { id: "history", label: "MEMORIA", Icon: Grid2x2 },
   { id: "settings", label: "CONFIG", Icon: Settings2 },
+  { id: "connection", label: "n8n", Icon: Webhook },
   { id: "debug", label: "DEBUG", Icon: Bug },
 ];
 
