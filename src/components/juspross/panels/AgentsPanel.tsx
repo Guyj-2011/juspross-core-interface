@@ -130,11 +130,13 @@ function LinkPicker({
   excludeId,
   selected,
   onToggle,
+  tone = "var(--cyan)",
 }: {
   agents: Agent[];
   excludeId?: string;
   selected: string[];
   onToggle: (id: string) => void;
+  tone?: string;
 }) {
   const options = agents.filter((a) => a.id !== excludeId);
   if (options.length === 0)
