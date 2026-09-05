@@ -249,45 +249,57 @@ export function AgentsPanel({ compact = false }: { compact?: boolean } = {}) {
                 <p className="mt-1 pl-6.5 text-[11px] text-muted-foreground">{a.activity}</p>
 
                 {editingLinksId === a.id ? (
-                  <div className="mt-2 border border-cyan/25 bg-background/50 p-2 pl-2.5">
-                    <div className="mb-1.5 flex items-center justify-between">
-                      <p className="label-xs text-cyan">ENVÍA SALIDA A →</p>
-                      <button
-                        onClick={() => setEditingLinksId(null)}
-                        aria-label="Cerrar editor de conexiones"
-                        className="text-muted-foreground hover:text-foreground"
-                      >
-                        <X className="size-3" />
-                      </button>
+                  <div className="mt-2 space-y-2">
+                    <div className="border border-amber/30 bg-[linear-gradient(120deg,color-mix(in_oklab,var(--amber)_10%,transparent),transparent_70%)] p-2">
+                      <div className="mb-1.5 flex items-center justify-between">
+                        <p className="label-xs text-amber">← RECIBE ENTRADA DE</p>
+                        <button
+                          onClick={() => setEditingLinksId(null)}
+                          aria-label="Cerrar editor de conexiones"
+                          className="text-muted-foreground hover:text-foreground"
+                        >
+                          <X className="size-3" />
+                        </button>
+                      </div>
+                      <LinkPicker
+                        agents={agents}
+                        excludeId={a.id}
+                        tone="var(--amber)"
+                        selected={inputsOf(a.id)}
+                        onToggle={(id) => toggleInput(id, a.id)}
+                      />
                     </div>
-                    <LinkPicker
-                      agents={agents}
-                      excludeId={a.id}
-                      selected={a.links}
-                      onToggle={(id) =>
-                        updateAgent(a.id, { links: toggle(a.links, id) })
-                      }
-                    />
+                    <div className="border border-cyan/30 bg-[linear-gradient(120deg,color-mix(in_oklab,var(--cyan)_10%,transparent),transparent_70%)] p-2">
+                      <p className="label-xs mb-1.5 text-cyan">ENVÍA SALIDA A →</p>
+                      <LinkPicker
+                        agents={agents}
+                        excludeId={a.id}
+                        selected={a.links}
+                        onToggle={(id) => updateAgent(a.id, { links: toggle(a.links, id) })}
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-1 space-y-0.5 pl-6.5 font-mono text-[9px] tracking-[0.12em]">
+                    {inputsOf(a.id).length > 0 && (
+                      <p className="text-amber/70">
+                        ←{" "}
+                        {inputsOf(a.id)
+                          .map((l) => agents.find((x) => x.id === l)?.name)
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </p>
+                    )}
                     {a.links.length > 0 && (
-                      <p className="mt-1.5 font-mono text-[9px] tracking-[0.12em] text-muted-foreground">
-                        {a.name} →{" "}
+                      <p className="text-cyan/70">
+                        →{" "}
                         {a.links
                           .map((l) => agents.find((x) => x.id === l)?.name)
                           .filter(Boolean)
-                          .join(" → ")}
+                          .join(" · ")}
                       </p>
                     )}
                   </div>
-                ) : (
-                  a.links.length > 0 && (
-                    <p className="mt-1 pl-6.5 font-mono text-[9px] tracking-[0.12em] text-cyan/60">
-                      →{" "}
-                      {a.links
-                        .map((l) => agents.find((x) => x.id === l)?.name)
-                        .filter(Boolean)
-                        .join(" · ")}
-                    </p>
-                  )
                 )}
               </li>
             ))}
