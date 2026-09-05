@@ -54,9 +54,6 @@ const nodeColor = (id: string) => {
   return PALETTE[h % PALETTE.length]!;
 };
 
-const NODE_COLOR = new Proxy({} as Record<string, string>, {
-  get: (_t, k: string) => nodeColor(k),
-});
 
 function AgentMap({ agents }: { agents: Agent[] }) {
   const W = 340;
@@ -69,7 +66,7 @@ function AgentMap({ agents }: { agents: Agent[] }) {
     return { ...a, x: cx + Math.cos(ang) * 118, y: cy + Math.sin(ang) * 68 };
   });
   const find = (id: string) => nodes.find((n) => n.id === id);
-  const color = (id: string) => NODE_COLOR[id] ?? "var(--cyan)";
+  const color = (id: string) => nodeColor(id);
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="mb-3 w-full">
@@ -187,7 +184,7 @@ function LinkPicker({
           >
             <span
               className="inline-block size-1 rounded-full"
-              style={{ background: NODE_COLOR[a.id] ?? "var(--cyan)" }}
+              style={{ background: nodeColor(a.id) }}
             />
             {a.name}
           </button>
@@ -245,7 +242,7 @@ export function AgentsPanel({ compact = false }: { compact?: boolean } = {}) {
               >
                 <span
                   className="absolute inset-y-0 left-0 w-px"
-                  style={{ background: NODE_COLOR[a.id] ?? "var(--cyan)" }}
+                  style={{ background: nodeColor(a.id) }}
                 />
                 <div className="flex items-center gap-2.5">
                   <Glyph id={a.id} className={TONE[a.status]} />
