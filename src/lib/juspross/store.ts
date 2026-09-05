@@ -124,7 +124,7 @@ export const useJuspross = create<JusprossState>((set, get) => ({
     set((s) => ({
       agents: s.agents.map((a) => ({ ...a, status: "IDLE", activity: "En espera", elapsedMs: 0 })),
     })),
-  addAgent: ({ name, role, links }) =>
+  addAgent: ({ name, role, links, inputs = [] }) =>
     set((s) => {
       const base = name
         .trim()
