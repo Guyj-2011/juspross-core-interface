@@ -180,14 +180,25 @@ export function AgentsPanel({ compact = false }: { compact?: boolean } = {}) {
   const [name, setName] = useState("");
   const [role, setRole] = useState("");
   const [links, setLinks] = useState<string[]>([]);
+  const [inputs, setInputs] = useState<string[]>([]);
+
+  /** Conmuta la ENTRADA: el agente `sourceId` envía (o deja de enviar) a `targetId`. */
+  const toggleInput = (sourceId: string, targetId: string) => {
+    const src = agents.find((a) => a.id === sourceId);
+    if (!src) return;
+    updateAgent(sourceId, { links: toggle(src.links, targetId) });
+  };
+
+  const inputsOf = (id: string) => agents.filter((a) => a.links.includes(id)).map((a) => a.id);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
-    addAgent({ name, role, links });
+    addAgent({ name, role, links, inputs });
     setName("");
     setRole("");
     setLinks([]);
+    setInputs([]);
     setOpen(false);
   };
 
