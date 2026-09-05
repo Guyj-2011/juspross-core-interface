@@ -324,23 +324,38 @@ export function AgentsPanel({ compact = false }: { compact?: boolean } = {}) {
                 placeholder="Función / rol"
                 className="w-full border border-border/60 bg-background/50 px-2 py-1.5 text-[11px] text-foreground outline-none focus:border-cyan"
               />
-              <div className="border border-border/50 bg-background/30 p-2">
-                <p className="label-xs mb-1.5">FLUJO: ESTE AGENTE ENVÍA SU SALIDA A →</p>
+              <div className="border border-amber/30 bg-[linear-gradient(120deg,color-mix(in_oklab,var(--amber)_10%,transparent),transparent_70%)] p-2">
+                <p className="label-xs mb-1.5 text-amber">ENTRADA: RECIBE DE ←</p>
+                <LinkPicker
+                  agents={agents}
+                  tone="var(--amber)"
+                  selected={inputs}
+                  onToggle={(id) => setInputs((l) => toggle(l, id))}
+                />
+              </div>
+              <div className="border border-cyan/30 bg-[linear-gradient(120deg,color-mix(in_oklab,var(--cyan)_10%,transparent),transparent_70%)] p-2">
+                <p className="label-xs mb-1.5 text-cyan">SALIDA: ENVÍA A →</p>
                 <LinkPicker
                   agents={agents}
                   selected={links}
                   onToggle={(id) => setLinks((l) => toggle(l, id))}
                 />
-                {links.length > 0 && (
-                  <p className="mt-1.5 font-mono text-[9px] tracking-[0.12em] text-cyan/70">
-                    {name.trim().toUpperCase() || "NUEVO"} →{" "}
-                    {links
-                      .map((l) => agents.find((x) => x.id === l)?.name)
-                      .filter(Boolean)
-                      .join(" → ")}
-                  </p>
-                )}
               </div>
+              {(inputs.length > 0 || links.length > 0) && (
+                <p className="font-mono text-[9px] tracking-[0.12em] text-muted-foreground">
+                  {inputs
+                    .map((l) => agents.find((x) => x.id === l)?.name)
+                    .filter(Boolean)
+                    .join(" · ")}
+                  {inputs.length > 0 ? " → " : ""}
+                  <span className="text-cyan">{name.trim().toUpperCase() || "NUEVO"}</span>
+                  {links.length > 0 ? " → " : ""}
+                  {links
+                    .map((l) => agents.find((x) => x.id === l)?.name)
+                    .filter(Boolean)
+                    .join(" · ")}
+                </p>
+              )}
               <div className="flex gap-2">
                 <button
                   type="submit"
