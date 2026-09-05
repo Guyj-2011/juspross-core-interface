@@ -82,8 +82,8 @@ const META: Record<
 
 const GAP = 18;
 const TOP = 92;
-const LEFT = 112;
-const ROW_H = 336;
+const LEFT = 186;
+const ROW_H = 322;
 
 /** Reparte los paneles abiertos en una rejilla ordenada (columnas → filas). */
 function useTiles(ids: PanelId[]) {
