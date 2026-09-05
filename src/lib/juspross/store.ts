@@ -52,7 +52,7 @@ interface JusprossState {
   setSidebar: (v: boolean) => void;
   updateAgent: (id: string, patch: Partial<Agent>) => void;
   resetAgents: () => void;
-  addAgent: (a: { name: string; role: string; links: string[] }) => void;
+  addAgent: (a: { name: string; role: string; links: string[]; inputs?: string[] }) => void;
   removeAgent: (id: string) => void;
   log: (agent: string, message: string, level?: ActivityEntry["level"]) => void;
   pushDebug: (e: Omit<DebugEvent, "id" | "time">) => void;
@@ -124,7 +124,7 @@ export const useJuspross = create<JusprossState>((set, get) => ({
     set((s) => ({
       agents: s.agents.map((a) => ({ ...a, status: "IDLE", activity: "En espera", elapsedMs: 0 })),
     })),
-  addAgent: ({ name, role, links }) =>
+  addAgent: ({ name, role, links, inputs = [] }) =>
     set((s) => {
       const base = name
         .trim()
@@ -137,7 +137,12 @@ export const useJuspross = create<JusprossState>((set, get) => ({
       while (s.agents.some((a) => a.id === id)) id = `${base || "agente"}-${uid().slice(0, 3)}`;
       return {
         agents: [
-          ...s.agents,
+          // los agentes de entrada apuntan al nuevo nodo
+          ...s.agents.map((a) =>
+            inputs.includes(a.id) && !a.links.includes(id)
+              ? { ...a, links: [...a.links, id], updatedAt: Date.now() }
+              : a,
+          ),
           {
             id,
             name: name.trim().toUpperCase(),

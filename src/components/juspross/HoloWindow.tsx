@@ -9,6 +9,7 @@ interface Props {
   width?: number;
   accent?: string;
   accent2?: string;
+  maxBodyHeight?: number;
   onClose: () => void;
   children: ReactNode;
   className?: string;
@@ -22,6 +23,7 @@ export function HoloWindow({
   width = 380,
   accent = "var(--cyan)",
   accent2 = "var(--violet)",
+  maxBodyHeight,
   onClose,
   children,
   className,
@@ -134,7 +136,12 @@ export function HoloWindow({
           opacity: 0.7,
         }}
       />
-      <div className="relative max-h-[62vh] overflow-y-auto px-3 py-3">{children}</div>
+      <div
+        className="relative overflow-y-auto px-3 py-3"
+        style={{ maxHeight: maxBodyHeight ?? "62vh" }}
+      >
+        {children}
+      </div>
       <div
         className="h-px w-full opacity-40"
         style={{ background: "linear-gradient(90deg, transparent, var(--accent2), transparent)" }}

@@ -82,8 +82,8 @@ const META: Record<
 
 const GAP = 18;
 const TOP = 92;
-const LEFT = 112;
-const ROW_H = 336;
+const LEFT = 186;
+const ROW_H = 322;
 
 /** Reparte los paneles abiertos en una rejilla ordenada (columnas → filas). */
 function useTiles(ids: PanelId[]) {
@@ -95,22 +95,36 @@ function useTiles(ids: PanelId[]) {
     return () => window.removeEventListener("resize", set);
   }, []);
 
-  const rows = Math.max(1, Math.floor((vp.h - TOP - 150) / ROW_H));
+  const rows = Math.max(1, Math.floor((vp.h - TOP - 170) / ROW_H));
+  const cols = Math.max(1, Math.ceil(ids.length / rows));
+
+  // ancho de cada columna (el mayor de sus paneles)
+  const colW: number[] = [];
+  ids.forEach((id, i) => {
+    const c = Math.floor(i / rows);
+    colW[c] = Math.max(colW[c] ?? 0, META[id].w);
+  });
+
+  const avail = vp.w - LEFT - 24;
+  const total = colW.reduce((a, b) => a + b, 0) + GAP * (cols - 1);
+
+  // si no caben lado a lado, se reparten en cascada uniforme (siempre en orden)
+  const xs: number[] = [];
+  if (total <= avail || cols === 1) {
+    let x = LEFT;
+    colW.forEach((w, c) => {
+      xs[c] = x;
+      x += w + GAP;
+    });
+  } else {
+    const step = (avail - (colW[cols - 1] ?? 0)) / (cols - 1);
+    colW.forEach((_, c) => (xs[c] = Math.round(LEFT + step * c)));
+  }
+
   const positions: Record<string, { x: number; y: number }> = {};
-  let x = LEFT;
-  let row = 0;
-  let colW = 0;
-  ids.forEach((id) => {
-    if (row >= rows) {
-      x += colW + GAP;
-      row = 0;
-      colW = 0;
-    }
-    const w = META[id].w;
-    colW = Math.max(colW, w);
-    const maxX = Math.max(LEFT, vp.w - w - 24);
-    positions[id] = { x: Math.min(x, maxX), y: TOP + row * ROW_H };
-    row += 1;
+  ids.forEach((id, i) => {
+    const c = Math.floor(i / rows);
+    positions[id] = { x: xs[c] ?? LEFT, y: TOP + (i % rows) * ROW_H };
   });
   return positions;
 }
@@ -134,6 +148,7 @@ export function PanelHost() {
             accent={m.accent}
             accent2={m.accent2}
             position={tiles[id] ?? { x: LEFT, y: TOP }}
+            maxBodyHeight={ROW_H - 74}
             onClose={() => closePanel(id)}
           >
             <Body />

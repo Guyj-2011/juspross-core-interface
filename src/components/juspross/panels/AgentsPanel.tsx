@@ -29,13 +29,31 @@ function Glyph({ id, className }: { id: string; className?: string }) {
 }
 
 /** Mapa neuronal del flujo real de agentes. */
-const NODE_COLOR: Record<string, string> = {
+const PALETTE = [
+  "var(--cyan)",
+  "var(--violet)",
+  "var(--emerald)",
+  "var(--amber)",
+  "var(--magenta)",
+  "var(--electric)",
+];
+
+const BASE_COLOR: Record<string, string> = {
   planificador: "var(--amber)",
   director: "var(--cyan)",
   investigador: "var(--violet)",
   curador: "var(--emerald)",
-  guionista: "var(--amber)",
+  guionista: "var(--magenta)",
 };
+
+/** Color estable por agente (los nuevos toman un tono de la paleta). */
+const nodeColor = (id: string) => {
+  if (BASE_COLOR[id]) return BASE_COLOR[id];
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+  return PALETTE[h % PALETTE.length]!;
+};
+
 
 function AgentMap({ agents }: { agents: Agent[] }) {
   const W = 340;
@@ -48,7 +66,7 @@ function AgentMap({ agents }: { agents: Agent[] }) {
     return { ...a, x: cx + Math.cos(ang) * 118, y: cy + Math.sin(ang) * 68 };
   });
   const find = (id: string) => nodes.find((n) => n.id === id);
-  const color = (id: string) => NODE_COLOR[id] ?? "var(--cyan)";
+  const color = (id: string) => nodeColor(id);
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="mb-3 w-full">
@@ -130,11 +148,13 @@ function LinkPicker({
   excludeId,
   selected,
   onToggle,
+  tone = "var(--cyan)",
 }: {
   agents: Agent[];
   excludeId?: string;
   selected: string[];
   onToggle: (id: string) => void;
+  tone?: string;
 }) {
   const options = agents.filter((a) => a.id !== excludeId);
   if (options.length === 0)
@@ -150,14 +170,21 @@ function LinkPicker({
             onClick={() => onToggle(a.id)}
             className={cn(
               "flex items-center gap-1 border px-1.5 py-0.5 font-mono text-[9px] tracking-[0.16em] transition-colors",
-              on
-                ? "border-cyan/70 bg-cyan/15 text-cyan"
-                : "border-border/60 text-muted-foreground hover:text-foreground",
+              on ? "" : "border-border/60 text-muted-foreground hover:text-foreground",
             )}
+            style={
+              on
+                ? {
+                    borderColor: `color-mix(in oklab, ${tone} 70%, transparent)`,
+                    background: `color-mix(in oklab, ${tone} 16%, transparent)`,
+                    color: tone,
+                  }
+                : undefined
+            }
           >
             <span
               className="inline-block size-1 rounded-full"
-              style={{ background: NODE_COLOR[a.id] ?? "var(--cyan)" }}
+              style={{ background: nodeColor(a.id) }}
             />
             {a.name}
           </button>
@@ -180,14 +207,25 @@ export function AgentsPanel({ compact = false }: { compact?: boolean } = {}) {
   const [name, setName] = useState("");
   const [role, setRole] = useState("");
   const [links, setLinks] = useState<string[]>([]);
+  const [inputs, setInputs] = useState<string[]>([]);
+
+  /** Conmuta la ENTRADA: el agente `sourceId` envía (o deja de enviar) a `targetId`. */
+  const toggleInput = (sourceId: string, targetId: string) => {
+    const src = agents.find((a) => a.id === sourceId);
+    if (!src) return;
+    updateAgent(sourceId, { links: toggle(src.links, targetId) });
+  };
+
+  const inputsOf = (id: string) => agents.filter((a) => a.links.includes(id)).map((a) => a.id);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
-    addAgent({ name, role, links });
+    addAgent({ name, role, links, inputs });
     setName("");
     setRole("");
     setLinks([]);
+    setInputs([]);
     setOpen(false);
   };
 
@@ -204,7 +242,7 @@ export function AgentsPanel({ compact = false }: { compact?: boolean } = {}) {
               >
                 <span
                   className="absolute inset-y-0 left-0 w-px"
-                  style={{ background: NODE_COLOR[a.id] ?? "var(--cyan)" }}
+                  style={{ background: nodeColor(a.id) }}
                 />
                 <div className="flex items-center gap-2.5">
                   <Glyph id={a.id} className={TONE[a.status]} />
@@ -238,45 +276,57 @@ export function AgentsPanel({ compact = false }: { compact?: boolean } = {}) {
                 <p className="mt-1 pl-6.5 text-[11px] text-muted-foreground">{a.activity}</p>
 
                 {editingLinksId === a.id ? (
-                  <div className="mt-2 border border-cyan/25 bg-background/50 p-2 pl-2.5">
-                    <div className="mb-1.5 flex items-center justify-between">
-                      <p className="label-xs text-cyan">ENVÍA SALIDA A →</p>
-                      <button
-                        onClick={() => setEditingLinksId(null)}
-                        aria-label="Cerrar editor de conexiones"
-                        className="text-muted-foreground hover:text-foreground"
-                      >
-                        <X className="size-3" />
-                      </button>
+                  <div className="mt-2 space-y-2">
+                    <div className="border border-amber/30 bg-[linear-gradient(120deg,color-mix(in_oklab,var(--amber)_10%,transparent),transparent_70%)] p-2">
+                      <div className="mb-1.5 flex items-center justify-between">
+                        <p className="label-xs text-amber">← RECIBE ENTRADA DE</p>
+                        <button
+                          onClick={() => setEditingLinksId(null)}
+                          aria-label="Cerrar editor de conexiones"
+                          className="text-muted-foreground hover:text-foreground"
+                        >
+                          <X className="size-3" />
+                        </button>
+                      </div>
+                      <LinkPicker
+                        agents={agents}
+                        excludeId={a.id}
+                        tone="var(--amber)"
+                        selected={inputsOf(a.id)}
+                        onToggle={(id) => toggleInput(id, a.id)}
+                      />
                     </div>
-                    <LinkPicker
-                      agents={agents}
-                      excludeId={a.id}
-                      selected={a.links}
-                      onToggle={(id) =>
-                        updateAgent(a.id, { links: toggle(a.links, id) })
-                      }
-                    />
+                    <div className="border border-cyan/30 bg-[linear-gradient(120deg,color-mix(in_oklab,var(--cyan)_10%,transparent),transparent_70%)] p-2">
+                      <p className="label-xs mb-1.5 text-cyan">ENVÍA SALIDA A →</p>
+                      <LinkPicker
+                        agents={agents}
+                        excludeId={a.id}
+                        selected={a.links}
+                        onToggle={(id) => updateAgent(a.id, { links: toggle(a.links, id) })}
+                      />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-1 space-y-0.5 pl-6.5 font-mono text-[9px] tracking-[0.12em]">
+                    {inputsOf(a.id).length > 0 && (
+                      <p className="text-amber/70">
+                        ←{" "}
+                        {inputsOf(a.id)
+                          .map((l) => agents.find((x) => x.id === l)?.name)
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </p>
+                    )}
                     {a.links.length > 0 && (
-                      <p className="mt-1.5 font-mono text-[9px] tracking-[0.12em] text-muted-foreground">
-                        {a.name} →{" "}
+                      <p className="text-cyan/70">
+                        →{" "}
                         {a.links
                           .map((l) => agents.find((x) => x.id === l)?.name)
                           .filter(Boolean)
-                          .join(" → ")}
+                          .join(" · ")}
                       </p>
                     )}
                   </div>
-                ) : (
-                  a.links.length > 0 && (
-                    <p className="mt-1 pl-6.5 font-mono text-[9px] tracking-[0.12em] text-cyan/60">
-                      →{" "}
-                      {a.links
-                        .map((l) => agents.find((x) => x.id === l)?.name)
-                        .filter(Boolean)
-                        .join(" · ")}
-                    </p>
-                  )
                 )}
               </li>
             ))}
@@ -301,23 +351,38 @@ export function AgentsPanel({ compact = false }: { compact?: boolean } = {}) {
                 placeholder="Función / rol"
                 className="w-full border border-border/60 bg-background/50 px-2 py-1.5 text-[11px] text-foreground outline-none focus:border-cyan"
               />
-              <div className="border border-border/50 bg-background/30 p-2">
-                <p className="label-xs mb-1.5">FLUJO: ESTE AGENTE ENVÍA SU SALIDA A →</p>
+              <div className="border border-amber/30 bg-[linear-gradient(120deg,color-mix(in_oklab,var(--amber)_10%,transparent),transparent_70%)] p-2">
+                <p className="label-xs mb-1.5 text-amber">ENTRADA: RECIBE DE ←</p>
+                <LinkPicker
+                  agents={agents}
+                  tone="var(--amber)"
+                  selected={inputs}
+                  onToggle={(id) => setInputs((l) => toggle(l, id))}
+                />
+              </div>
+              <div className="border border-cyan/30 bg-[linear-gradient(120deg,color-mix(in_oklab,var(--cyan)_10%,transparent),transparent_70%)] p-2">
+                <p className="label-xs mb-1.5 text-cyan">SALIDA: ENVÍA A →</p>
                 <LinkPicker
                   agents={agents}
                   selected={links}
                   onToggle={(id) => setLinks((l) => toggle(l, id))}
                 />
-                {links.length > 0 && (
-                  <p className="mt-1.5 font-mono text-[9px] tracking-[0.12em] text-cyan/70">
-                    {name.trim().toUpperCase() || "NUEVO"} →{" "}
-                    {links
-                      .map((l) => agents.find((x) => x.id === l)?.name)
-                      .filter(Boolean)
-                      .join(" → ")}
-                  </p>
-                )}
               </div>
+              {(inputs.length > 0 || links.length > 0) && (
+                <p className="font-mono text-[9px] tracking-[0.12em] text-muted-foreground">
+                  {inputs
+                    .map((l) => agents.find((x) => x.id === l)?.name)
+                    .filter(Boolean)
+                    .join(" · ")}
+                  {inputs.length > 0 ? " → " : ""}
+                  <span className="text-cyan">{name.trim().toUpperCase() || "NUEVO"}</span>
+                  {links.length > 0 ? " → " : ""}
+                  {links
+                    .map((l) => agents.find((x) => x.id === l)?.name)
+                    .filter(Boolean)
+                    .join(" · ")}
+                </p>
+              )}
               <div className="flex gap-2">
                 <button
                   type="submit"
