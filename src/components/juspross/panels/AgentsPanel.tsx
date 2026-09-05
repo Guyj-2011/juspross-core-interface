@@ -29,13 +29,34 @@ function Glyph({ id, className }: { id: string; className?: string }) {
 }
 
 /** Mapa neuronal del flujo real de agentes. */
-const NODE_COLOR: Record<string, string> = {
+const PALETTE = [
+  "var(--cyan)",
+  "var(--violet)",
+  "var(--emerald)",
+  "var(--amber)",
+  "var(--magenta)",
+  "var(--electric)",
+];
+
+const BASE_COLOR: Record<string, string> = {
   planificador: "var(--amber)",
   director: "var(--cyan)",
   investigador: "var(--violet)",
   curador: "var(--emerald)",
-  guionista: "var(--amber)",
+  guionista: "var(--magenta)",
 };
+
+/** Color estable por agente (los nuevos toman un tono de la paleta). */
+const nodeColor = (id: string) => {
+  if (BASE_COLOR[id]) return BASE_COLOR[id];
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+  return PALETTE[h % PALETTE.length]!;
+};
+
+const NODE_COLOR = new Proxy({} as Record<string, string>, {
+  get: (_t, k: string) => nodeColor(k),
+});
 
 function AgentMap({ agents }: { agents: Agent[] }) {
   const W = 340;
