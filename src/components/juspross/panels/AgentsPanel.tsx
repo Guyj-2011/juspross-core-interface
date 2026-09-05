@@ -152,10 +152,17 @@ function LinkPicker({
             onClick={() => onToggle(a.id)}
             className={cn(
               "flex items-center gap-1 border px-1.5 py-0.5 font-mono text-[9px] tracking-[0.16em] transition-colors",
-              on
-                ? "border-cyan/70 bg-cyan/15 text-cyan"
-                : "border-border/60 text-muted-foreground hover:text-foreground",
+              on ? "" : "border-border/60 text-muted-foreground hover:text-foreground",
             )}
+            style={
+              on
+                ? {
+                    borderColor: `color-mix(in oklab, ${tone} 70%, transparent)`,
+                    background: `color-mix(in oklab, ${tone} 16%, transparent)`,
+                    color: tone,
+                  }
+                : undefined
+            }
           >
             <span
               className="inline-block size-1 rounded-full"
