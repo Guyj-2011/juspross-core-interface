@@ -95,29 +95,36 @@ function useTiles(ids: PanelId[]) {
     return () => window.removeEventListener("resize", set);
   }, []);
 
-  const rows = Math.max(1, Math.floor((vp.h - TOP - 150) / ROW_H));
+  const rows = Math.max(1, Math.floor((vp.h - TOP - 170) / ROW_H));
+  const cols = Math.max(1, Math.ceil(ids.length / rows));
+
+  // ancho de cada columna (el mayor de sus paneles)
+  const colW: number[] = [];
+  ids.forEach((id, i) => {
+    const c = Math.floor(i / rows);
+    colW[c] = Math.max(colW[c] ?? 0, META[id].w);
+  });
+
+  const avail = vp.w - LEFT - 24;
+  const total = colW.reduce((a, b) => a + b, 0) + GAP * (cols - 1);
+
+  // si no caben lado a lado, se reparten en cascada uniforme (siempre en orden)
+  const xs: number[] = [];
+  if (total <= avail || cols === 1) {
+    let x = LEFT;
+    colW.forEach((w, c) => {
+      xs[c] = x;
+      x += w + GAP;
+    });
+  } else {
+    const step = (avail - (colW[cols - 1] ?? 0)) / (cols - 1);
+    colW.forEach((_, c) => (xs[c] = Math.round(LEFT + step * c)));
+  }
+
   const positions: Record<string, { x: number; y: number }> = {};
-  let x = LEFT;
-  let row = 0;
-  let colW = 0;
-  let wrap = 0;
-  ids.forEach((id) => {
-    const w = META[id].w;
-    if (row >= rows) {
-      x += colW + GAP;
-      row = 0;
-      colW = 0;
-    }
-    // si la columna ya no cabe en pantalla, se reinicia con un ligero desfase
-    if (x + w > vp.w - 24) {
-      wrap += 1;
-      x = LEFT + wrap * 26;
-      row = 0;
-      colW = 0;
-    }
-    colW = Math.max(colW, w);
-    positions[id] = { x, y: TOP + wrap * 18 + row * ROW_H };
-    row += 1;
+  ids.forEach((id, i) => {
+    const c = Math.floor(i / rows);
+    positions[id] = { x: xs[c] ?? LEFT, y: TOP + (i % rows) * ROW_H };
   });
   return positions;
 }
