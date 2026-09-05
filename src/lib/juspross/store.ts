@@ -52,7 +52,7 @@ interface JusprossState {
   setSidebar: (v: boolean) => void;
   updateAgent: (id: string, patch: Partial<Agent>) => void;
   resetAgents: () => void;
-  addAgent: (a: { name: string; role: string; links: string[] }) => void;
+  addAgent: (a: { name: string; role: string; links: string[]; inputs?: string[] }) => void;
   removeAgent: (id: string) => void;
   log: (agent: string, message: string, level?: ActivityEntry["level"]) => void;
   pushDebug: (e: Omit<DebugEvent, "id" | "time">) => void;
