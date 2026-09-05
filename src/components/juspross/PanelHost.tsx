@@ -100,16 +100,23 @@ function useTiles(ids: PanelId[]) {
   let x = LEFT;
   let row = 0;
   let colW = 0;
+  let wrap = 0;
   ids.forEach((id) => {
+    const w = META[id].w;
     if (row >= rows) {
       x += colW + GAP;
       row = 0;
       colW = 0;
     }
-    const w = META[id].w;
+    // si la columna ya no cabe en pantalla, se reinicia con un ligero desfase
+    if (x + w > vp.w - 24) {
+      wrap += 1;
+      x = LEFT + wrap * 26;
+      row = 0;
+      colW = 0;
+    }
     colW = Math.max(colW, w);
-    const maxX = Math.max(LEFT, vp.w - w - 24);
-    positions[id] = { x: Math.min(x, maxX), y: TOP + row * ROW_H };
+    positions[id] = { x, y: TOP + wrap * 18 + row * ROW_H };
     row += 1;
   });
   return positions;
@@ -134,6 +141,7 @@ export function PanelHost() {
             accent={m.accent}
             accent2={m.accent2}
             position={tiles[id] ?? { x: LEFT, y: TOP }}
+            maxBodyHeight={ROW_H - 74}
             onClose={() => closePanel(id)}
           >
             <Body />
