@@ -137,7 +137,12 @@ export const useJuspross = create<JusprossState>((set, get) => ({
       while (s.agents.some((a) => a.id === id)) id = `${base || "agente"}-${uid().slice(0, 3)}`;
       return {
         agents: [
-          ...s.agents,
+          // los agentes de entrada apuntan al nuevo nodo
+          ...s.agents.map((a) =>
+            inputs.includes(a.id) && !a.links.includes(id)
+              ? { ...a, links: [...a.links, id], updatedAt: Date.now() }
+              : a,
+          ),
           {
             id,
             name: name.trim().toUpperCase(),
