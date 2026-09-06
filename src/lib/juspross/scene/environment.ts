@@ -140,7 +140,7 @@ export function createWaveField(density: number): EnvLayer {
         c = mix(c, white, smoothstep(0.75, 1.0, vH) * 0.70);
         // vetas magenta en las laderas exteriores, como en la referencia
         c = mix(c, magenta, vSide * step(0.82, vSeed) * 0.8);
-        float a = (halo * 0.24 + core * 0.60) * (0.25 + vI * 0.85);
+        float a = (halo * 0.16 + core * 0.42) * (0.25 + vI * 0.85);
         gl_FragColor = vec4(c * (0.7 + vI * 0.95), a);
       }
     `,
@@ -432,7 +432,7 @@ export function createDust(count: number, band: "near" | "mid" | "far"): EnvLaye
         float halo = smoothstep(0.5, 0.0, d);
         vec3 c = mix(vec3(0.22,0.58,1.0), vec3(0.70,0.95,1.0), vT);
         c = mix(c, vec3(0.45,0.42,1.0), step(0.94, vT) * 0.7);
-        gl_FragColor = vec4(c * (0.55 + vI * 0.6), (halo * 0.10 + core * 0.26) * vI);
+        gl_FragColor = vec4(c * (0.55 + vI * 0.6), (halo * 0.07 + core * 0.18) * vI);
       }
     `,
     transparent: true,
