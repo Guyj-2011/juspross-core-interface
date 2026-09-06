@@ -23,7 +23,9 @@ export function HistoryPanel() {
               onClick={() => select(c.id)}
               className={cn(
                 "w-full rounded-sm px-2 py-1.5 text-left transition-colors",
-                c.id === active ? "bg-primary/12 text-cyan" : "text-foreground/80 hover:bg-primary/8",
+                c.id === active
+                  ? "bg-primary/12 glow-yellow"
+                  : "text-foreground/80 hover:bg-primary/8",
               )}
             >
               <p className="truncate text-[12px]">{c.title}</p>

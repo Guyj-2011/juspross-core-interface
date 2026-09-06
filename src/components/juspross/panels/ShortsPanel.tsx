@@ -23,7 +23,11 @@ function StageTrack({ stage }: { stage: ShortStage }) {
           title={s}
           className={cn(
             "h-[3px] flex-1 rounded-full transition-colors",
-            i < idx ? "bg-cyan/60" : i === idx ? "bg-cyan animate-blip" : "bg-border",
+            i < idx
+              ? "bg-cyan/60"
+              : i === idx
+                ? "bg-yellow animate-blip shadow-[0_0_8px_var(--yellow),0_0_16px_var(--yellow)]"
+                : "bg-border",
           )}
         />
       ))}
@@ -72,7 +76,7 @@ export function ShortsPanel() {
             {(s.stage === "REVISION" || s.stage === "APROBACION") && (
               <button
                 onClick={() => setReview(s.id)}
-                className="mt-1.5 rounded-sm border border-cyan/40 px-2 py-0.5 font-mono text-[9px] tracking-[0.2em] text-cyan transition-colors hover:bg-cyan/10"
+                className="mt-1.5 rounded-sm border border-yellow/50 px-2 py-0.5 font-mono text-[9px] tracking-[0.2em] glow-yellow transition-colors hover:bg-yellow/10"
               >
                 REVISAR
               </button>

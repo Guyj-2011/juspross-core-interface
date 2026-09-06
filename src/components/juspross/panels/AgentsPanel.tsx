@@ -6,10 +6,10 @@ import { cn } from "@/lib/utils";
 
 const TONE: Record<AgentStatus, string> = {
   IDLE: "text-muted-foreground",
-  ACTIVE: "text-cyan",
-  PROCESSING: "text-electric",
-  COMPLETED: "text-emerald",
-  ERROR: "text-amber",
+  ACTIVE: "text-cyan [text-shadow:0_0_10px_var(--cyan)]",
+  PROCESSING: "glow-yellow",
+  COMPLETED: "text-emerald [text-shadow:0_0_10px_var(--emerald)]",
+  ERROR: "glow-red",
 };
 
 const GLYPH: Record<string, string> = {
