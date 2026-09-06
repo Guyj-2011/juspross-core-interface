@@ -124,7 +124,7 @@ void main() {
   vec4 mv = modelViewMatrix * vec4(p, 1.0);
   gl_Position = projectionMatrix * mv;
 
-  float glow = 0.55 + uEnergy * 0.5 + uAmp * 0.9 + uWave * 1.2;
+  float glow = 0.78 + uEnergy * 0.55 + uAmp * 1.05 + uWave * 1.35;
   vec3 c = aColor;
   // degradado cian (izquierda) -> azul profundo (derecha)
   float hx = clamp(position.x / 3.0 * 0.5 + 0.5, 0.0, 1.0);
@@ -156,8 +156,8 @@ void main() {
   float core = smoothstep(0.5, 0.22, d);
   float dot = smoothstep(0.30, 0.10, d);
   float halo = pow(core, 2.0);
-  vec3 c = vColor * (0.4 + vGlow * 0.85) * (0.3 + halo * 1.3 + dot * 0.9);
-  gl_FragColor = vec4(c, min(1.0, core * 0.55 + dot * 0.75));
+  vec3 c = vColor * (0.55 + vGlow * 1.05) * (0.35 + halo * 1.45 + dot * 1.05);
+  gl_FragColor = vec4(c, min(1.0, core * 0.72 + dot * 0.88));
 }
 `;
 
