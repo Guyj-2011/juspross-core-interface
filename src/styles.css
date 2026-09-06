@@ -340,6 +340,33 @@
   animation: jp-pulse 1.8s ease-in-out infinite;
 }
 
+@utility glow-red {
+  color: var(--red);
+  text-shadow:
+    0 0 8px oklch(0.72 0.24 22 / 0.85),
+    0 0 22px oklch(0.72 0.24 22 / 0.45);
+}
+
+@utility glow-yellow {
+  color: var(--yellow);
+  text-shadow:
+    0 0 8px oklch(0.9 0.19 95 / 0.85),
+    0 0 22px oklch(0.9 0.19 95 / 0.45);
+}
+
+@utility glow-dot {
+  position: relative;
+  &::after {
+    content: "";
+    position: absolute;
+    inset: -3px;
+    border-radius: 99px;
+    background: inherit;
+    filter: blur(5px);
+    opacity: 0.75;
+  }
+}
+
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
