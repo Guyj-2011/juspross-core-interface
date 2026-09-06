@@ -18,9 +18,9 @@ const PRESET: Record<
   Quality,
   { wave: number; struct: number; circuits: number; dustNear: number; dustMid: number; dustFar: number; orbit: number; aura: number; bloom: number; dpr: number }
 > = {
-  high: { wave: 240, struct: 190, circuits: 22, dustNear: 700, dustMid: 1100, dustFar: 1600, orbit: 260, aura: 900, bloom: 0.42, dpr: 2 },
-  balanced: { wave: 180, struct: 130, circuits: 16, dustNear: 450, dustMid: 750, dustFar: 1000, orbit: 180, aura: 600, bloom: 0.38, dpr: 1.6 },
-  low: { wave: 110, struct: 70, circuits: 10, dustNear: 220, dustMid: 340, dustFar: 460, orbit: 90, aura: 280, bloom: 0.3, dpr: 1 },
+  high: { wave: 460, struct: 340, circuits: 22, dustNear: 2600, dustMid: 4200, dustFar: 6400, orbit: 260, aura: 900, bloom: 0.42, dpr: 2 },
+  balanced: { wave: 340, struct: 260, circuits: 16, dustNear: 1700, dustMid: 2800, dustFar: 4200, orbit: 180, aura: 600, bloom: 0.38, dpr: 1.6 },
+  low: { wave: 200, struct: 150, circuits: 10, dustNear: 800, dustMid: 1300, dustFar: 1800, orbit: 90, aura: 280, bloom: 0.3, dpr: 1 },
 };
 
 const STATE_ENERGY: Record<SystemState, { energy: number; think: number; orbit: number; err: number }> = {
