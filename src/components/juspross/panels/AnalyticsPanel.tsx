@@ -1,12 +1,12 @@
 import { ANALYTICS_SERIES } from "@/lib/juspross/seed";
 
 const metrics = [
-  { label: "VIEWS 28D", value: "312.4K", delta: "+18.2%" },
-  { label: "LIKES", value: "41.7K", delta: "+9.4%" },
-  { label: "SUBS", value: "6 208", delta: "+2.1%" },
-  { label: "SHORTS", value: "24", delta: "+4" },
-  { label: "RETENCIÓN", value: "58%", delta: "+3.0" },
-  { label: "CTR", value: "7.1%", delta: "+0.4" },
+  { label: "VIEWS 28D", value: "312.4K", delta: "+18.2%", glow: "text-emerald [text-shadow:0_0_8px_var(--emerald)]" },
+  { label: "LIKES", value: "41.7K", delta: "+9.4%", glow: "glow-yellow" },
+  { label: "SUBS", value: "6 208", delta: "+2.1%", glow: "text-cyan [text-shadow:0_0_8px_var(--cyan)]" },
+  { label: "SHORTS", value: "24", delta: "+4", glow: "glow-red" },
+  { label: "RETENCIÓN", value: "58%", delta: "+3.0", glow: "glow-yellow" },
+  { label: "CTR", value: "7.1%", delta: "+0.4", glow: "text-emerald [text-shadow:0_0_8px_var(--emerald)]" },
 ];
 
 export function AnalyticsPanel() {
@@ -24,7 +24,7 @@ export function AnalyticsPanel() {
           <div key={m.label} className="rounded-sm border border-border/60 bg-background/25 p-2">
             <p className="label-xs">{m.label}</p>
             <p className="mt-0.5 font-mono text-sm text-foreground">{m.value}</p>
-            <p className="font-mono text-[9px] text-emerald">{m.delta}</p>
+            <p className={`font-mono text-[9px] ${m.glow}`}>{m.delta}</p>
           </div>
         ))}
       </div>
@@ -55,13 +55,21 @@ export function AnalyticsPanel() {
       <div className="rounded-sm border border-border/60 bg-background/25 p-2">
         <p className="label-xs mb-1.5">RETENCIÓN POR SHORT</p>
         <div className="flex h-16 items-end gap-[3px]">
-          {ANALYTICS_SERIES.slice(-20).map((d) => (
-            <span
-              key={d.day}
-              className="flex-1 rounded-t-[1px] bg-gradient-to-t from-electric/25 to-cyan/80"
-              style={{ height: `${d.retention}%` }}
-            />
-          ))}
+          {ANALYTICS_SERIES.slice(-20).map((d, i) => {
+            const colors = ["var(--cyan)", "var(--yellow)", "var(--emerald)", "var(--red)", "var(--magenta)"];
+            const c = colors[i % colors.length];
+            return (
+              <span
+                key={d.day}
+                className="flex-1 rounded-t-[1px]"
+                style={{
+                  height: `${d.retention}%`,
+                  background: `linear-gradient(to top, color-mix(in oklab, ${c} 20%, transparent), ${c})`,
+                  boxShadow: `0 0 6px color-mix(in oklab, ${c} 55%, transparent)`,
+                }}
+              />
+            );
+          })}
         </div>
       </div>
     </div>

@@ -15,7 +15,7 @@ export function DebugPanel() {
         .map((e) => (
           <details key={e.id} className="rounded-sm border border-border/60 bg-background/30 px-2 py-1.5">
             <summary className="flex cursor-pointer items-center gap-2 select-none">
-              <span className={cn(e.direction === "out" ? "text-electric" : "text-cyan")}>
+              <span className={cn(e.direction === "out" ? "glow-yellow" : "glow-red")}>
                 {e.direction === "out" ? "▶" : "◀"}
               </span>
               <span className="text-foreground/85">{e.label}</span>
