@@ -491,7 +491,7 @@ export function createAura(count: number): EnvLayer & { setEnergy: (v: number) =
         vec2 uv = gl_PointCoord - 0.5; float d = length(uv);
         if (d > 0.5) discard;
         float a = smoothstep(0.5, 0.0, d);
-        gl_FragColor = vec4(vec3(0.42, 0.82, 1.0) * (0.5 + vI * 0.6), a * vI * 0.22);
+        gl_FragColor = vec4(vec3(0.42, 0.82, 1.0) * (0.55 + vI * 0.65), a * vI * 0.26);
       }
     `,
     transparent: true,
