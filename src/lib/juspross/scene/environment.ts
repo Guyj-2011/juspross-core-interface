@@ -262,7 +262,7 @@ export function createStructures(count: number): EnvLayer {
         vec2 uv = gl_PointCoord - 0.5; float d = length(uv);
         if (d > 0.5) discard;
         float a = smoothstep(0.5, 0.0, d);
-        gl_FragColor = vec4(mix(vC, vec3(1.0), 0.35) * (0.7 + vI), a * vI * 0.9);
+        gl_FragColor = vec4(mix(vC, vec3(1.0), 0.35) * (0.78 + vI), a * vI * 0.95);
       }
     `,
     transparent: true,
