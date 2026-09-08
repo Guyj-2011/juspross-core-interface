@@ -73,14 +73,22 @@ export function createWaveField(density: number): EnvLayer {
   const pos = new Float32Array(count * 3);
   const seed = new Float32Array(count);
   let i = 0;
-  for (let x = 0; x < N; x++) {
-    for (let z = 0; z < N; z++) {
-      // jitter más contenido para dejar menos huecos entre celdas
-      const jx = (Math.random() - 0.5) * (spread / N) * 0.65;
-      const jz = (Math.random() - 0.5) * (spread / N) * 0.65;
-      pos[i * 3] = (x / (N - 1) - 0.5) * spread + jx;
+  // grilla hexagonal + jitter grande para romper las líneas visibles
+  const spacingX = spread / N;
+  const spacingZ = spacingX * 0.8660254; // sqrt(3)/2
+  for (let z = 0; z < N; z++) {
+    for (let x = 0; x < N; x++) {
+      const cx = (x / (N - 1) - 0.5) * spread + (z % 2 === 1 ? spacingX * 0.5 : 0);
+      const cz = (z / (N - 1) - 0.5) * spread * (spacingZ / spacingX);
+      // jitter grande que cruza los límites de celda para evitar patrones de grilla
+      const jx = (Math.random() - 0.5) * spacingX * 1.45;
+      const jz = (Math.random() - 0.5) * spacingZ * 1.45;
+      // rotación aleatoria alrededor del centro de celda
+      const ang = Math.random() * Math.PI * 2;
+      const rad = Math.random() * spacingX * 0.55;
+      pos[i * 3] = cx + jx + Math.cos(ang) * rad;
       pos[i * 3 + 1] = 0;
-      pos[i * 3 + 2] = (z / (N - 1) - 0.5) * spread + jz;
+      pos[i * 3 + 2] = cz + jz + Math.sin(ang) * rad;
       seed[i] = Math.random();
       i++;
     }
