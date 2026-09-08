@@ -432,7 +432,7 @@ export function createDust(count: number, band: "near" | "mid" | "far"): EnvLaye
         float halo = smoothstep(0.5, 0.0, d);
         vec3 c = mix(vec3(0.22,0.58,1.0), vec3(0.70,0.95,1.0), vT);
         c = mix(c, vec3(0.45,0.42,1.0), step(0.94, vT) * 0.7);
-        gl_FragColor = vec4(c * (0.55 + vI * 0.6), (halo * 0.07 + core * 0.18) * vI);
+        gl_FragColor = vec4(c * (0.62 + vI * 0.68), (halo * 0.08 + core * 0.21) * vI);
       }
     `,
     transparent: true,
