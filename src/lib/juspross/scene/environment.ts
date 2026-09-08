@@ -75,8 +75,9 @@ export function createWaveField(density: number): EnvLayer {
   let i = 0;
   for (let x = 0; x < N; x++) {
     for (let z = 0; z < N; z++) {
-      const jx = (Math.random() - 0.5) * (spread / N) * 1.1;
-      const jz = (Math.random() - 0.5) * (spread / N) * 1.1;
+      // jitter más contenido para dejar menos huecos entre celdas
+      const jx = (Math.random() - 0.5) * (spread / N) * 0.65;
+      const jz = (Math.random() - 0.5) * (spread / N) * 0.65;
       pos[i * 3] = (x / (N - 1) - 0.5) * spread + jx;
       pos[i * 3 + 1] = 0;
       pos[i * 3 + 2] = (z / (N - 1) - 0.5) * spread + jz;
@@ -142,6 +143,107 @@ export function createWaveField(density: number): EnvLayer {
         c = mix(c, magenta, vSide * step(0.82, vSeed) * 0.8);
         float a = (halo * 0.16 + core * 0.42) * (0.25 + vI * 0.85) * 1.08;
         gl_FragColor = vec4(c * (0.78 + vI * 1.05), a);
+      }
+    `,
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  });
+
+  const points = new THREE.Points(geo, mat);
+  points.position.y = -9.5;
+  points.frustumCulled = false;
+
+  return {
+    object: points,
+    parallax: 0.35,
+    update: (t, _dt, energy, amp) => {
+      mat.uniforms["uTime"]!.value = t;
+      mat.uniforms["uEnergy"]!.value = energy;
+      mat.uniforms["uAmp"]!.value = amp;
+    },
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/* RELLENO DEL MANTO: partículas en los huecos de la grilla principal */
+/* ------------------------------------------------------------------ */
+export function createWaveFieldFill(density: number): EnvLayer {
+  const N = density;
+  const spread = 260;
+  const count = N * N;
+  const pos = new Float32Array(count * 3);
+  const seed = new Float32Array(count);
+  let i = 0;
+  for (let x = 0; x < N; x++) {
+    for (let z = 0; z < N; z++) {
+      // offset de media celda para caer exactamente en los huecos
+      const ox = 0.5 + (Math.random() - 0.5) * 0.35;
+      const oz = 0.5 + (Math.random() - 0.5) * 0.35;
+      pos[i * 3] = ((x + ox) / N - 0.5) * spread;
+      pos[i * 3 + 1] = 0;
+      pos[i * 3 + 2] = ((z + oz) / N - 0.5) * spread;
+      seed[i] = Math.random();
+      i++;
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute("aSeed", new THREE.BufferAttribute(seed, 1));
+
+  const mat = new THREE.ShaderMaterial({
+    uniforms: {
+      uTime: { value: 0 },
+      uEnergy: { value: 0 },
+      uAmp: { value: 0 },
+      uDpr: { value: DPR() },
+    },
+    vertexShader: /* glsl */ `
+      attribute float aSeed;
+      uniform float uTime; uniform float uEnergy; uniform float uAmp; uniform float uDpr;
+      varying float vI; varying float vH; varying float vSide; varying float vSeed;
+      void main(){
+        vec3 p = position;
+        float d = length(p.xz);
+        float w  = sin(p.x * 0.085 + uTime * 0.22) * 3.4;
+        w += cos(p.z * 0.062 - uTime * 0.17) * 2.8;
+        w += sin((p.x * 0.7 + p.z) * 0.13 + uTime * 0.31) * 1.5;
+        w += cos(p.x * 0.24 - uTime * 0.45) * 0.6;
+        w += sin(d * 0.20 - uTime * 0.8) * (0.5 + uEnergy * 0.9 + uAmp * 2.0);
+        float rise = smoothstep(6.0, 46.0, abs(p.x)) * 5.5 + smoothstep(10.0, 70.0, abs(p.z)) * 2.5;
+        w = w * smoothstep(5.0, 26.0, d) + rise;
+        p.y += w;
+        vec4 mv = modelViewMatrix * vec4(p, 1.0);
+        gl_Position = projectionMatrix * mv;
+        float dist = -mv.z;
+        float fade = smoothstep(300.0, 20.0, d);
+        vH = smoothstep(-2.0, 9.0, w);
+        vSide = smoothstep(10.0, 90.0, abs(p.x));
+        vSeed = aSeed;
+        // ligeramente más tenues que la capa principal
+        vI = fade * (0.32 + 0.65 * vH) * (0.5 + aSeed * 0.7);
+        gl_PointSize = (0.85 + aSeed * 1.25 + vH * 0.8) * uDpr * (24.0 / max(0.001, dist));
+      }
+    `,
+    fragmentShader: /* glsl */ `
+      precision highp float;
+      varying float vI; varying float vH; varying float vSide; varying float vSeed;
+      void main(){
+        vec2 uv = gl_PointCoord - 0.5;
+        float d = length(uv);
+        if (d > 0.5) discard;
+        float core = smoothstep(0.5, 0.05, d);
+        float halo = smoothstep(0.5, 0.0, d);
+        vec3 deepBlue = vec3(0.02, 0.14, 0.52);
+        vec3 cyan     = vec3(0.10, 0.55, 0.82);
+        vec3 white    = vec3(0.60, 0.85, 0.95);
+        vec3 magenta  = vec3(0.65, 0.16, 0.72);
+        vec3 c = mix(deepBlue, cyan, vH);
+        c = mix(c, white, smoothstep(0.75, 1.0, vH) * 0.55);
+        c = mix(c, magenta, vSide * step(0.86, vSeed) * 0.65);
+        // más transparente y pequeño para no competir con la capa principal
+        float a = (halo * 0.12 + core * 0.30) * (0.20 + vI * 0.75) * 1.04;
+        gl_FragColor = vec4(c * (0.68 + vI * 0.92), a);
       }
     `,
     transparent: true,
