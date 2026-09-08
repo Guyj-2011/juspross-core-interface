@@ -73,14 +73,22 @@ export function createWaveField(density: number): EnvLayer {
   const pos = new Float32Array(count * 3);
   const seed = new Float32Array(count);
   let i = 0;
-  for (let x = 0; x < N; x++) {
-    for (let z = 0; z < N; z++) {
-      // jitter más contenido para dejar menos huecos entre celdas
-      const jx = (Math.random() - 0.5) * (spread / N) * 0.65;
-      const jz = (Math.random() - 0.5) * (spread / N) * 0.65;
-      pos[i * 3] = (x / (N - 1) - 0.5) * spread + jx;
+  // grilla hexagonal + jitter grande para romper las líneas visibles
+  const spacingX = spread / N;
+  const spacingZ = spacingX * 0.8660254; // sqrt(3)/2
+  for (let z = 0; z < N; z++) {
+    for (let x = 0; x < N; x++) {
+      const cx = (x / (N - 1) - 0.5) * spread + (z % 2 === 1 ? spacingX * 0.5 : 0);
+      const cz = (z / (N - 1) - 0.5) * spread * (spacingZ / spacingX);
+      // jitter grande que cruza los límites de celda para evitar patrones de grilla
+      const jx = (Math.random() - 0.5) * spacingX * 1.45;
+      const jz = (Math.random() - 0.5) * spacingZ * 1.45;
+      // rotación aleatoria alrededor del centro de celda
+      const ang = Math.random() * Math.PI * 2;
+      const rad = Math.random() * spacingX * 0.55;
+      pos[i * 3] = cx + jx + Math.cos(ang) * rad;
       pos[i * 3 + 1] = 0;
-      pos[i * 3 + 2] = (z / (N - 1) - 0.5) * spread + jz;
+      pos[i * 3 + 2] = cz + jz + Math.sin(ang) * rad;
       seed[i] = Math.random();
       i++;
     }
@@ -103,12 +111,14 @@ export function createWaveField(density: number): EnvLayer {
       void main(){
         vec3 p = position;
         float d = length(p.xz);
+        // fase aleatoria por partícula para romper la regularidad de las ondas
+        float ph = aSeed * 6.2831;
         // dunas de datos: crestas largas que suben a izquierda y derecha
-        float w  = sin(p.x * 0.085 + uTime * 0.22) * 3.4;
-        w += cos(p.z * 0.062 - uTime * 0.17) * 2.8;
-        w += sin((p.x * 0.7 + p.z) * 0.13 + uTime * 0.31) * 1.5;
-        w += cos(p.x * 0.24 - uTime * 0.45) * 0.6;
-        w += sin(d * 0.20 - uTime * 0.8) * (0.5 + uEnergy * 0.9 + uAmp * 2.0);
+        float w  = sin(p.x * 0.085 + uTime * 0.22 + ph * 0.3) * 3.4;
+        w += cos(p.z * 0.062 - uTime * 0.17 + ph * 0.5) * 2.8;
+        w += sin((p.x * 0.7 + p.z) * 0.13 + uTime * 0.31 + ph * 0.7) * 1.5;
+        w += cos(p.x * 0.24 - uTime * 0.45 + ph * 0.2) * 0.6;
+        w += sin(d * 0.20 - uTime * 0.8 + ph) * (0.5 + uEnergy * 0.9 + uAmp * 2.0);
         // las laderas crecen al alejarse del núcleo (valle central despejado)
         float rise = smoothstep(6.0, 46.0, abs(p.x)) * 5.5 + smoothstep(10.0, 70.0, abs(p.z)) * 2.5;
         w = w * smoothstep(5.0, 26.0, d) + rise;
@@ -175,14 +185,20 @@ export function createWaveFieldFill(density: number): EnvLayer {
   const pos = new Float32Array(count * 3);
   const seed = new Float32Array(count);
   let i = 0;
-  for (let x = 0; x < N; x++) {
-    for (let z = 0; z < N; z++) {
-      // offset de media celda para caer exactamente en los huecos
-      const ox = 0.5 + (Math.random() - 0.5) * 0.35;
-      const oz = 0.5 + (Math.random() - 0.5) * 0.35;
-      pos[i * 3] = ((x + ox) / N - 0.5) * spread;
+  // grilla hexagonal desplazada para rellenar huecos sin formar líneas
+  const spacingX = spread / N;
+  const spacingZ = spacingX * 0.8660254;
+  for (let z = 0; z < N; z++) {
+    for (let x = 0; x < N; x++) {
+      const cx = (x / (N - 1) - 0.5) * spread + (z % 2 === 1 ? spacingX * 0.5 : 0) + spacingX * 0.25;
+      const cz = (z / (N - 1) - 0.5) * spread * (spacingZ / spacingX) + spacingZ * 0.25;
+      const jx = (Math.random() - 0.5) * spacingX * 1.35;
+      const jz = (Math.random() - 0.5) * spacingZ * 1.35;
+      const ang = Math.random() * Math.PI * 2;
+      const rad = Math.random() * spacingX * 0.5;
+      pos[i * 3] = cx + jx + Math.cos(ang) * rad;
       pos[i * 3 + 1] = 0;
-      pos[i * 3 + 2] = ((z + oz) / N - 0.5) * spread;
+      pos[i * 3 + 2] = cz + jz + Math.sin(ang) * rad;
       seed[i] = Math.random();
       i++;
     }
@@ -205,11 +221,12 @@ export function createWaveFieldFill(density: number): EnvLayer {
       void main(){
         vec3 p = position;
         float d = length(p.xz);
-        float w  = sin(p.x * 0.085 + uTime * 0.22) * 3.4;
-        w += cos(p.z * 0.062 - uTime * 0.17) * 2.8;
-        w += sin((p.x * 0.7 + p.z) * 0.13 + uTime * 0.31) * 1.5;
-        w += cos(p.x * 0.24 - uTime * 0.45) * 0.6;
-        w += sin(d * 0.20 - uTime * 0.8) * (0.5 + uEnergy * 0.9 + uAmp * 2.0);
+        float ph = aSeed * 6.2831;
+        float w  = sin(p.x * 0.085 + uTime * 0.22 + ph * 0.35) * 3.4;
+        w += cos(p.z * 0.062 - uTime * 0.17 + ph * 0.55) * 2.8;
+        w += sin((p.x * 0.7 + p.z) * 0.13 + uTime * 0.31 + ph * 0.75) * 1.5;
+        w += cos(p.x * 0.24 - uTime * 0.45 + ph * 0.25) * 0.6;
+        w += sin(d * 0.20 - uTime * 0.8 + ph) * (0.5 + uEnergy * 0.9 + uAmp * 2.0);
         float rise = smoothstep(6.0, 46.0, abs(p.x)) * 5.5 + smoothstep(10.0, 70.0, abs(p.z)) * 2.5;
         w = w * smoothstep(5.0, 26.0, d) + rise;
         p.y += w;
