@@ -183,14 +183,20 @@ export function createWaveFieldFill(density: number): EnvLayer {
   const pos = new Float32Array(count * 3);
   const seed = new Float32Array(count);
   let i = 0;
-  for (let x = 0; x < N; x++) {
-    for (let z = 0; z < N; z++) {
-      // offset de media celda para caer exactamente en los huecos
-      const ox = 0.5 + (Math.random() - 0.5) * 0.35;
-      const oz = 0.5 + (Math.random() - 0.5) * 0.35;
-      pos[i * 3] = ((x + ox) / N - 0.5) * spread;
+  // grilla hexagonal desplazada para rellenar huecos sin formar líneas
+  const spacingX = spread / N;
+  const spacingZ = spacingX * 0.8660254;
+  for (let z = 0; z < N; z++) {
+    for (let x = 0; x < N; x++) {
+      const cx = (x / (N - 1) - 0.5) * spread + (z % 2 === 1 ? spacingX * 0.5 : 0) + spacingX * 0.25;
+      const cz = (z / (N - 1) - 0.5) * spread * (spacingZ / spacingX) + spacingZ * 0.25;
+      const jx = (Math.random() - 0.5) * spacingX * 1.35;
+      const jz = (Math.random() - 0.5) * spacingZ * 1.35;
+      const ang = Math.random() * Math.PI * 2;
+      const rad = Math.random() * spacingX * 0.5;
+      pos[i * 3] = cx + jx + Math.cos(ang) * rad;
       pos[i * 3 + 1] = 0;
-      pos[i * 3 + 2] = ((z + oz) / N - 0.5) * spread;
+      pos[i * 3 + 2] = cz + jz + Math.sin(ang) * rad;
       seed[i] = Math.random();
       i++;
     }
