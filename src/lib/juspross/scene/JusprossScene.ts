@@ -8,6 +8,7 @@ import {
   createMirrorFloor,
   createStructures,
   createWaveField,
+  createWaveFieldFill,
   type EnvLayer,
 } from "./environment";
 import type { SystemState } from "../types";
