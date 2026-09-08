@@ -140,8 +140,8 @@ export function createWaveField(density: number): EnvLayer {
         c = mix(c, white, smoothstep(0.75, 1.0, vH) * 0.70);
         // vetas magenta en las laderas exteriores, como en la referencia
         c = mix(c, magenta, vSide * step(0.82, vSeed) * 0.8);
-        float a = (halo * 0.16 + core * 0.42) * (0.25 + vI * 0.85);
-        gl_FragColor = vec4(c * (0.7 + vI * 0.95), a);
+        float a = (halo * 0.16 + core * 0.42) * (0.25 + vI * 0.85) * 1.08;
+        gl_FragColor = vec4(c * (0.78 + vI * 1.05), a);
       }
     `,
     transparent: true,
