@@ -221,11 +221,12 @@ export function createWaveFieldFill(density: number): EnvLayer {
       void main(){
         vec3 p = position;
         float d = length(p.xz);
-        float w  = sin(p.x * 0.085 + uTime * 0.22) * 3.4;
-        w += cos(p.z * 0.062 - uTime * 0.17) * 2.8;
-        w += sin((p.x * 0.7 + p.z) * 0.13 + uTime * 0.31) * 1.5;
-        w += cos(p.x * 0.24 - uTime * 0.45) * 0.6;
-        w += sin(d * 0.20 - uTime * 0.8) * (0.5 + uEnergy * 0.9 + uAmp * 2.0);
+        float ph = aSeed * 6.2831;
+        float w  = sin(p.x * 0.085 + uTime * 0.22 + ph * 0.35) * 3.4;
+        w += cos(p.z * 0.062 - uTime * 0.17 + ph * 0.55) * 2.8;
+        w += sin((p.x * 0.7 + p.z) * 0.13 + uTime * 0.31 + ph * 0.75) * 1.5;
+        w += cos(p.x * 0.24 - uTime * 0.45 + ph * 0.25) * 0.6;
+        w += sin(d * 0.20 - uTime * 0.8 + ph) * (0.5 + uEnergy * 0.9 + uAmp * 2.0);
         float rise = smoothstep(6.0, 46.0, abs(p.x)) * 5.5 + smoothstep(10.0, 70.0, abs(p.z)) * 2.5;
         w = w * smoothstep(5.0, 26.0, d) + rise;
         p.y += w;
