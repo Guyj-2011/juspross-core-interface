@@ -111,12 +111,14 @@ export function createWaveField(density: number): EnvLayer {
       void main(){
         vec3 p = position;
         float d = length(p.xz);
+        // fase aleatoria por partícula para romper la regularidad de las ondas
+        float ph = aSeed * 6.2831;
         // dunas de datos: crestas largas que suben a izquierda y derecha
-        float w  = sin(p.x * 0.085 + uTime * 0.22) * 3.4;
-        w += cos(p.z * 0.062 - uTime * 0.17) * 2.8;
-        w += sin((p.x * 0.7 + p.z) * 0.13 + uTime * 0.31) * 1.5;
-        w += cos(p.x * 0.24 - uTime * 0.45) * 0.6;
-        w += sin(d * 0.20 - uTime * 0.8) * (0.5 + uEnergy * 0.9 + uAmp * 2.0);
+        float w  = sin(p.x * 0.085 + uTime * 0.22 + ph * 0.3) * 3.4;
+        w += cos(p.z * 0.062 - uTime * 0.17 + ph * 0.5) * 2.8;
+        w += sin((p.x * 0.7 + p.z) * 0.13 + uTime * 0.31 + ph * 0.7) * 1.5;
+        w += cos(p.x * 0.24 - uTime * 0.45 + ph * 0.2) * 0.6;
+        w += sin(d * 0.20 - uTime * 0.8 + ph) * (0.5 + uEnergy * 0.9 + uAmp * 2.0);
         // las laderas crecen al alejarse del núcleo (valle central despejado)
         float rise = smoothstep(6.0, 46.0, abs(p.x)) * 5.5 + smoothstep(10.0, 70.0, abs(p.z)) * 2.5;
         w = w * smoothstep(5.0, 26.0, d) + rise;
