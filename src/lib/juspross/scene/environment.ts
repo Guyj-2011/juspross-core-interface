@@ -73,22 +73,14 @@ export function createWaveField(density: number): EnvLayer {
   const pos = new Float32Array(count * 3);
   const seed = new Float32Array(count);
   let i = 0;
-  // grilla hexagonal + jitter grande para romper las líneas visibles
-  const spacingX = spread / N;
-  const spacingZ = spacingX * 0.8660254; // sqrt(3)/2
-  for (let z = 0; z < N; z++) {
-    for (let x = 0; x < N; x++) {
-      const cx = (x / (N - 1) - 0.5) * spread + (z % 2 === 1 ? spacingX * 0.5 : 0);
-      const cz = (z / (N - 1) - 0.5) * spread * (spacingZ / spacingX);
-      // jitter grande que cruza los límites de celda para evitar patrones de grilla
-      const jx = (Math.random() - 0.5) * spacingX * 1.45;
-      const jz = (Math.random() - 0.5) * spacingZ * 1.45;
-      // rotación aleatoria alrededor del centro de celda
-      const ang = Math.random() * Math.PI * 2;
-      const rad = Math.random() * spacingX * 0.55;
-      pos[i * 3] = cx + jx + Math.cos(ang) * rad;
+  for (let x = 0; x < N; x++) {
+    for (let z = 0; z < N; z++) {
+      // jitter más contenido para dejar menos huecos entre celdas
+      const jx = (Math.random() - 0.5) * (spread / N) * 0.65;
+      const jz = (Math.random() - 0.5) * (spread / N) * 0.65;
+      pos[i * 3] = (x / (N - 1) - 0.5) * spread + jx;
       pos[i * 3 + 1] = 0;
-      pos[i * 3 + 2] = cz + jz + Math.sin(ang) * rad;
+      pos[i * 3 + 2] = (z / (N - 1) - 0.5) * spread + jz;
       seed[i] = Math.random();
       i++;
     }
@@ -111,14 +103,12 @@ export function createWaveField(density: number): EnvLayer {
       void main(){
         vec3 p = position;
         float d = length(p.xz);
-        // fase aleatoria por partícula para romper la regularidad de las ondas
-        float ph = aSeed * 6.2831;
         // dunas de datos: crestas largas que suben a izquierda y derecha
-        float w  = sin(p.x * 0.085 + uTime * 0.22 + ph * 0.3) * 3.4;
-        w += cos(p.z * 0.062 - uTime * 0.17 + ph * 0.5) * 2.8;
-        w += sin((p.x * 0.7 + p.z) * 0.13 + uTime * 0.31 + ph * 0.7) * 1.5;
-        w += cos(p.x * 0.24 - uTime * 0.45 + ph * 0.2) * 0.6;
-        w += sin(d * 0.20 - uTime * 0.8 + ph) * (0.5 + uEnergy * 0.9 + uAmp * 2.0);
+        float w  = sin(p.x * 0.085 + uTime * 0.22) * 3.4;
+        w += cos(p.z * 0.062 - uTime * 0.17) * 2.8;
+        w += sin((p.x * 0.7 + p.z) * 0.13 + uTime * 0.31) * 1.5;
+        w += cos(p.x * 0.24 - uTime * 0.45) * 0.6;
+        w += sin(d * 0.20 - uTime * 0.8) * (0.5 + uEnergy * 0.9 + uAmp * 2.0);
         // las laderas crecen al alejarse del núcleo (valle central despejado)
         float rise = smoothstep(6.0, 46.0, abs(p.x)) * 5.5 + smoothstep(10.0, 70.0, abs(p.z)) * 2.5;
         w = w * smoothstep(5.0, 26.0, d) + rise;
@@ -151,8 +141,8 @@ export function createWaveField(density: number): EnvLayer {
         c = mix(c, white, smoothstep(0.75, 1.0, vH) * 0.70);
         // vetas magenta en las laderas exteriores, como en la referencia
         c = mix(c, magenta, vSide * step(0.82, vSeed) * 0.8);
-        float a = (halo * 0.16 + core * 0.42) * (0.25 + vI * 0.85) * 1.18;
-        gl_FragColor = vec4(c * (0.95 + vI * 1.28), a);
+        float a = (halo * 0.16 + core * 0.42) * (0.25 + vI * 0.85) * 1.08;
+        gl_FragColor = vec4(c * (0.78 + vI * 1.05), a);
       }
     `,
     transparent: true,
@@ -185,20 +175,14 @@ export function createWaveFieldFill(density: number): EnvLayer {
   const pos = new Float32Array(count * 3);
   const seed = new Float32Array(count);
   let i = 0;
-  // grilla hexagonal desplazada para rellenar huecos sin formar líneas
-  const spacingX = spread / N;
-  const spacingZ = spacingX * 0.8660254;
-  for (let z = 0; z < N; z++) {
-    for (let x = 0; x < N; x++) {
-      const cx = (x / (N - 1) - 0.5) * spread + (z % 2 === 1 ? spacingX * 0.5 : 0) + spacingX * 0.25;
-      const cz = (z / (N - 1) - 0.5) * spread * (spacingZ / spacingX) + spacingZ * 0.25;
-      const jx = (Math.random() - 0.5) * spacingX * 1.35;
-      const jz = (Math.random() - 0.5) * spacingZ * 1.35;
-      const ang = Math.random() * Math.PI * 2;
-      const rad = Math.random() * spacingX * 0.5;
-      pos[i * 3] = cx + jx + Math.cos(ang) * rad;
+  for (let x = 0; x < N; x++) {
+    for (let z = 0; z < N; z++) {
+      // offset de media celda para caer exactamente en los huecos
+      const ox = 0.5 + (Math.random() - 0.5) * 0.35;
+      const oz = 0.5 + (Math.random() - 0.5) * 0.35;
+      pos[i * 3] = ((x + ox) / N - 0.5) * spread;
       pos[i * 3 + 1] = 0;
-      pos[i * 3 + 2] = cz + jz + Math.sin(ang) * rad;
+      pos[i * 3 + 2] = ((z + oz) / N - 0.5) * spread;
       seed[i] = Math.random();
       i++;
     }
@@ -221,12 +205,11 @@ export function createWaveFieldFill(density: number): EnvLayer {
       void main(){
         vec3 p = position;
         float d = length(p.xz);
-        float ph = aSeed * 6.2831;
-        float w  = sin(p.x * 0.085 + uTime * 0.22 + ph * 0.35) * 3.4;
-        w += cos(p.z * 0.062 - uTime * 0.17 + ph * 0.55) * 2.8;
-        w += sin((p.x * 0.7 + p.z) * 0.13 + uTime * 0.31 + ph * 0.75) * 1.5;
-        w += cos(p.x * 0.24 - uTime * 0.45 + ph * 0.25) * 0.6;
-        w += sin(d * 0.20 - uTime * 0.8 + ph) * (0.5 + uEnergy * 0.9 + uAmp * 2.0);
+        float w  = sin(p.x * 0.085 + uTime * 0.22) * 3.4;
+        w += cos(p.z * 0.062 - uTime * 0.17) * 2.8;
+        w += sin((p.x * 0.7 + p.z) * 0.13 + uTime * 0.31) * 1.5;
+        w += cos(p.x * 0.24 - uTime * 0.45) * 0.6;
+        w += sin(d * 0.20 - uTime * 0.8) * (0.5 + uEnergy * 0.9 + uAmp * 2.0);
         float rise = smoothstep(6.0, 46.0, abs(p.x)) * 5.5 + smoothstep(10.0, 70.0, abs(p.z)) * 2.5;
         w = w * smoothstep(5.0, 26.0, d) + rise;
         p.y += w;
@@ -259,8 +242,8 @@ export function createWaveFieldFill(density: number): EnvLayer {
         c = mix(c, white, smoothstep(0.75, 1.0, vH) * 0.55);
         c = mix(c, magenta, vSide * step(0.86, vSeed) * 0.65);
         // más transparente y pequeño para no competir con la capa principal
-        float a = (halo * 0.12 + core * 0.30) * (0.20 + vI * 0.75) * 1.14;
-        gl_FragColor = vec4(c * (0.82 + vI * 1.1), a);
+        float a = (halo * 0.12 + core * 0.30) * (0.20 + vI * 0.75) * 1.04;
+        gl_FragColor = vec4(c * (0.68 + vI * 0.92), a);
       }
     `,
     transparent: true,
@@ -551,7 +534,7 @@ export function createDust(count: number, band: "near" | "mid" | "far"): EnvLaye
         float halo = smoothstep(0.5, 0.0, d);
         vec3 c = mix(vec3(0.22,0.58,1.0), vec3(0.70,0.95,1.0), vT);
         c = mix(c, vec3(0.45,0.42,1.0), step(0.94, vT) * 0.7);
-        gl_FragColor = vec4(c * (0.78 + vI * 0.85), (halo * 0.09 + core * 0.24) * vI);
+        gl_FragColor = vec4(c * (0.62 + vI * 0.68), (halo * 0.08 + core * 0.21) * vI);
       }
     `,
     transparent: true,
@@ -610,7 +593,7 @@ export function createAura(count: number): EnvLayer & { setEnergy: (v: number) =
         vec2 uv = gl_PointCoord - 0.5; float d = length(uv);
         if (d > 0.5) discard;
         float a = smoothstep(0.5, 0.0, d);
-        gl_FragColor = vec4(vec3(0.42, 0.82, 1.0) * (0.68 + vI * 0.8), a * vI * 0.3);
+        gl_FragColor = vec4(vec3(0.42, 0.82, 1.0) * (0.55 + vI * 0.65), a * vI * 0.26);
       }
     `,
     transparent: true,
