@@ -151,8 +151,8 @@ export function createWaveField(density: number): EnvLayer {
         c = mix(c, white, smoothstep(0.75, 1.0, vH) * 0.70);
         // vetas magenta en las laderas exteriores, como en la referencia
         c = mix(c, magenta, vSide * step(0.82, vSeed) * 0.8);
-        float a = (halo * 0.16 + core * 0.42) * (0.25 + vI * 0.85) * 1.08;
-        gl_FragColor = vec4(c * (0.78 + vI * 1.05), a);
+        float a = (halo * 0.16 + core * 0.42) * (0.25 + vI * 0.85) * 1.18;
+        gl_FragColor = vec4(c * (0.95 + vI * 1.28), a);
       }
     `,
     transparent: true,
@@ -259,8 +259,8 @@ export function createWaveFieldFill(density: number): EnvLayer {
         c = mix(c, white, smoothstep(0.75, 1.0, vH) * 0.55);
         c = mix(c, magenta, vSide * step(0.86, vSeed) * 0.65);
         // más transparente y pequeño para no competir con la capa principal
-        float a = (halo * 0.12 + core * 0.30) * (0.20 + vI * 0.75) * 1.04;
-        gl_FragColor = vec4(c * (0.68 + vI * 0.92), a);
+        float a = (halo * 0.12 + core * 0.30) * (0.20 + vI * 0.75) * 1.14;
+        gl_FragColor = vec4(c * (0.82 + vI * 1.1), a);
       }
     `,
     transparent: true,
@@ -551,7 +551,7 @@ export function createDust(count: number, band: "near" | "mid" | "far"): EnvLaye
         float halo = smoothstep(0.5, 0.0, d);
         vec3 c = mix(vec3(0.22,0.58,1.0), vec3(0.70,0.95,1.0), vT);
         c = mix(c, vec3(0.45,0.42,1.0), step(0.94, vT) * 0.7);
-        gl_FragColor = vec4(c * (0.62 + vI * 0.68), (halo * 0.08 + core * 0.21) * vI);
+        gl_FragColor = vec4(c * (0.78 + vI * 0.85), (halo * 0.09 + core * 0.24) * vI);
       }
     `,
     transparent: true,
@@ -610,7 +610,7 @@ export function createAura(count: number): EnvLayer & { setEnergy: (v: number) =
         vec2 uv = gl_PointCoord - 0.5; float d = length(uv);
         if (d > 0.5) discard;
         float a = smoothstep(0.5, 0.0, d);
-        gl_FragColor = vec4(vec3(0.42, 0.82, 1.0) * (0.55 + vI * 0.65), a * vI * 0.26);
+        gl_FragColor = vec4(vec3(0.42, 0.82, 1.0) * (0.68 + vI * 0.8), a * vI * 0.3);
       }
     `,
     transparent: true,
