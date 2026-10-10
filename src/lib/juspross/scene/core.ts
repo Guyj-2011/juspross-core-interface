@@ -124,7 +124,7 @@ void main() {
   vec4 mv = modelViewMatrix * vec4(p, 1.0);
   gl_Position = projectionMatrix * mv;
 
-  float glow = 0.78 + uEnergy * 0.55 + uAmp * 1.05 + uWave * 1.35;
+   float glow = 0.92 + uEnergy * 0.60 + uAmp * 1.05 + uWave * 1.35;
   vec3 c = aColor;
   // degradado cian (izquierda) -> azul profundo (derecha)
   float hx = clamp(position.x / 3.0 * 0.5 + 0.5, 0.0, 1.0);

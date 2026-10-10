@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { createSkyAurora } from "./aurora";
 import { makeCoreMaterial, sampleLogo } from "./core";
 import {
   createAtmosphere,
@@ -84,6 +85,7 @@ export class JusprossScene {
 
     // capas del entorno (orden = profundidad conceptual)
     this.layers.push(createAtmosphere());
+    this.layers.push(createSkyAurora());
     this.layers.push(createMirrorFloor());
     this.layers.push(createDust(this.preset.dustFar, "far"));
     this.layers.push(createStructures(this.preset.struct));
