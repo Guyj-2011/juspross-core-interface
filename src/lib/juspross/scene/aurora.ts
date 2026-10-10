@@ -77,8 +77,8 @@ export function createSkyAurora(): EnvLayer {
           float edge = smoothstep(0.0, 0.14, x) * (1.0 - smoothstep(0.86, 1.0, x))
             * smoothstep(0.0, 0.08, vUv.y) * (1.0 - smoothstep(0.76, 1.0, vUv.y));
           vec3 color = mix(uBlue, uCyan, base * 0.55 + rays * 0.24);
-          float redAccent = smoothstep(0.30, 0.65, noise(vec2(x * 5.0 + uPhase, time * 0.25)))
-            * smoothstep(0.04, 0.18, height);
+          float redAccent = smoothstep(0.22, 0.52, noise(vec2(x * 5.0 + uPhase, time * 0.25)))
+            * smoothstep(0.015, 0.085, height);
           color = mix(color, uRed, redAccent * 0.88);
           float alpha = min(0.65, light * edge * uStrength);
           gl_FragColor = vec4(color * 1.4, alpha);
