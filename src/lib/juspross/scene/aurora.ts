@@ -75,11 +75,14 @@ export function createSkyAurora(): EnvLayer {
           float fold = sin(flow) * 0.5 + 0.5;
           float crest = pow(fold, 7.0);
           float curtain = pow(fold, 1.8);
+          float secondary = pow(0.5 + 0.5 * sin(folded.y * 3.4 - folded.x * 1.6
+            + fbm(folded + 8.0 - time) * 6.0), 2.0);
           float rays = noise(vec2(folded.x * 65.0, folded.y * 5.0 - time));
           float wisps = 0.3 + 0.7 * fbm(p * 2.0 - time);
-          float light = (crest * 0.24 + curtain * (0.25 + rays * 0.42)) * wisps;
+          float light = (0.09 + crest * 0.24 + curtain * (0.25 + rays * 0.42)
+            + secondary * (0.2 + rays * 0.2)) * wisps;
           vec3 color = mix(uBlue, uCyan, crest * 0.55 + rays * 0.1);
-          float redAccent = smoothstep(0.57, 0.82, fbm(p * 1.3 + 21.0))
+          float redAccent = smoothstep(0.49, 0.7, fbm(p * 1.3 + 21.0))
             * (1.0 - crest * 0.7);
           color = mix(color, uRed, redAccent * 0.8);
           float alpha = min(0.65, light * sky * uStrength);
