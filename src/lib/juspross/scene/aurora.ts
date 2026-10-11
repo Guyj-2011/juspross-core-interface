@@ -100,7 +100,7 @@ export function createSkyAurora(): EnvLayer {
           float wisps = 0.32 + 0.68 * fbm(gp * 1.7 - time * 0.8);
 
           // breadth variation: some regions richer, others calmer, everywhere lit
-          float region = 0.55 + 0.75 * fbm(gp * 0.8 + 31.0 + uPhase);
+          float region = 0.7 + 0.7 * fbm(gp * 0.8 + 31.0 + uPhase);
 
           // curtains rise across the sky; a broad glow keeps the zenith covered
           float rise = smoothstep(0.05, 0.5, elev) * uRise + (1.0 - uRise) * 0.4;
