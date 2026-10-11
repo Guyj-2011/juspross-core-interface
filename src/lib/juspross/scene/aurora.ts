@@ -14,7 +14,7 @@ function paletteColor(token: string): THREE.Color {
   return color.setRGB((pixel[0] ?? 0) / 255, (pixel[1] ?? 0) / 255, (pixel[2] ?? 0) / 255, THREE.SRGBColorSpace);
 }
 
-/** Broad overhead curtains extending beyond both sides of the visible sky. */
+/** Continuous auroral canopy, distributed across the whole upper sky. */
 export function createSkyAurora(): EnvLayer {
   const group = new THREE.Group();
   const materials: THREE.ShaderMaterial[] = [];
@@ -23,7 +23,7 @@ export function createSkyAurora(): EnvLayer {
   const cyan = paletteColor("--aurora-cyan");
   const red = paletteColor("--aurora-red");
 
-  for (let layer = 0; layer < 3; layer++) {
+  for (let layer = 0; layer < 1; layer++) {
     const material = new THREE.ShaderMaterial({
       transparent: true,
       depthWrite: false,
@@ -33,32 +33,21 @@ export function createSkyAurora(): EnvLayer {
       uniforms: {
         uTime: { value: 0 },
         uPhase: { value: layer * 2.7 },
-        uStrength: { value: layer === 1 ? 0.66 : 0.5 },
-        uLane: { value: layer - 1 },
+        uStrength: { value: 0.65 },
         uBlue: { value: blue },
         uCyan: { value: cyan },
         uRed: { value: red },
       },
       vertexShader: /* glsl */ `
-        varying vec2 vUv;
-        uniform float uTime; uniform float uPhase; uniform float uLane;
+        varying vec3 vDirection;
         void main() {
-          vUv = uv;
-          // The ends lie well outside the view, keeping the curtains
-          // continuous across the sky rather than converging ahead.
-          float path = (uv.x - 0.5) * 5.19;
-          float depth = 125.0 + uLane * 32.0;
-          vec3 p = vec3(path * 340.0,
-            44.0 + uLane * 8.0 + (uv.y - 0.5) * 38.0,
-            -depth + sin(path * 3.0 + uPhase) * 12.0);
-          p.y += sin(path * 5.0 + uv.y * 3.0 + uPhase) * 4.0;
-          p.y += sin(path * 7.0 + uPhase + uTime * 0.015) * 0.8;
-          gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+          vDirection = position;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
         }
       `,
       fragmentShader: /* glsl */ `
         precision highp float;
-        varying vec2 vUv;
+        varying vec3 vDirection;
         uniform float uTime; uniform float uPhase; uniform float uStrength;
         uniform vec3 uBlue; uniform vec3 uCyan; uniform vec3 uRed;
         float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -68,31 +57,38 @@ export function createSkyAurora(): EnvLayer {
           return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x),
                      mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0)), f.x), f.y);
         }
+        float fbm(vec2 p) {
+          return noise(p) * 0.57 + noise(p * 2.03 + 7.1) * 0.28
+            + noise(p * 4.1 + 19.7) * 0.15;
+        }
         void main() {
-          float time = uTime * 0.025;
-          float x = (vUv.x - 0.5) * 5.19;
-          float ridge = 0.38 + sin(x * 5.0 + uPhase) * 0.07
-            + sin(x * 13.0 - uPhase * 0.6) * 0.035;
-          float height = vUv.y - ridge;
-          float fold = noise(vec2(x * 15.0 - time * 0.35, uPhase));
-          float rays = noise(vec2(x * 80.0 - time * 0.4, height * 2.0 + uPhase));
-          float base = exp(-pow(height / 0.115, 2.0));
-          float curtain = exp(-pow((height - 0.09) / 0.24, 2.0));
-          float wisps = 0.4 + 0.6 * noise(vec2(x * 9.0 - time * 0.3, height * 7.0 + uPhase));
-          float light = (base * 0.38 + curtain * (0.25 + rays * 0.65)) * wisps;
-          float edge = smoothstep(0.0, 0.16, vUv.y)
-            * (1.0 - smoothstep(0.78, 1.0, vUv.y));
-          vec3 color = mix(uBlue, uCyan, base * 0.5 + rays * 0.15);
-          float redAccent = smoothstep(0.2, 0.62, noise(vec2(x * 4.0 + uPhase, 0.5)))
-            * smoothstep(0.04, 0.24, height);
-          color = mix(color, uRed, redAccent * 0.85);
-          float alpha = min(0.65, light * edge * uStrength);
+          vec3 direction = normalize(vDirection);
+          float sky = smoothstep(0.06, 0.24, direction.y);
+          if (sky < 0.001) discard;
+          float time = uTime * 0.008;
+          // Dome projection has no lateral endpoints or horizon-aligned strip.
+          vec2 p = direction.xz / (direction.y + 0.45) * 2.5;
+          vec2 warp = vec2(fbm(p * 0.8 + time), fbm(p * 0.8 + 11.3 - time));
+          vec2 folded = p + (warp - 0.5) * 2.8;
+          float flow = folded.x * 2.1 + folded.y * 1.7
+            + fbm(folded * 1.4 + time) * 7.0;
+          float fold = sin(flow) * 0.5 + 0.5;
+          float crest = pow(fold, 7.0);
+          float curtain = pow(fold, 1.8);
+          float rays = noise(vec2(folded.x * 65.0, folded.y * 5.0 - time));
+          float wisps = 0.3 + 0.7 * fbm(p * 2.0 - time);
+          float light = (crest * 0.24 + curtain * (0.25 + rays * 0.42)) * wisps;
+          vec3 color = mix(uBlue, uCyan, crest * 0.55 + rays * 0.1);
+          float redAccent = smoothstep(0.57, 0.82, fbm(p * 1.3 + 21.0))
+            * (1.0 - crest * 0.7);
+          color = mix(color, uRed, redAccent * 0.8);
+          float alpha = min(0.65, light * sky * uStrength);
           gl_FragColor = vec4(color * 1.4, alpha);
         }
       `,
     });
     materials.push(material);
-    const curtain = new THREE.Mesh(new THREE.PlaneGeometry(1, 1, 512, 24), material);
+    const curtain = new THREE.Mesh(new THREE.SphereGeometry(900, 64, 32), material);
     curtain.frustumCulled = false;
     group.add(curtain);
   }
