@@ -28,8 +28,8 @@ export function createSkyAurora(): EnvLayer {
   const red = paletteColor("--aurora-red");
 
   const layers = [
-    { strength: 0.62, freq: 1.0, phase: 0.0, rise: 1.0 },
-    { strength: 0.38, freq: 1.7, phase: 2.6, rise: 0.7 },
+    { strength: 0.85, freq: 1.0, phase: 0.0, rise: 1.0 },
+    { strength: 0.55, freq: 1.7, phase: 2.6, rise: 0.7 },
   ];
 
   for (const cfg of layers) {
