@@ -44,13 +44,16 @@ export function createSkyAurora(): EnvLayer {
         uniform float uTime; uniform float uPhase; uniform float uLane;
         void main() {
           vUv = uv;
-          float depth = 35.0 + uv.x * 340.0;
-          float width = 44.0 + uv.x * 36.0;
-          float bend = sin(uv.x * 5.0 + uPhase) * 8.0;
-          vec3 p = vec3(uLane * (35.0 + uv.x * 24.0) + (uv.y - 0.5) * width + bend,
+          // Extend toward the far plane without flaring sideways: perspective
+          // makes the continuous lanes converge naturally into the distance.
+          float path = uv.x * 5.19;
+          float depth = 35.0 + path * 340.0;
+          float width = 44.0 + (1.0 - exp(-path)) * 36.0;
+          float bend = sin(path * 5.0 + uPhase) * 8.0;
+          vec3 p = vec3(uLane * 35.0 + (uv.y - 0.5) * width + bend,
             24.0 + depth * 0.18, -depth);
-          p.y += sin(uv.x * 9.0 + uv.y * 5.0 + uPhase) * 4.0;
-          p.y += sin(uv.x * 7.0 + uPhase + uTime * 0.015) * 0.8;
+          p.y += sin(path * 9.0 + uv.y * 5.0 + uPhase) * 4.0;
+          p.y += sin(path * 7.0 + uPhase + uTime * 0.015) * 0.8;
           gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
         }
       `,
@@ -68,7 +71,7 @@ export function createSkyAurora(): EnvLayer {
         }
         void main() {
           float time = uTime * 0.025;
-          float x = vUv.x;
+          float x = vUv.x * 5.19;
           float ridge = 0.38 + sin(x * 5.0 + uPhase) * 0.07
             + sin(x * 13.0 - uPhase * 0.6) * 0.035;
           float height = vUv.y - ridge;
@@ -78,7 +81,7 @@ export function createSkyAurora(): EnvLayer {
           float curtain = exp(-pow((height - 0.09) / 0.24, 2.0));
           float wisps = 0.4 + 0.6 * noise(vec2(x * 9.0 - time * 0.3, height * 7.0 + uPhase));
           float light = (base * 0.38 + curtain * (0.25 + rays * 0.65)) * wisps;
-          float edge = smoothstep(0.0, 0.045, x) * (1.0 - smoothstep(0.83, 1.0, x))
+          float edge = smoothstep(0.0, 0.045, x) * (1.0 - smoothstep(4.3, 5.19, x))
             * smoothstep(0.0, 0.16, vUv.y) * (1.0 - smoothstep(0.78, 1.0, vUv.y));
           vec3 color = mix(uBlue, uCyan, base * 0.5 + rays * 0.15);
           float redAccent = smoothstep(0.2, 0.62, noise(vec2(x * 4.0 + uPhase, 0.5)))
@@ -90,7 +93,7 @@ export function createSkyAurora(): EnvLayer {
       `,
     });
     materials.push(material);
-    const curtain = new THREE.Mesh(new THREE.PlaneGeometry(1, 1, 128, 24), material);
+    const curtain = new THREE.Mesh(new THREE.PlaneGeometry(1, 1, 512, 24), material);
     curtain.frustumCulled = false;
     group.add(curtain);
   }
