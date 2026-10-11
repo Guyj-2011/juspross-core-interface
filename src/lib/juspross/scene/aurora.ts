@@ -14,7 +14,11 @@ function paletteColor(token: string): THREE.Color {
   return color.setRGB((pixel[0] ?? 0) / 255, (pixel[1] ?? 0) / 255, (pixel[2] ?? 0) / 255, THREE.SRGBColorSpace);
 }
 
-/** Continuous auroral canopy, distributed across the whole upper sky. */
+/**
+ * Continuous auroral canopy: the curtain folds keep their shape but wrap the
+ * entire dome. Longitudes use integer frequencies so the pattern is seamless,
+ * and warp noise is sampled on the world-plane so there is no seam anywhere.
+ */
 export function createSkyAurora(): EnvLayer {
   const group = new THREE.Group();
   const materials: THREE.ShaderMaterial[] = [];
@@ -23,7 +27,12 @@ export function createSkyAurora(): EnvLayer {
   const cyan = paletteColor("--aurora-cyan");
   const red = paletteColor("--aurora-red");
 
-  for (let layer = 0; layer < 1; layer++) {
+  const layers = [
+    { strength: 0.85, freq: 1.0, phase: 0.0, rise: 1.0 },
+    { strength: 0.55, freq: 1.7, phase: 2.6, rise: 0.7 },
+  ];
+
+  for (const cfg of layers) {
     const material = new THREE.ShaderMaterial({
       transparent: true,
       depthWrite: false,
@@ -32,8 +41,10 @@ export function createSkyAurora(): EnvLayer {
       side: THREE.DoubleSide,
       uniforms: {
         uTime: { value: 0 },
-        uPhase: { value: layer * 2.7 },
-        uStrength: { value: 0.65 },
+        uPhase: { value: cfg.phase },
+        uFreq: { value: cfg.freq },
+        uRise: { value: cfg.rise },
+        uStrength: { value: cfg.strength },
         uBlue: { value: blue },
         uCyan: { value: cyan },
         uRed: { value: red },
@@ -48,7 +59,8 @@ export function createSkyAurora(): EnvLayer {
       fragmentShader: /* glsl */ `
         precision highp float;
         varying vec3 vDirection;
-        uniform float uTime; uniform float uPhase; uniform float uStrength;
+        uniform float uTime; uniform float uPhase; uniform float uFreq;
+        uniform float uRise; uniform float uStrength;
         uniform vec3 uBlue; uniform vec3 uCyan; uniform vec3 uRed;
         float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
         float noise(vec2 p) {
@@ -62,38 +74,56 @@ export function createSkyAurora(): EnvLayer {
             + noise(p * 4.1 + 19.7) * 0.15;
         }
         void main() {
-          vec3 direction = normalize(vDirection);
-          float sky = smoothstep(0.06, 0.24, direction.y);
+          vec3 d = normalize(vDirection);
+          float elev = d.y;
+          float lon = atan(d.z, d.x);
+          vec2 gp = d.xz * 2.6; // continuous world-plane coords, seam-free
+          float sky = smoothstep(0.03, 0.2, elev);
           if (sky < 0.001) discard;
           float time = uTime * 0.008;
-          // Dome projection has no lateral endpoints or horizon-aligned strip.
-          vec2 p = direction.xz / (direction.y + 0.45) * 2.5;
-          vec2 warp = vec2(fbm(p * 0.8 + time), fbm(p * 0.8 + 11.3 - time));
-          vec2 folded = p + (warp - 0.5) * 2.8;
-          float flow = folded.x * 2.1 + folded.y * 1.7
-            + fbm(folded * 1.4 + time) * 7.0;
-          float fold = sin(flow) * 0.5 + 0.5;
-          float crest = pow(fold, 7.0);
-          float curtain = pow(fold, 1.8);
-          float secondary = pow(0.5 + 0.5 * sin(folded.y * 3.4 - folded.x * 1.6
-            + fbm(folded + 8.0 - time) * 6.0), 2.0);
-          float rays = noise(vec2(folded.x * 65.0, folded.y * 5.0 - time));
-          float wisps = 0.3 + 0.7 * fbm(p * 2.0 - time);
-          float light = (0.09 + crest * 0.24 + curtain * (0.25 + rays * 0.42)
-            + secondary * (0.2 + rays * 0.2)) * wisps;
+
+          // slow drift of the whole canopy
+          vec2 warpIn = vec2(fbm(gp * 0.55 + time + uPhase), fbm(gp * 0.55 + 11.3 - time));
+          vec2 warp = (warpIn - 0.5) * 2.6;
+
+          // curtain folds around the full sky: integer lon frequencies wrap seamlessly
+          float f1 = sin(lon * (5.0 * uFreq) + warp.x * 1.9 + uPhase + fbm(gp * 1.2 + 4.0 - time) * 3.2);
+          float f2 = sin(lon * (9.0 * uFreq) - warp.y * 1.4 + uPhase * 1.7 + elev * 2.4 * uRise);
+          float f3 = sin(lon * (14.0 * uFreq) + warp.x * 0.8 + uPhase * 2.3 - elev * 3.2);
+          float fold = (f1 * 0.55 + f2 * 0.3 + f3 * 0.18) * 0.5 + 0.5;
+
+          float crest = pow(max(fold, 0.0), 6.0);
+          float curtain = pow(max(fold, 0.0), 1.7);
+          float rays = noise(vec2(gp.x * 24.0 + uPhase, gp.y * 24.0 - time * 1.4));
+          float secondary = pow(0.5 + 0.5 * sin(gp.x * 1.6 - gp.y * 1.1
+            + fbm(gp * 1.1 + 8.0 - time) * 5.5), 2.0);
+          float wisps = 0.32 + 0.68 * fbm(gp * 1.7 - time * 0.8);
+
+          // breadth variation: some regions richer, others calmer, everywhere lit
+          float region = 0.7 + 0.7 * fbm(gp * 0.8 + 31.0 + uPhase);
+
+          // curtains rise across the sky; a broad glow keeps the zenith covered
+          float rise = smoothstep(0.05, 0.5, elev) * uRise + (1.0 - uRise) * 0.4;
+          float zenithGlow = smoothstep(0.45, 0.95, elev)
+            * (0.35 + 0.4 * fbm(gp * 1.4 + time * 0.6 + uPhase));
+
+          float light = (0.07 + crest * 0.26 + curtain * (0.22 + rays * 0.4)
+            + secondary * (0.16 + rays * 0.18)) * wisps * region * rise
+            + zenithGlow * 0.22;
+
           vec3 color = mix(uBlue, uCyan, crest * 0.55 + rays * 0.1);
-          float redAccent = smoothstep(0.49, 0.7, fbm(p * 1.3 + 21.0))
+          float redAccent = smoothstep(0.49, 0.7, fbm(gp * 1.1 + 21.0 + uPhase))
             * (1.0 - crest * 0.7);
           color = mix(color, uRed, redAccent * 0.8);
-          float alpha = min(0.65, light * sky * uStrength);
+          float alpha = min(0.62, light * sky * uStrength);
           gl_FragColor = vec4(color * 1.4, alpha);
         }
       `,
     });
     materials.push(material);
-    const curtain = new THREE.Mesh(new THREE.SphereGeometry(900, 64, 32), material);
-    curtain.frustumCulled = false;
-    group.add(curtain);
+    const dome = new THREE.Mesh(new THREE.SphereGeometry(900, 64, 48), material);
+    dome.frustumCulled = false;
+    group.add(dome);
   }
 
   return {
