@@ -141,8 +141,8 @@ export function createWaveField(density: number): EnvLayer {
         c = mix(c, white, smoothstep(0.75, 1.0, vH) * 0.70);
         // vetas magenta en las laderas exteriores, como en la referencia
         c = mix(c, magenta, vSide * step(0.82, vSeed) * 0.8);
-        float a = (halo * 0.16 + core * 0.42) * (0.25 + vI * 0.85) * 1.08;
-        gl_FragColor = vec4(c * (0.78 + vI * 1.05) * 1.24, a);
+        float a = min(1.0, (halo * 0.22 + core * 0.60) * (0.32 + vI * 0.95) * 1.45);
+        gl_FragColor = vec4(c * (0.95 + vI * 1.25) * 1.65, a);
       }
     `,
     transparent: true,
@@ -242,8 +242,8 @@ export function createWaveFieldFill(density: number): EnvLayer {
         c = mix(c, white, smoothstep(0.75, 1.0, vH) * 0.55);
         c = mix(c, magenta, vSide * step(0.86, vSeed) * 0.65);
         // más transparente y pequeño para no competir con la capa principal
-        float a = (halo * 0.12 + core * 0.30) * (0.20 + vI * 0.75) * 1.04;
-        gl_FragColor = vec4(c * (0.68 + vI * 0.92) * 1.24, a);
+        float a = min(1.0, (halo * 0.17 + core * 0.43) * (0.26 + vI * 0.85) * 1.40);
+        gl_FragColor = vec4(c * (0.85 + vI * 1.10) * 1.60, a);
       }
     `,
     transparent: true,
