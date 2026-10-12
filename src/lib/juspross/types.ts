@@ -1,3 +1,5 @@
+export type AuroraStyle = "canopy" | "depth";
+
 export type SystemState =
   | "idle"
   | "listening"
