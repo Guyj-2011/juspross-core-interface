@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useJuspross } from "@/lib/juspross/store";
 import { useRuntime } from "@/lib/juspross/useRuntime";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Cloud, Waves } from "lucide-react";
 
 export function ConnectionPanel() {
   const webhookUrl = useJuspross((s) => s.webhookUrl);
@@ -63,6 +65,8 @@ export function SettingsPanel() {
   const setQuality = useJuspross((s) => s.setQuality);
   const wake = useJuspross((s) => s.micEnabled);
   const setMic = useJuspross((s) => s.setMic);
+  const auroraStyle = useJuspross((s) => s.auroraStyle);
+  const setAuroraStyle = useJuspross((s) => s.setAuroraStyle);
 
   const Row = ({ label, children }: { label: string; children: React.ReactNode }) => (
     <div className="flex items-center justify-between gap-3 border-b border-border/50 py-2 last:border-0">
@@ -96,6 +100,31 @@ export function SettingsPanel() {
       <Row label="SONIDOS DEL SISTEMA">
         <Toggle on={sound} onClick={() => setSound(!sound)} />
       </Row>
+      <div className="border-b border-border/50 py-3">
+        <span className="label-xs" id="aurora-style-label">AURORAS BOREALES</span>
+        <div className="mt-2 grid grid-cols-2 gap-2" role="group" aria-labelledby="aurora-style-label">
+          {([
+            { value: "canopy", label: "Bóveda total", Icon: Cloud },
+            { value: "depth", label: "En profundidad", Icon: Waves },
+          ] as const).map(({ value, label, Icon }) => (
+            <Button
+              key={value}
+              variant="outline"
+              size="sm"
+              aria-pressed={auroraStyle === value}
+              onClick={() => setAuroraStyle(value)}
+              className={cn(
+                "h-11 gap-1.5 whitespace-normal rounded-sm px-1.5 font-mono text-[10px] leading-tight",
+                auroraStyle === value
+                  ? "border-cyan/60 bg-cyan/10 text-cyan hover:bg-cyan/15 hover:text-cyan"
+                  : "border-border bg-background/40 text-muted-foreground hover:text-foreground",
+              )}
+            >
+              <Icon className="size-3.5" />{label}
+            </Button>
+          ))}
+        </div>
+      </div>
       <Row label="CALIDAD DE RENDER">
         <div className="flex gap-1">
           {(["high", "balanced", "low"] as const).map((q) => (

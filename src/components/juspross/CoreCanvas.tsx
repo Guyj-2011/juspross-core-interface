@@ -9,6 +9,7 @@ export function CoreCanvas() {
   const quality = useJuspross((s) => s.quality);
   const systemState = useJuspross((s) => s.systemState);
   const amplitude = useJuspross((s) => s.amplitude);
+  const auroraStyle = useJuspross((s) => s.auroraStyle);
 
   useEffect(() => {
     let alive = true;
@@ -18,6 +19,7 @@ export function CoreCanvas() {
       if (!alive || !ref.current) return;
       sceneRef.current = new JusprossScene(ref.current, img, quality as Quality);
       sceneRef.current.setState(useJuspross.getState().systemState);
+      sceneRef.current.setAuroraStyle(useJuspross.getState().auroraStyle);
     });
     return () => {
       alive = false;
@@ -33,6 +35,10 @@ export function CoreCanvas() {
   useEffect(() => {
     sceneRef.current?.setAmplitude(amplitude);
   }, [amplitude]);
+
+  useEffect(() => {
+    sceneRef.current?.setAuroraStyle(auroraStyle);
+  }, [auroraStyle]);
 
   return <div ref={ref} className="absolute inset-0" aria-hidden />;
 }

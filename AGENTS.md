@@ -9,4 +9,4 @@
 > the editor, so keep the branch in a working state.
 <!-- LOVABLE:END -->
 
-- Keep sky auroras in a dedicated procedural Three.js sky-dome environment layer, using CSS palette tokens and independent reduced-motion-aware timing, so the sky has continuous coverage and animation never couples to voice or UI state.
+- Keep both aurora styles in a dedicated procedural Three.js environment layer with CSS palette tokens, independent reduced-motion-aware timing and opacity crossfades; switch styles without rebuilding the scene so the core and voice remain unaffected.

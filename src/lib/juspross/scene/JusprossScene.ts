@@ -12,7 +12,7 @@ import {
   createWaveFieldFill,
   type EnvLayer,
 } from "./environment";
-import type { SystemState } from "../types";
+import type { AuroraStyle, SystemState } from "../types";
 
 export type Quality = "high" | "balanced" | "low";
 
@@ -40,6 +40,7 @@ export class JusprossScene {
   private scene = new THREE.Scene();
   private camera: THREE.PerspectiveCamera;
   private layers: EnvLayer[] = [];
+  private aurora = createSkyAurora();
   private basePos = new WeakMap<THREE.Object3D, THREE.Vector3>();
   private orbit = createOrbit(1);
   private aura = createAura(1);
@@ -85,7 +86,7 @@ export class JusprossScene {
 
     // capas del entorno (orden = profundidad conceptual)
     this.layers.push(createAtmosphere());
-    this.layers.push(createSkyAurora());
+    this.layers.push(this.aurora);
     this.layers.push(createMirrorFloor());
     this.layers.push(createDust(this.preset.dustFar, "far"));
     this.layers.push(createStructures(this.preset.struct));
@@ -173,6 +174,10 @@ export class JusprossScene {
 
   setAmplitude(v: number) {
     this.amp = v;
+  }
+
+  setAuroraStyle(style: AuroraStyle) {
+    this.aurora.setStyle(style);
   }
 
   pulse() {

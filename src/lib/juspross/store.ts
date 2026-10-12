@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type {
   ActivityEntry,
+  AuroraStyle,
   Agent,
   ChatMessage,
   ConnectionState,
@@ -38,6 +39,7 @@ interface JusprossState {
   connection: ConnectionState;
   soundEnabled: boolean;
   quality: "high" | "balanced" | "low";
+  auroraStyle: AuroraStyle;
 
   setBooted: (v: boolean) => void;
   setAuthed: (v: boolean) => void;
@@ -63,6 +65,7 @@ interface JusprossState {
   setConnection: (c: ConnectionState) => void;
   setSound: (v: boolean) => void;
   setQuality: (q: JusprossState["quality"]) => void;
+  setAuroraStyle: (style: AuroraStyle) => void;
   setShortStage: (id: string, stage: Short["stage"]) => void;
   setReviewShort: (id: string | null) => void;
   addShort: (s: Short) => void;
@@ -97,6 +100,7 @@ export const useJuspross = create<JusprossState>((set, get) => ({
   connection: "unknown",
   soundEnabled: true,
   quality: "high",
+  auroraStyle: "canopy",
 
   setBooted: (v) => set({ booted: v }),
   setAuthed: (v) => set({ authed: v }),
@@ -204,6 +208,7 @@ export const useJuspross = create<JusprossState>((set, get) => ({
   setConnection: (c) => set({ connection: c }),
   setSound: (v) => set({ soundEnabled: v }),
   setQuality: (q) => set({ quality: q }),
+  setAuroraStyle: (auroraStyle) => set({ auroraStyle }),
   setShortStage: (id, stage) =>
     set((s) => ({ shorts: s.shorts.map((x) => (x.id === id ? { ...x, stage } : x)) })),
   setReviewShort: (id) => set({ reviewShortId: id }),
