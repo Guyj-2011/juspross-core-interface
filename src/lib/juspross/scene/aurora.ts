@@ -1,5 +1,10 @@
 import * as THREE from "three";
 import type { EnvLayer } from "./environment";
+import type { AuroraStyle } from "../types";
+
+export interface AuroraLayer extends EnvLayer {
+  setStyle: (style: AuroraStyle) => void;
+}
 
 /** Resolve CSS palette tokens through the browser's color-space conversion. */
 function paletteColor(token: string): THREE.Color {
@@ -19,9 +24,15 @@ function paletteColor(token: string): THREE.Color {
  * entire dome. Longitudes use integer frequencies so the pattern is seamless,
  * and warp noise is sampled on the world-plane so there is no seam anywhere.
  */
-export function createSkyAurora(): EnvLayer {
+export function createSkyAurora(): AuroraLayer {
   const group = new THREE.Group();
   const materials: THREE.ShaderMaterial[] = [];
+  const depthMaterials: THREE.ShaderMaterial[] = [];
+  const canopy = new THREE.Group();
+  const depth = new THREE.Group();
+  group.add(canopy, depth);
+  let style: AuroraStyle = "canopy";
+  let blend = 0;
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const blue = paletteColor("--aurora-blue");
   const cyan = paletteColor("--aurora-cyan");
@@ -45,6 +56,7 @@ export function createSkyAurora(): EnvLayer {
         uFreq: { value: cfg.freq },
         uRise: { value: cfg.rise },
         uStrength: { value: cfg.strength },
+        uOpacity: { value: 1 },
         uBlue: { value: blue },
         uCyan: { value: cyan },
         uRed: { value: red },
@@ -61,6 +73,7 @@ export function createSkyAurora(): EnvLayer {
         varying vec3 vDirection;
         uniform float uTime; uniform float uPhase; uniform float uFreq;
         uniform float uRise; uniform float uStrength;
+        uniform float uOpacity;
         uniform vec3 uBlue; uniform vec3 uCyan; uniform vec3 uRed;
         float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
         float noise(vec2 p) {
@@ -116,23 +129,106 @@ export function createSkyAurora(): EnvLayer {
             * (1.0 - crest * 0.7);
           color = mix(color, uRed, redAccent * 0.8);
           float alpha = min(0.62, light * sky * uStrength);
-          gl_FragColor = vec4(color * 1.4, alpha);
+          gl_FragColor = vec4(color * 1.4, alpha * uOpacity);
         }
       `,
     });
     materials.push(material);
     const dome = new THREE.Mesh(new THREE.SphereGeometry(900, 64, 48), material);
     dome.frustumCulled = false;
-    group.add(dome);
+    canopy.add(dome);
+  }
+
+  // Earlier perspective curtains: broad overhead ribbons running into the distance.
+  for (const [index, lane] of [-1, 0, 1].entries()) {
+    const material = new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+      uniforms: {
+        uTime: { value: 0 },
+        uLane: { value: lane },
+        uPhase: { value: index * 2.1 },
+        uOpacity: { value: 0 },
+        uBlue: { value: blue },
+        uCyan: { value: cyan },
+        uRed: { value: red },
+      },
+      vertexShader: /* glsl */ `
+        varying vec2 vUv;
+        uniform float uTime; uniform float uLane; uniform float uPhase;
+        void main() {
+          vUv = uv;
+          float path = uv.x * 5.19;
+          float depth = 35.0 + path * 340.0;
+          float width = 44.0 + (1.0 - exp(-path)) * 36.0;
+          float time = uTime * 0.008;
+          float bend = sin(path * 5.0 + uPhase + time) * 8.0;
+          vec3 p = vec3(uLane * 35.0 + (uv.y - 0.5) * width + bend,
+            24.0 + depth * 0.18, -depth);
+          p.y += sin(path * 4.0 + uv.y * 3.0 + uPhase - time) * 6.0;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+        }
+      `,
+      fragmentShader: /* glsl */ `
+        precision highp float;
+        varying vec2 vUv;
+        uniform float uTime; uniform float uPhase; uniform float uOpacity;
+        uniform vec3 uBlue; uniform vec3 uCyan; uniform vec3 uRed;
+        float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+        float noise(vec2 p) {
+          vec2 i = floor(p), f = fract(p);
+          f = f * f * (3.0 - 2.0 * f);
+          return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x),
+            mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0)), f.x), f.y);
+        }
+        void main() {
+          float path = vUv.x * 5.19;
+          float time = uTime * 0.008;
+          float flow = path * 5.0 + sin(path * 2.7 + uPhase - time) * 1.4;
+          float fold = 0.5 + 0.5 * sin(flow + vUv.y * 4.0 + time);
+          float crest = pow(fold, 5.0);
+          float rays = noise(vec2(path * 38.0 + uPhase, vUv.y * 3.0 - time));
+          float edge = smoothstep(0.0, 0.045, path) * (1.0 - smoothstep(4.3, 5.19, path));
+          edge *= smoothstep(0.0, 0.16, vUv.y) * (1.0 - smoothstep(0.78, 1.0, vUv.y));
+          float light = (0.10 + fold * 0.22 + crest * 0.25) * (0.55 + rays * 0.45);
+          vec3 color = mix(uBlue, uCyan, crest * 0.55);
+          float red = smoothstep(0.5, 0.8, noise(vec2(path * 1.7 + uPhase, 21.0)))
+            * smoothstep(0.35, 0.85, vUv.y);
+          color = mix(color, uRed, red * 0.8);
+          gl_FragColor = vec4(color * 1.4, light * edge * uOpacity);
+        }
+      `,
+    });
+    depthMaterials.push(material);
+    const ribbon = new THREE.Mesh(new THREE.PlaneGeometry(1, 1, 512, 24), material);
+    ribbon.frustumCulled = false;
+    depth.add(ribbon);
   }
 
   return {
     object: group,
     parallax: 0,
-    update: (t) => {
-      for (const material of materials) {
+    setStyle: (next) => { style = next; },
+    update: (t, dt) => {
+      const target = style === "depth" ? 1 : 0;
+      blend = reducedMotion ? target : THREE.MathUtils.clamp(
+        blend + Math.sign(target - blend) * dt / 1.2, 0, 1,
+      );
+      canopy.visible = blend < 1;
+      depth.visible = blend > 0;
+      for (const material of [...materials, ...depthMaterials]) {
         const time = material.uniforms["uTime"];
         if (time) time.value = reducedMotion ? 0 : t;
+      }
+      for (const material of materials) {
+        const opacity = material.uniforms["uOpacity"];
+        if (opacity) opacity.value = 1 - blend;
+      }
+      for (const material of depthMaterials) {
+        const opacity = material.uniforms["uOpacity"];
+        if (opacity) opacity.value = blend;
       }
     },
   };
