@@ -3,7 +3,7 @@ import { useJuspross } from "@/lib/juspross/store";
 import { useRuntime } from "@/lib/juspross/useRuntime";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Cloud, Waves } from "lucide-react";
+import { Cloud, Sparkles, Waves } from "lucide-react";
 
 export function ConnectionPanel() {
   const webhookUrl = useJuspross((s) => s.webhookUrl);
@@ -102,9 +102,10 @@ export function SettingsPanel() {
       </Row>
       <div className="border-b border-border/50 py-3">
         <span className="label-xs" id="aurora-style-label">AURORAS BOREALES</span>
-        <div className="mt-2 grid grid-cols-2 gap-2" role="group" aria-labelledby="aurora-style-label">
+        <div className="mt-2 grid grid-cols-3 gap-2" role="group" aria-labelledby="aurora-style-label">
           {([
             { value: "canopy", label: "Bóveda total", Icon: Cloud },
+            { value: "distributed", label: "Distribuida", Icon: Sparkles },
             { value: "depth", label: "En profundidad", Icon: Waves },
           ] as const).map(({ value, label, Icon }) => (
             <Button

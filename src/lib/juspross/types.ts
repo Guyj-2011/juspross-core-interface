@@ -1,4 +1,4 @@
-export type AuroraStyle = "canopy" | "depth";
+export type AuroraStyle = "canopy" | "distributed" | "depth";
 
 export type SystemState =
   | "idle"
