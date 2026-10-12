@@ -28,11 +28,13 @@ export function createSkyAurora(): AuroraLayer {
   const group = new THREE.Group();
   const materials: THREE.ShaderMaterial[] = [];
   const depthMaterials: THREE.ShaderMaterial[] = [];
+  const distributedMaterials: THREE.ShaderMaterial[] = [];
   const canopy = new THREE.Group();
   const depth = new THREE.Group();
-  group.add(canopy, depth);
+  const distributed = new THREE.Group();
+  group.add(canopy, depth, distributed);
   let style: AuroraStyle = "canopy";
-  let blend = 0;
+  let blend = 0; // 0 = canopy, 1 = distributed, 2 = depth
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const blue = paletteColor("--aurora-blue");
   const cyan = paletteColor("--aurora-cyan");
