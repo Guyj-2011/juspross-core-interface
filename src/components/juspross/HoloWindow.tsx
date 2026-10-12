@@ -30,16 +30,16 @@ export function HoloWindow({
 }: Props) {
   const [pos, setPos] = useState(position);
   const drag = useRef<{ dx: number; dy: number } | null>(null);
-  const moved = useRef(false);
+  const [dragging, setDragging] = useState(false);
 
-  // Reflow automático mientras el usuario no haya movido el panel a mano.
+  // Cada vez que cambia la rejilla (se abre/cierra un panel o cambia la
+  // ventana) el panel vuelve a su casilla, así nunca quedan unos sobre otros.
   useEffect(() => {
-    if (!moved.current) setPos(position);
-  }, [position]);
+    setPos({ x: position.x, y: position.y });
+  }, [position.x, position.y]);
 
   const onMove = useCallback((e: PointerEvent) => {
     if (!drag.current) return;
-    moved.current = true;
     setPos({
       x: Math.max(8, Math.min(window.innerWidth - 120, e.clientX - drag.current.dx)),
       y: Math.max(8, Math.min(window.innerHeight - 60, e.clientY - drag.current.dy)),
@@ -47,7 +47,10 @@ export function HoloWindow({
   }, []);
 
   useEffect(() => {
-    const up = () => (drag.current = null);
+    const up = () => {
+      drag.current = null;
+      setDragging(false);
+    };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", up);
     return () => {
@@ -60,6 +63,9 @@ export function HoloWindow({
     left: pos.x,
     top: pos.y,
     width,
+    transition: dragging
+      ? "none"
+      : "left 380ms cubic-bezier(0.22,1,0.36,1), top 380ms cubic-bezier(0.22,1,0.36,1), width 380ms cubic-bezier(0.22,1,0.36,1)",
     "--accent": accent,
     "--accent2": accent2,
     borderColor: "color-mix(in oklab, var(--accent) 38%, transparent)",
@@ -102,6 +108,7 @@ export function HoloWindow({
         }}
         onPointerDown={(e) => {
           drag.current = { dx: e.clientX - pos.x, dy: e.clientY - pos.y };
+          setDragging(true);
         }}
       >
         <div className="flex min-w-0 items-center gap-2">
