@@ -126,12 +126,26 @@ export function speak(
     return () => {};
   }
   const u = new SpeechSynthesisUtterance(text);
-  u.lang = "es-ES";
-  u.rate = 1.02;
-  u.pitch = 0.92;
+  // Perfil calmado: español latino, voz masculina si el navegador ofrece una,
+  // ritmo pausado y tono grave sin forzar una voz artificial.
+  u.lang = "es-MX";
+  u.rate = 0.94;
+  u.pitch = 0.82;
+  u.volume = 1;
+
   const voices = window.speechSynthesis.getVoices();
-  const v = voices.find((x) => x.lang.startsWith("es"));
-  if (v) u.voice = v;
+  const spanishVoices = voices.filter((voice) => /^es([-_]|$)/i.test(voice.lang));
+  const preferredVoice = spanishVoices.find((voice) =>
+    /mexic|\bes[-_]mx\b|latin.?america|es[-_]419/i.test(`${voice.name} ${voice.lang}`),
+  );
+  const maleVoice = spanishVoices.find((voice) =>
+    /jorge|raul|raúl|pablo|antonio|diego|andres|andrés|carlos|miguel|enrique|male|masculin/i.test(voice.name),
+  );
+  const spanishVoice = preferredVoice ?? maleVoice ?? spanishVoices.find((voice) => /^es[-_]es/i.test(voice.lang)) ?? spanishVoices[0];
+  if (spanishVoice) {
+    u.voice = spanishVoice;
+    u.lang = spanishVoice.lang;
+  }
 
   let raf = 0;
   let t = 0;
