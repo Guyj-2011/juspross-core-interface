@@ -57,6 +57,9 @@ export function useRuntime() {
               if (jp().systemState === "success") jp().setState("idle", "STANDBY");
             }, 1400);
           },
+          (reason) => {
+            jp().log("VOZ XTTS", `No se pudo usar la voz neuronal: ${reason} Se activó la voz de respaldo del navegador.`, "warn");
+          },
         );
         break;
       }
