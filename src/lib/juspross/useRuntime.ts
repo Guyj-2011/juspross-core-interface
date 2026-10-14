@@ -16,6 +16,12 @@ export function useRuntime() {
   const abortRef = useRef<AbortController | null>(null);
   const stopSpeakRef = useRef<(() => void) | null>(null);
 
+  useEffect(() => () => {
+    abortRef.current?.abort();
+    stopSpeakRef.current?.();
+    jp().setAmplitude(0);
+  }, []);
+
   useEffect(() => {
     const saved = typeof window !== "undefined" ? localStorage.getItem("juspross.webhook") : null;
     if (saved) useJuspross.setState({ webhookUrl: saved });
@@ -58,7 +64,11 @@ export function useRuntime() {
             }, 1400);
           },
           (reason) => {
-            jp().log("VOZ XTTS", `No se pudo usar la voz neuronal: ${reason} Se activó la voz de respaldo del navegador.`, "warn");
+            const st = jp();
+            st.setAmplitude(0);
+            st.setError(reason);
+            st.setState("error", "ERROR DE VOZ");
+            st.log("VOZ", reason, "error");
           },
         );
         break;

@@ -1,3 +1,4 @@
+import { streamSpeech } from "./streamSpeech";
 import { useCallback, useEffect, useRef } from "react";
 
 /* Web Speech API — tipos mínimos */
@@ -64,7 +65,8 @@ export function useSpeechRecognition({ onInterim, onFinal, onWake, onError, wake
       let interim = "";
       let final = "";
       for (let i = e.resultIndex; i < e.results.length; i++) {
-        const r = e.results[i]!;
+        const r = e.results[i];
+        if (!r) continue;
         if (r.isFinal) final += r[0].transcript;
         else interim += r[0].transcript;
       }
@@ -115,200 +117,23 @@ export function useSpeechRecognition({ onInterim, onFinal, onWake, onError, wake
   return { start, stop, forceWake };
 }
 
-/** Síntesis de voz + amplitud sintética coherente con el habla. */
+/** Voz neuronal compartida por ambos modos; nunca sustituye un error por voz robótica. */
 export function speak(
-  text: string,
-  onLevel: (v: number) => void,
-  onEnd: () => void,
-): () => void {
-  if (typeof window === "undefined" || !("speechSynthesis" in window)) {
-    onEnd();
-    return () => {};
-  }
-  const u = new SpeechSynthesisUtterance(text);
-  // Perfil calmado: español latino, voz masculina si el navegador ofrece una,
-  // ritmo pausado y tono grave sin forzar una voz artificial.
-  u.lang = "es-MX";
-  u.rate = 0.94;
-  u.pitch = 0.82;
-  u.volume = 1;
-
-  const voices = window.speechSynthesis.getVoices();
-  const spanishVoices = voices.filter((voice) => /^es([-_]|$)/i.test(voice.lang));
-  const preferredVoice = spanishVoices.find((voice) =>
-    /mexic|\bes[-_]mx\b|latin.?america|es[-_]419/i.test(`${voice.name} ${voice.lang}`),
-  );
-  const maleVoice = spanishVoices.find((voice) =>
-    /jorge|raul|raúl|pablo|antonio|diego|andres|andrés|carlos|miguel|enrique|male|masculin/i.test(voice.name),
-  );
-  const spanishVoice = preferredVoice ?? maleVoice ?? spanishVoices.find((voice) => /^es[-_]es/i.test(voice.lang)) ?? spanishVoices[0];
-  if (spanishVoice) {
-    u.voice = spanishVoice;
-    u.lang = spanishVoice.lang;
-  }
-
-  let raf = 0;
-  let t = 0;
-  let target = 0.5;
-  let level = 0;
-  const tick = () => {
-    t += 1 / 60;
-    if (Math.random() < 0.06) target = 0.25 + Math.random() * 0.75;
-    const syllable = 0.5 + 0.5 * Math.sin(t * 15.5 + Math.sin(t * 4.1) * 2.0);
-    level += (target * syllable - level) * 0.25;
-    onLevel(Math.max(0, Math.min(1, level)));
-    raf = requestAnimationFrame(tick);
-  };
-
-  u.onstart = () => tick();
-  const finish = () => {
-    cancelAnimationFrame(raf);
-    onLevel(0);
-    onEnd();
-  };
-  u.onend = finish;
-  u.onerror = finish;
-  window.speechSynthesis.cancel();
-  window.speechSynthesis.speak(u);
-  // fallback: si la síntesis no está disponible, cerrar el estado
-  const guard = setTimeout(() => {
-    if (!window.speechSynthesis.speaking) finish();
-  }, 900);
-  return () => {
-    clearTimeout(guard);
-    cancelAnimationFrame(raf);
-    window.speechSynthesis.cancel();
-    onLevel(0);
-  };
-}
-
-/**
- * Voz del lado calmado: usa el servidor neuronal XTTS local cuando está disponible.
- * Si no lo está, recurre a la voz del navegador para no dejar la interfaz muda.
- * XTTS debe responder audio binario en POST http://127.0.0.1:8000/tts con { text }.
- */
-export function speakCalm(
   text: string,
   onLevel: (v: number) => void,
   onEnd: () => void,
   onUnavailable?: (reason: string) => void,
 ): () => void {
-  if (typeof window === "undefined") return speak(text, onLevel, onEnd);
-
+  if (typeof window === "undefined") return () => {};
   const controller = new AbortController();
-  let cancelled = false;
-  let finished = false;
-  let fallbackStarted = false;
-  let fallbackCancel: (() => void) | null = null;
-  let audio: HTMLAudioElement | null = null;
-  let objectUrl: string | null = null;
-  let raf = 0;
-  let timer = 0;
-  let timedOut = false;
-  let t = 0;
-  let level = 0;
-  let target = 0.45;
-
-  const clearPlayback = () => {
-    cancelAnimationFrame(raf);
-    if (audio) {
-      audio.onplay = null;
-      audio.onended = null;
-      audio.onerror = null;
-      audio.pause();
-      audio.removeAttribute("src");
-      audio.load();
-      audio = null;
-    }
-    if (objectUrl) {
-      URL.revokeObjectURL(objectUrl);
-      objectUrl = null;
-    }
-  };
-
-  const finish = () => {
-    if (finished || cancelled) return;
-    finished = true;
-    window.clearTimeout(timer);
-    cancelAnimationFrame(raf);
-    onLevel(0);
-    onEnd();
-    if (objectUrl) {
-      URL.revokeObjectURL(objectUrl);
-      objectUrl = null;
-    }
-  };
-
-  const tick = () => {
-    t += 1 / 60;
-    if (Math.random() < 0.06) target = 0.2 + Math.random() * 0.7;
-    const syllable = 0.5 + 0.5 * Math.sin(t * 13.5 + Math.sin(t * 3.7) * 1.8);
-    level += (target * syllable - level) * 0.22;
-    onLevel(Math.max(0, Math.min(1, level)));
-    raf = requestAnimationFrame(tick);
-  };
-
-  const fallback = (reason: string) => {
-    if (cancelled || finished || fallbackStarted) return;
-    fallbackStarted = true;
-    window.clearTimeout(timer);
-    onUnavailable?.(reason);
-    clearPlayback();
-    fallbackCancel = speak(text, onLevel, onEnd);
-  };
-
-  timer = window.setTimeout(() => {
-    timedOut = true;
-    controller.abort();
-  }, 15000);
-
-  void fetch("http://127.0.0.1:8000/tts", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text }),
-    signal: controller.signal,
-  })
-    .then(async (response) => {
-      window.clearTimeout(timer);
-      if (!response.ok) throw new Error(`XTTS respondió ${response.status}`);
-      const blob = await response.blob();
-      if (cancelled) return;
-      const contentType = response.headers.get("content-type") || blob.type;
-      if (/application\/json|text\/html/i.test(contentType)) {
-        throw new Error("XTTS respondió texto/JSON en vez de audio. El endpoint /tts debe devolver un archivo WAV reproducible.");
-      }
-      if (blob.size < 64) throw new Error("XTTS devolvió un audio vacío.");
-      objectUrl = URL.createObjectURL(blob);
-      audio = new Audio(objectUrl);
-      audio.preload = "auto";
-      audio.onplay = tick;
-      audio.onended = finish;
-      audio.onerror = () => fallback("El servidor respondió, pero el audio XTTS no se pudo reproducir. Comprueba que /tts devuelva WAV o MP3.");
-      try {
-        await audio.play();
-      } catch {
-        fallback("El navegador bloqueó la reproducción del audio XTTS.");
-      }
-    })
+  void streamSpeech("/api/speech", text, controller.signal, onLevel)
+    .then(() => { if (!controller.signal.aborted) onEnd(); })
     .catch((error: unknown) => {
-      if (cancelled) return;
-      if (timedOut) {
-        fallback("XTTS tardó más de 15 segundos en responder.");
-        return;
-      }
-      const detail = error instanceof Error ? error.message : String(error);
-      const reason = detail === "Failed to fetch" || error instanceof TypeError
-        ? "No se pudo conectar con http://127.0.0.1:8000/tts. Revisa que el servidor esté encendido y permita CORS desde el dominio de Lovable."
-        : detail || "Falló la solicitud al servidor XTTS.";
-      fallback(reason);
+      if (controller.signal.aborted) return;
+      onLevel(0);
+      onUnavailable?.(error instanceof Error ? error.message : "No se pudo generar la voz.");
     });
-
-  return () => {
-    cancelled = true;
-    window.clearTimeout(timer);
-    controller.abort();
-    fallbackCancel?.();
-    clearPlayback();
-    onLevel(0);
-  };
+  return () => { controller.abort(); onLevel(0); };
 }
+
+export const speakCalm = speak;
