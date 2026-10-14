@@ -7,4 +7,4 @@
 - [x] Add the verified distributed full-sky aurora as a third selectable style.
 
 # Voice
-- [ ] Replace robotic speech with a natural, composed masculine voice in both modes and verify playback.
+- [x] Replace robotic speech with a natural, composed masculine voice in both modes and verify playback.
