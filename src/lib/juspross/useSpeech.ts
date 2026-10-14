@@ -181,3 +181,120 @@ export function speak(
     onLevel(0);
   };
 }
+
+/**
+ * Voz del lado calmado: usa el servidor neuronal XTTS local cuando está disponible.
+ * Si no lo está, recurre a la voz del navegador para no dejar la interfaz muda.
+ * XTTS debe responder audio binario en POST http://127.0.0.1:8000/tts con { text }.
+ */
+export function speakCalm(
+  text: string,
+  onLevel: (v: number) => void,
+  onEnd: () => void,
+): () => void {
+  if (typeof window === "undefined") return speak(text, onLevel, onEnd);
+
+  const controller = new AbortController();
+  let cancelled = false;
+  let finished = false;
+  let fallbackStarted = false;
+  let fallbackCancel: (() => void) | null = null;
+  let audio: HTMLAudioElement | null = null;
+  let objectUrl: string | null = null;
+  let raf = 0;
+  let timer = 0;
+  let timedOut = false;
+  let t = 0;
+  let level = 0;
+  let target = 0.45;
+
+  const clearPlayback = () => {
+    cancelAnimationFrame(raf);
+    if (audio) {
+      audio.onplay = null;
+      audio.onended = null;
+      audio.onerror = null;
+      audio.pause();
+      audio.removeAttribute("src");
+      audio.load();
+      audio = null;
+    }
+    if (objectUrl) {
+      URL.revokeObjectURL(objectUrl);
+      objectUrl = null;
+    }
+  };
+
+  const finish = () => {
+    if (finished || cancelled) return;
+    finished = true;
+    window.clearTimeout(timer);
+    cancelAnimationFrame(raf);
+    onLevel(0);
+    onEnd();
+    if (objectUrl) {
+      URL.revokeObjectURL(objectUrl);
+      objectUrl = null;
+    }
+  };
+
+  const tick = () => {
+    t += 1 / 60;
+    if (Math.random() < 0.06) target = 0.2 + Math.random() * 0.7;
+    const syllable = 0.5 + 0.5 * Math.sin(t * 13.5 + Math.sin(t * 3.7) * 1.8);
+    level += (target * syllable - level) * 0.22;
+    onLevel(Math.max(0, Math.min(1, level)));
+    raf = requestAnimationFrame(tick);
+  };
+
+  const fallback = () => {
+    if (cancelled || finished || fallbackStarted) return;
+    fallbackStarted = true;
+    window.clearTimeout(timer);
+    clearPlayback();
+    fallbackCancel = speak(text, onLevel, onEnd);
+  };
+
+  timer = window.setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, 15000);
+
+  void fetch("http://127.0.0.1:8000/tts", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ text }),
+    signal: controller.signal,
+  })
+    .then(async (response) => {
+      window.clearTimeout(timer);
+      if (!response.ok) throw new Error(`XTTS respondió ${response.status}`);
+      const blob = await response.blob();
+      if (cancelled) return;
+      if (blob.size < 64) throw new Error("XTTS devolvió un audio vacío");
+      objectUrl = URL.createObjectURL(blob);
+      audio = new Audio(objectUrl);
+      audio.preload = "auto";
+      audio.onplay = tick;
+      audio.onended = finish;
+      audio.onerror = fallback;
+      try {
+        await audio.play();
+      } catch {
+        fallback();
+      }
+    })
+    .catch(() => {
+      if (cancelled) return;
+      if (timedOut || !fallbackStarted) fallback();
+    });
+
+  return () => {
+    cancelled = true;
+    window.clearTimeout(timer);
+    controller.abort();
+    fallbackCancel?.();
+    clearPlayback();
+    onLevel(0);
+  };
+}

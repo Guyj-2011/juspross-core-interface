@@ -3,7 +3,7 @@ import { jp, useJuspross } from "./store";
 import { createN8nTransport, type JusprossEvent, type Transport } from "./n8n";
 import { createMockTransport } from "./mockTransport";
 import { cue } from "./audio";
-import { speak } from "./useSpeech";
+import { speakCalm } from "./useSpeech";
 
 const SESSION_ID = Math.random().toString(36).slice(2, 12);
 
@@ -45,7 +45,7 @@ export function useRuntime() {
       case "speak": {
         s.addMessage({ role: "juspross", text: e.text, channel: "voice" });
         s.setState("speaking", "SPEAKING");
-        stopSpeakRef.current = speak(
+        stopSpeakRef.current = speakCalm(
           e.text,
           (v) => jp().setAmplitude(v),
           () => {
