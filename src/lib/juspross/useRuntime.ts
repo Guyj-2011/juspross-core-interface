@@ -58,7 +58,11 @@ export function useRuntime() {
             }, 1400);
           },
           (reason) => {
-            jp().log("VOZ XTTS", `No se pudo usar la voz neuronal: ${reason} Se activó la voz de respaldo del navegador.`, "warn");
+            const st = jp();
+            st.setAmplitude(0);
+            st.setError(reason);
+            st.setState("error", "ERROR DE VOZ");
+            st.log("VOZ", reason, "error");
           },
         );
         break;

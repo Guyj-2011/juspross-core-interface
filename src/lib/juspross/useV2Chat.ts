@@ -76,6 +76,12 @@ export function useV2Chat() {
               useV2.getState().setAmplitude(0);
               useV2.getState().setState("idle");
             },
+            (reason) => {
+              const current = useV2.getState();
+              current.setAmplitude(0);
+              current.patchMessage(id, { text: `${final}\n\nVoz: ${reason}` });
+              current.setState("error");
+            },
           );
         } else {
           st.setState("idle");
