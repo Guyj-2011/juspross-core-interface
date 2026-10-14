@@ -1,4 +1,10 @@
+import { useEffect } from "react";
 import { createFileRoute } from "@tanstack/react-router";
+import { OrbCanvas } from "@/components/juspross/OrbCanvas";
+import { V2Console } from "@/components/juspross/V2Console";
+import { ModeSwitch } from "@/components/juspross/ModeSwitch";
+import { useV2 } from "@/lib/juspross/v2Store";
+import { cn } from "@/lib/utils";
 import { CoreCanvas } from "@/components/juspross/CoreCanvas";
 import { Brand } from "@/components/juspross/Brand";
 import { Sidebar } from "@/components/juspross/Sidebar";
@@ -29,17 +35,36 @@ export const Route = createFileRoute("/")({
 });
 
 function Index() {
+  const mode = useV2((s) => s.mode);
+  const hydrate = useV2((s) => s.hydrate);
+  useEffect(() => hydrate(), [hydrate]);
+
   return (
-    <main className="relative h-screen w-screen overflow-hidden bg-background">
-      <CoreCanvas />
-      <div className="pointer-events-none absolute inset-0">
-        <Brand />
-        <Sidebar />
-        <StatusDeck />
-        <Telemetry />
-        <PanelHost />
-        <CommandBar />
-      </div>
+    <main
+      className={cn(
+        "relative h-screen w-screen overflow-hidden",
+        mode === "v2" ? "bg-black" : "bg-background",
+      )}
+    >
+      {mode === "calm" ? (
+        <>
+          <CoreCanvas />
+          <div className="pointer-events-none absolute inset-0">
+            <Brand />
+            <Sidebar />
+            <StatusDeck />
+            <Telemetry />
+            <PanelHost />
+            <CommandBar />
+          </div>
+        </>
+      ) : (
+        <>
+          <OrbCanvas />
+          <V2Console />
+        </>
+      )}
+      <ModeSwitch />
       <BootSequence />
     </main>
   );
