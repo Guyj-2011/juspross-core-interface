@@ -7,12 +7,13 @@ import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import type { V2State } from "../v2Store";
 
 /* =====================================================================
- *  Núcleo 2.0 — energía azul, muy compleja y siempre en movimiento.
- *  De lejos: plasma en capas, retículas geodésicas con ondas, miles de
- *  partículas en órbita, rayos que chisporrotean, ondas de choque y
- *  anillos HUD. Sin brillo exagerado, pero con destellos.
- *  De cerca (zoom máximo): aparecen miles de engranajes microscópicos
- *  que engranan entre sí, escondidos en el corazón del núcleo.
+ *  Núcleo 2.0 — bola de fuego volumétrica (azul → amarillo).
+ *  · Llamas reales: ray-marching de ruido 3D con turbulencia; azules en la
+ *    base, blancas y amarillas hacia las puntas.
+ *  · El interior es oscuro: el brillo está en las llamas del borde.
+ *  · Al pensar, las llamas se expanden y estallan hacia afuera.
+ *  · En el corazón oscuro hay miles de engranajes microscópicos que solo
+ *    aparecen con el zoom al máximo.
  * ===================================================================== */
 
 const rnd = (a = 0, b = 1) => a + Math.random() * (b - a);
@@ -86,8 +87,6 @@ function gearGeometry(N: number, o: GearOpts = {}): THREE.BufferGeometry {
   return g;
 }
 
-/* ---------- shaders ---------- */
-
 /** Engranajes microscópicos: acero azul oscuro con filo de energía; se difuminan por cercanía. */
 const GEAR_VERT = /* glsl */ `
   attribute float aPhase, aSpeed, aThick, aHot, aShade;
@@ -146,77 +145,6 @@ const GEAR_FRAG = /* glsl */ `
   }
 `;
 
-const NOISE = /* glsl */ `
-  float hash3(vec3 p){ p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
-  float vnoise(vec3 x){
-    vec3 i = floor(x), f = fract(x);
-    f = f * f * (3.0 - 2.0 * f);
-    return mix(mix(mix(hash3(i), hash3(i + vec3(1,0,0)), f.x), mix(hash3(i + vec3(0,1,0)), hash3(i + vec3(1,1,0)), f.x), f.y),
-               mix(mix(hash3(i + vec3(0,0,1)), hash3(i + vec3(1,0,1)), f.x), mix(hash3(i + vec3(0,1,1)), hash3(i + vec3(1,1,1)), f.x), f.y), f.z);
-  }
-  float fbm3(vec3 p){ float a = 0.5, s = 0.0; for (int i = 0; i < 3; i++) { s += a * vnoise(p); p = p * 2.03 + vec3(1.7, 9.2, 3.1); a *= 0.5; } return s; }
-`;
-
-/** Plasma: venas eléctricas y nubes de energía que fluyen sobre una esfera. */
-const PLASMA_VERT = /* glsl */ `
-  varying vec3 vObj, vN, vV;
-  void main(){
-    vObj = position;
-    vN = normalize(normalMatrix * normal);
-    vec4 mv = modelViewMatrix * vec4(position, 1.0);
-    vV = -mv.xyz;
-    gl_Position = projectionMatrix * mv;
-  }
-`;
-const PLASMA_FRAG = /* glsl */ `
-  precision highp float;
-  uniform float uTime, uThink, uAmp, uErr, uScale, uSpeed, uOpacity;
-  varying vec3 vObj, vN, vV;
-  ${NOISE}
-  void main(){
-    vec3 N = normalize(vN);
-    if (!gl_FrontFacing) N = -N;
-    vec3 p = normalize(vObj) * uScale;
-    float t = uTime * uSpeed;
-    vec3 q = vec3(fbm3(p + vec3(0.0, t, 0.0)), fbm3(p + vec3(5.2, 1.3, -t)), fbm3(p + vec3(-t, 8.3, 2.8)));
-    float n = fbm3(p + 1.8 * q + vec3(0.0, t * 0.5, 0.0));
-    float veins = pow(1.0 - abs(2.0 * n - 1.0), 7.0);
-    float cloud = smoothstep(0.3, 0.8, n);
-    float fres = pow(1.0 - abs(dot(N, normalize(vV))), 2.0);
-    vec3 col = vec3(0.015, 0.09, 0.42) * cloud * 0.4;
-    col += vec3(0.08, 0.5, 1.0) * veins * (0.7 + uThink * 1.3);
-    col += vec3(0.7, 0.9, 1.0) * veins * veins * (0.25 + uThink * 0.6);
-    col += vec3(0.05, 0.3, 1.0) * fres * 0.3;
-    col = mix(col, vec3(col.b, col.g * 0.2, col.r * 0.2), uErr);
-    gl_FragColor = vec4(col * uOpacity * (1.0 + uAmp * 0.7), 1.0);
-  }
-`;
-
-/** Miles de partículas en órbitas inclinadas, con zonas brillantes que viajan. */
-const ORBIT_VERT = /* glsl */ `
-  attribute vec4 aOrbit;
-  attribute vec3 aRot;
-  uniform float uTime, uSpin, uThink, uAmp, uDpr, uEnergy, uErr;
-  varying vec3 vColor;
-  varying float vA;
-  void main(){
-    float a = aOrbit.z + aOrbit.y * uSpin;
-    float r = aOrbit.x * (1.0 + 0.025 * sin(uTime * 0.7 + aRot.z * 20.0) + uAmp * 0.05);
-    vec3 p = vec3(cos(a) * r, sin(a * 3.0 + aRot.z * 9.0) * r * 0.035, sin(a) * r);
-    float ct = cos(aRot.x), st = sin(aRot.x);
-    p = vec3(p.x, p.y * ct - p.z * st, p.y * st + p.z * ct);
-    float ca = cos(aRot.y), sa = sin(aRot.y);
-    p = vec3(p.x * ca + p.z * sa, p.y, -p.x * sa + p.z * ca);
-    vec4 mv = modelViewMatrix * vec4(p, 1.0);
-    gl_Position = projectionMatrix * mv;
-    float comet = pow(0.5 + 0.5 * sin(a * 2.0 + aRot.z * 31.0 - uSpin * 0.6), 3.0);
-    float tw = 0.5 + 0.5 * sin(uTime * (1.0 + aRot.z * 3.0) + aRot.z * 60.0);
-    vA = 0.22 + 0.78 * comet * (0.6 + 0.4 * tw);
-    vec3 c = mix(vec3(0.04, 0.25, 0.95), vec3(0.55, 0.85, 1.0), comet * comet) * (0.8 + uThink * 0.6);
-    vColor = mix(c, vec3(c.b, c.g * 0.2, c.r * 0.2), uErr);
-    gl_PointSize = aOrbit.w * uDpr * (1.0 + uEnergy * 0.2) * (12.0 / max(0.05, -mv.z));
-  }
-`;
 const DOT_FRAG = /* glsl */ `
   precision highp float;
   uniform float uOpacity;
@@ -228,111 +156,6 @@ const DOT_FRAG = /* glsl */ `
     float halo = smoothstep(0.5, 0.0, d);
     float core = smoothstep(0.2, 0.0, d);
     gl_FragColor = vec4(vColor * (0.4 + halo * 0.8 + core), (halo * 0.5 + core * 0.6) * vA * uOpacity);
-  }
-`;
-
-/** Retículas geodésicas con ondas de luz que las recorren. */
-const LATT_VERT = /* glsl */ `
-  uniform float uSpin, uThink;
-  varying float vB;
-  void main(){
-    vec3 d = normalize(position);
-    float w = sin(dot(d, normalize(vec3(0.6, 0.5, 0.62))) * 7.0 - uSpin * 1.6);
-    float w2 = sin(dot(d, normalize(vec3(-0.4, 0.8, -0.3))) * 11.0 + uSpin * 2.3);
-    vB = 0.09 + 0.8 * pow(max(0.0, w), 8.0) * (0.5 + uThink) + 0.5 * pow(max(0.0, w2), 10.0) * (0.3 + uThink);
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-  }
-`;
-const LATT_FRAG = /* glsl */ `
-  precision highp float;
-  uniform float uOpacity, uErr;
-  varying float vB;
-  void main(){
-    vec3 c = mix(vec3(0.05, 0.3, 1.0), vec3(0.7, 0.9, 1.0), clamp(vB, 0.0, 1.0)) * vB * uOpacity;
-    gl_FragColor = vec4(mix(c, vec3(c.b, c.g * 0.2, c.r * 0.2), uErr), 1.0);
-  }
-`;
-const NODE_VERT = /* glsl */ `
-  uniform float uSpin, uThink, uDpr;
-  varying vec3 vColor;
-  varying float vA;
-  void main(){
-    vec3 d = normalize(position);
-    float w = sin(dot(d, normalize(vec3(0.6, 0.5, 0.62))) * 7.0 - uSpin * 1.6);
-    float b = 0.25 + 0.9 * pow(max(0.0, w), 8.0) * (0.5 + uThink);
-    vec4 mv = modelViewMatrix * vec4(position, 1.0);
-    gl_Position = projectionMatrix * mv;
-    vColor = mix(vec3(0.1, 0.4, 1.0), vec3(0.8, 0.93, 1.0), clamp(b, 0.0, 1.0));
-    vA = clamp(b, 0.0, 1.0);
-    gl_PointSize = 2.4 * uDpr * (0.8 + b) * (12.0 / max(0.05, -mv.z));
-  }
-`;
-
-/** Rayos que chisporrotean entre capas. */
-const ARC_VERT = /* glsl */ `
-  attribute float aU, aSeed;
-  attribute vec3 aJit;
-  uniform float uTime, uThink, uAmp;
-  varying float vA;
-  void main(){
-    float env = sin(3.14159 * aU);
-    float j = sin(uTime * (6.0 + aSeed * 8.0) + aSeed * 90.0 + aU * 12.0);
-    vec3 p = position + aJit * env * j * (0.12 + uThink * 0.25 + uAmp * 0.2);
-    float flash = pow(max(0.0, sin(uTime * (0.5 + aSeed * 0.9) + aSeed * 60.0)), 24.0);
-    vA = (0.03 + flash * (0.6 + uThink * 1.4)) * env;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
-  }
-`;
-const ARC_FRAG = /* glsl */ `
-  precision highp float;
-  uniform float uOpacity, uErr;
-  varying float vA;
-  void main(){
-    vec3 c = mix(vec3(0.1, 0.45, 1.0), vec3(0.85, 0.95, 1.0), clamp(vA * 1.3, 0.0, 1.0)) * vA * uOpacity;
-    gl_FragColor = vec4(mix(c, vec3(c.b, c.g * 0.2, c.r * 0.2), uErr), 1.0);
-  }
-`;
-
-/** Ondas de choque: cáscaras de luz que se expanden desde el centro. */
-const WAVE_VERT = /* glsl */ `
-  varying vec3 vN, vV;
-  void main(){
-    vN = normalize(normalMatrix * normal);
-    vec4 mv = modelViewMatrix * vec4(position, 1.0);
-    vV = -mv.xyz;
-    gl_Position = projectionMatrix * mv;
-  }
-`;
-const WAVE_FRAG = /* glsl */ `
-  precision highp float;
-  uniform float uLife, uOpacity, uThink, uErr;
-  varying vec3 vN, vV;
-  void main(){
-    float f = pow(1.0 - abs(dot(normalize(vN), normalize(vV))), 3.0);
-    float a = f * pow(1.0 - uLife, 2.0) * uOpacity * (0.7 + uThink);
-    vec3 c = vec3(0.1, 0.5, 1.0) * a;
-    gl_FragColor = vec4(mix(c, vec3(c.b, c.g * 0.2, c.r * 0.2), uErr), 1.0);
-  }
-`;
-
-/** Anillos HUD con marcas. */
-const HUD_VERT = /* glsl */ `
-  attribute float aA, aSeed;
-  uniform float uTime, uEnergy;
-  varying float vAlpha;
-  void main(){
-    float fl = 0.7 + 0.3 * sin(uTime * (0.8 + aSeed * 3.0) + aSeed * 40.0);
-    vAlpha = aA * fl * (0.8 + uEnergy * 0.5);
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-  }
-`;
-const HUD_FRAG = /* glsl */ `
-  precision highp float;
-  uniform float uOpacity, uErr;
-  varying float vAlpha;
-  void main(){
-    vec3 c = vec3(0.08, 0.38, 1.0) * vAlpha * uOpacity;
-    gl_FragColor = vec4(mix(c, vec3(c.b, c.g * 0.2, c.r * 0.2), uErr), 1.0);
   }
 `;
 
@@ -439,18 +262,197 @@ function buildChains(
   return gears;
 }
 
-function glowTexture(): THREE.CanvasTexture {
-  const c = document.createElement("canvas");
-  c.width = c.height = 128;
-  const g = c.getContext("2d")!;
-  const grad = g.createRadialGradient(64, 64, 0, 64, 64, 64);
-  grad.addColorStop(0, "rgba(255,255,255,1)");
-  grad.addColorStop(0.3, "rgba(255,255,255,0.35)");
-  grad.addColorStop(1, "rgba(255,255,255,0)");
-  g.fillStyle = grad;
-  g.fillRect(0, 0, 128, 128);
-  return new THREE.CanvasTexture(c);
+/** Textura 3D de ruido (3 canales, periódica) para el fuego. */
+function makeNoise3D(): THREE.Data3DTexture {
+  const N = 64;
+  const P = 8; // celdas por periodo
+  const lat: Float32Array[] = [0, 1, 2].map(() => {
+    const a = new Float32Array(P * P * P);
+    for (let i = 0; i < a.length; i++) a[i] = Math.random();
+    return a;
+  });
+  const fade = (t: number) => t * t * t * (t * (t * 6 - 15) + 10);
+  const data = new Uint8Array(N * N * N * 4);
+  for (let z = 0; z < N; z++) {
+    const gz = (z / N) * P;
+    const z0 = Math.floor(gz);
+    const fz = fade(gz - z0);
+    const z1 = (z0 + 1) % P;
+    for (let y = 0; y < N; y++) {
+      const gy = (y / N) * P;
+      const y0 = Math.floor(gy);
+      const fy = fade(gy - y0);
+      const y1 = (y0 + 1) % P;
+      for (let x = 0; x < N; x++) {
+        const gx = (x / N) * P;
+        const x0 = Math.floor(gx);
+        const fx = fade(gx - x0);
+        const x1 = (x0 + 1) % P;
+        const o = ((z * N + y) * N + x) * 4;
+        for (let c = 0; c < 3; c++) {
+          const L = lat[c]!;
+          const at = (i: number, j: number, k: number) => L[(k * P + j) * P + i]!;
+          const a = at(x0, y0, z0) + (at(x1, y0, z0) - at(x0, y0, z0)) * fx;
+          const b = at(x0, y1, z0) + (at(x1, y1, z0) - at(x0, y1, z0)) * fx;
+          const c2 = at(x0, y0, z1) + (at(x1, y0, z1) - at(x0, y0, z1)) * fx;
+          const d = at(x0, y1, z1) + (at(x1, y1, z1) - at(x0, y1, z1)) * fx;
+          const v = a + (b - a) * fy + (c2 + (d - c2) * fy - (a + (b - a) * fy)) * fz;
+          data[o + c] = Math.round(v * 255);
+        }
+        data[o + 3] = 255;
+      }
+    }
+  }
+  const t = new THREE.Data3DTexture(data, N, N, N);
+  t.format = THREE.RGBAFormat;
+  t.type = THREE.UnsignedByteType;
+  t.minFilter = t.magFilter = THREE.LinearFilter;
+  t.wrapS = t.wrapT = t.wrapR = THREE.RepeatWrapping;
+  t.unpackAlignment = 1;
+  t.needsUpdate = true;
+  return t;
 }
+
+/* ---------- shaders del fuego ---------- */
+
+const FS_VERT = /* glsl */ `
+  varying vec2 vUv;
+  void main(){
+    vUv = uv;
+    gl_Position = vec4(position.xy, 0.0, 1.0);
+  }
+`;
+
+/** Fuego volumétrico: ray-marching de ruido 3D avanzado hacia afuera, con turbulencia. */
+const FIRE_FRAG = /* glsl */ `
+  precision highp float;
+  precision highp sampler3D;
+  uniform sampler3D uNoise;
+  uniform mat4 uProjInv, uCamWorld;
+  uniform vec3 uCamPos;
+  uniform float uFlame, uTime, uR0, uH, uTurb, uBright, uErr;
+  varying vec2 vUv;
+
+  vec3 N3(vec3 p){ return texture(uNoise, p).rgb; }
+
+  vec2 hitSphere(vec3 ro, vec3 rd, float R){
+    float b = dot(ro, rd);
+    float c = dot(ro, ro) - R * R;
+    float h = b * b - c;
+    if (h < 0.0) return vec2(-1.0);
+    h = sqrt(h);
+    return vec2(-b - h, -b + h);
+  }
+
+  // densidad de llama: nace en la superficie (r = uR0) y sube hacia afuera; el interior se apaga rápido
+  float fireDensity(vec3 p, out float s, out float n){
+    float r = length(p);
+    vec3 dir = p / max(r, 1e-4);
+    float h = r - uR0;
+    s = clamp(h / uH, 0.0, 1.0);
+    vec3 q = (p - dir * uFlame) * 0.22;
+    vec3 w = N3(q * 0.9 + vec3(0.31, 0.77, 0.13)) - 0.5;
+    q += w * (0.22 + uTurb * 0.3);
+    float a = 0.5;
+    n = 0.0;
+    vec3 qq = q;
+    for (int i = 0; i < 4; i++) {
+      n += a * N3(qq).r;
+      qq = qq * 2.03 + vec3(0.13, 0.27, 0.31);
+      a *= 0.5;
+    }
+    float d = smoothstep(0.0, 1.0, n * 1.35 - 0.22 - s * 1.1);
+    return d * exp(min(h, 0.0) * 2.2);
+  }
+
+  // azul en la raíz → blanco azulado → amarillo → ámbar en las puntas
+  vec3 fireCol(float s, float n){
+    float k = clamp(s * 1.25 + (n - 0.5) * 0.35, 0.0, 1.0);
+    vec3 c = mix(vec3(0.03, 0.2, 1.0), vec3(0.55, 0.82, 1.0), smoothstep(0.0, 0.3, k));
+    c = mix(c, vec3(1.0, 0.82, 0.18), smoothstep(0.3, 0.62, k));
+    c = mix(c, vec3(0.95, 0.4, 0.05), smoothstep(0.62, 1.0, k));
+    return c;
+  }
+
+  void main(){
+    vec4 vp = uProjInv * vec4(vUv * 2.0 - 1.0, 1.0, 1.0);
+    vp /= vp.w;
+    vec3 rd = normalize((uCamWorld * vec4(vp.xyz, 0.0)).xyz);
+    vec3 ro = uCamPos;
+    float Rout = uR0 + uH + 0.4;
+    float Rin = max(0.0, uR0 - 1.6);
+    vec2 ho = hitSphere(ro, rd, Rout);
+    vec3 L = vec3(0.0);
+    float T = 1.0;
+    if (ho.y > 0.0) {
+      float a0 = max(ho.x, 0.0);
+      float a1 = ho.y;
+      vec2 hi = hitSphere(ro, rd, Rin);
+      bool skip = hi.y > 0.0 && Rin > 0.0;
+      float dith = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+      for (int sg = 0; sg < 2; sg++) {
+        float t0 = a0;
+        float t1 = a1;
+        if (skip) {
+          if (sg == 0) { t1 = min(hi.x, a1); }
+          else { t0 = max(hi.y, a0); }
+        } else if (sg == 1) {
+          break;
+        }
+        if (t1 <= t0) continue;
+        float dt = (t1 - t0) / 40.0;
+        float t = t0 + dt * dith;
+        for (int i = 0; i < 40; i++) {
+          vec3 p = ro + rd * t;
+          float s;
+          float n;
+          float d = fireDensity(p, s, n);
+          if (d > 0.003) {
+            vec3 c = fireCol(s, n);
+            c = mix(c, vec3(1.0, 0.12, 0.05) * dot(c, vec3(0.66)), uErr);
+            float emis = d * (1.5 - s * 0.9) * uBright;
+            L += T * c * emis * dt * 1.7;
+            T *= exp(-d * 2.4 * dt);
+          }
+          t += dt;
+          if (T < 0.02) break;
+        }
+        if (T < 0.02) break;
+      }
+    }
+    gl_FragColor = vec4(L, 1.0);
+  }
+`;
+
+const BLIT_FRAG = /* glsl */ `
+  precision highp float;
+  uniform sampler2D uTex;
+  varying vec2 vUv;
+  void main(){ gl_FragColor = vec4(texture2D(uTex, vUv).rgb, 1.0); }
+`;
+
+/** Chispas y brasas que salen despedidas de la bola de fuego. */
+const EMBER_VERT = /* glsl */ `
+  attribute vec3 aDir;
+  attribute vec4 aRnd;
+  uniform float uTime, uSpin, uR0, uH, uThink, uDpr, uErr;
+  varying vec3 vColor;
+  varying float vA;
+  void main(){
+    float u = fract(aRnd.x + uSpin * aRnd.y * 0.16);
+    float reach = uH * (0.9 + aRnd.z * 1.6) * (1.0 + uThink * 0.6);
+    float r = uR0 * 0.97 + u * reach;
+    vec3 off = vec3(sin(u * 7.0 + aRnd.w * 40.0), cos(u * 6.0 + aRnd.w * 23.0), sin(u * 5.0 + aRnd.w * 57.0)) * 0.25 * u * (1.0 + uThink);
+    vec3 p = aDir * r + off;
+    vec4 mv = modelViewMatrix * vec4(p, 1.0);
+    gl_Position = projectionMatrix * mv;
+    float life = 1.0 - u;
+    vA = pow(life, 1.4) * (0.5 + 0.5 * sin(uTime * (6.0 + aRnd.w * 10.0) + aRnd.w * 50.0));
+    vec3 c = mix(mix(vec3(0.7, 0.85, 1.0), vec3(1.0, 0.78, 0.15), smoothstep(0.0, 0.25, u)), vec3(0.95, 0.38, 0.05), smoothstep(0.35, 0.9, u));
+    vColor = mix(c, vec3(1.0, 0.15, 0.08), uErr);
+    gl_PointSize = (1.0 + 2.2 * aRnd.z * life) * uDpr * (12.0 / max(0.05, -mv.z));
+  }
+`;
 
 interface Spinner {
   o: THREE.Object3D;
@@ -468,32 +470,47 @@ export class OrbScene {
   private orb = new THREE.Group();
   private gearRoot = new THREE.Group();
   private spinners: Spinner[] = [];
-  private waves: { m: THREE.Mesh; mat: THREE.ShaderMaterial; k: number }[] = [];
-  private glow!: THREE.Sprite;
   private geoCache = new Map<string, THREE.BufferGeometry>();
   private u: {
     uTime: THREE.IUniform<number>;
     uSpin: THREE.IUniform<number>;
-    uEnergy: THREE.IUniform<number>;
     uThink: THREE.IUniform<number>;
     uAmp: THREE.IUniform<number>;
     uErr: THREE.IUniform<number>;
     uDpr: THREE.IUniform<number>;
     uVis: THREE.IUniform<number>;
   };
+  private fu: {
+    uNoise: THREE.IUniform<THREE.Data3DTexture>;
+    uProjInv: THREE.IUniform<THREE.Matrix4>;
+    uCamWorld: THREE.IUniform<THREE.Matrix4>;
+    uCamPos: THREE.IUniform<THREE.Vector3>;
+    uFlame: THREE.IUniform<number>;
+    uTime: THREE.IUniform<number>;
+    uR0: THREE.IUniform<number>;
+    uH: THREE.IUniform<number>;
+    uTurb: THREE.IUniform<number>;
+    uBright: THREE.IUniform<number>;
+    uErr: THREE.IUniform<number>;
+  };
   private gearMat: THREE.ShaderMaterial;
+  private fireMat: THREE.ShaderMaterial;
+  private blitMat: THREE.ShaderMaterial;
+  private fireScene = new THREE.Scene();
+  private fireRT: THREE.WebGLRenderTarget;
+  private noiseTex: THREE.Data3DTexture;
   private clock = new THREE.Clock();
   private raf = 0;
   private disposed = false;
   private resumeTimer = 0;
   private ro: ResizeObserver;
-  private tex = glowTexture();
   private target = { ...STATE_TARGET.idle };
   private cur = { ...STATE_TARGET.idle };
   private amp = 0;
   private ampS = 0;
-  private pulseV = 0;
+  private kick = 0;
   private spin = 0;
+  private fireT = 0;
   private speaking = false;
   private inSecretV3 = false;
 
@@ -509,16 +526,15 @@ export class OrbScene {
     });
     this.renderer.setPixelRatio(dpr);
     this.renderer.setSize(w, h);
-    this.renderer.setClearColor(0x000000, 1); // fondo completamente negro
+    this.renderer.setClearColor(0x000000, 1);
     container.appendChild(this.renderer.domElement);
 
-    this.camera = new THREE.PerspectiveCamera(50, w / h, 0.004, 90);
-    this.camera.position.set(0, 2.4, w / h < 1 ? 19 : 13.5);
+    this.camera = new THREE.PerspectiveCamera(50, w / h, 0.004, 120);
+    this.camera.position.set(0, 2.2, w / h < 1 ? 21 : 15);
 
     this.u = {
       uTime: { value: 0 },
       uSpin: { value: 0 },
-      uEnergy: { value: 0.35 },
       uThink: { value: 0 },
       uAmp: { value: 0 },
       uErr: { value: 0 },
@@ -531,14 +547,55 @@ export class OrbScene {
       uniforms: { ...this.u },
     });
 
+    this.noiseTex = makeNoise3D();
+    this.fu = {
+      uNoise: { value: this.noiseTex },
+      uProjInv: { value: this.camera.projectionMatrixInverse },
+      uCamWorld: { value: this.camera.matrixWorld },
+      uCamPos: { value: this.camera.position },
+      uFlame: { value: 0 },
+      uTime: { value: 0 },
+      uR0: { value: 2.2 },
+      uH: { value: 2.0 },
+      uTurb: { value: 0.2 },
+      uBright: { value: 1 },
+      uErr: { value: 0 },
+    };
+
+    // el fuego se calcula a menor resolución (es suave) y se proyecta como fondo
+    const fs = this.fireScale(w, h);
+    this.fireRT = new THREE.WebGLRenderTarget(Math.ceil(w * fs), Math.ceil(h * fs), {
+      type: THREE.HalfFloatType,
+      depthBuffer: false,
+    });
+    this.fireMat = new THREE.ShaderMaterial({
+      vertexShader: FS_VERT,
+      fragmentShader: FIRE_FRAG,
+      uniforms: { ...this.fu },
+      depthTest: false,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+    const fq = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.fireMat);
+    fq.frustumCulled = false;
+    this.fireScene.add(fq);
+
+    this.blitMat = new THREE.ShaderMaterial({
+      vertexShader: FS_VERT,
+      fragmentShader: BLIT_FRAG,
+      uniforms: { uTex: { value: this.fireRT.texture } },
+      blending: THREE.AdditiveBlending,
+      depthTest: false,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+    const blit = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.blitMat);
+    blit.frustumCulled = false;
+    blit.renderOrder = -10; // primero: los engranajes (opacos) quedan por delante
+    this.scene.add(blit);
+
     this.buildGears();
-    this.buildPlasma();
-    this.buildLattices();
-    this.buildOrbits();
-    this.buildArcs();
-    this.buildWaves();
-    this.buildHuds();
-    this.buildGlow();
+    this.buildEmbers();
     this.orb.add(this.gearRoot);
     this.scene.add(this.orb);
 
@@ -547,11 +604,11 @@ export class OrbScene {
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.06;
     this.controls.rotateSpeed = 0.75;
-    this.controls.zoomSpeed = 2.0; // mucho recorrido: de lejos hasta el corazón del núcleo
-    this.controls.minDistance = 0.03; // zoom máximo
-    this.controls.maxDistance = 30;
+    this.controls.zoomSpeed = 2.0;
+    this.controls.minDistance = 0.03; // zoom máximo hasta el corazón
+    this.controls.maxDistance = 34;
     this.controls.autoRotate = true;
-    this.controls.autoRotateSpeed = 0.45;
+    this.controls.autoRotateSpeed = 0.4;
     this.controls.addEventListener("start", () => {
       this.controls.autoRotate = false;
       window.clearTimeout(this.resumeTimer);
@@ -569,7 +626,7 @@ export class OrbScene {
     this.composer.setPixelRatio(dpr);
     this.composer.setSize(w, h);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(w, h), 0.32, 0.5, 0.22);
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(w, h), 0.4, 0.55, 0.3);
     this.composer.addPass(this.bloom);
     this.composer.addPass(new OutputPass());
 
@@ -578,31 +635,12 @@ export class OrbScene {
     this.loop();
   }
 
-  /* ---------- material helpers ---------- */
-
-  private addMat(
-    vs: string,
-    fs: string,
-    extra: Record<string, THREE.IUniform>,
-    side: THREE.Side = THREE.FrontSide,
-  ) {
-    return new THREE.ShaderMaterial({
-      transparent: true,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
-      side,
-      vertexShader: vs,
-      fragmentShader: fs,
-      uniforms: { ...this.u, ...extra },
-    });
+  /** Escala de resolución del fuego para mantener ~0.5 Mpx. */
+  private fireScale(w: number, h: number) {
+    return Math.min(1, Math.max(0.35, Math.sqrt(520000 / Math.max(1, w * h))));
   }
 
-  private spinner(o: THREE.Object3D, w: number) {
-    this.orb.add(o);
-    this.spinners.push({ o, axis: randDir(), w });
-  }
-
-  /* ---------- engranajes microscópicos (solo visibles con el zoom al máximo) ---------- */
+  /* ---------- engranajes microscópicos (solo con el zoom al máximo) ---------- */
 
   private gearGeo(N: number, o: GearOpts, key: string): THREE.BufferGeometry {
     let g = this.geoCache.get(key);
@@ -663,7 +701,6 @@ export class OrbScene {
   }
 
   private buildGears() {
-    // radio de cada engranaje ≈ 0.004–0.02: invisibles de lejos
     const bands: { r0: number; r1: number; n: number; m: [number, number]; w: number }[] = [
       { r0: 0.04, r1: 0.35, n: 1200, m: [0.0007, 0.0017], w: 0.25 },
       { r0: 0.35, r1: 0.8, n: 1700, m: [0.001, 0.0024], w: -0.18 },
@@ -679,224 +716,40 @@ export class OrbScene {
     this.gearRoot.visible = false;
   }
 
-  /* ---------- energía ---------- */
+  /* ---------- chispas ---------- */
 
-  /** Tres capas de plasma azul con venas eléctricas, una dentro de otra. */
-  private buildPlasma() {
-    const defs = [
-      { r: 1.3, scale: 2.2, speed: 0.5, op: 0.5, w: 0.07 },
-      { r: 2.3, scale: 2.8, speed: 0.35, op: 0.4, w: -0.05 },
-      { r: 3.5, scale: 3.4, speed: 0.25, op: 0.32, w: 0.035 },
-    ];
-    for (const d of defs) {
-      const mat = this.addMat(
-        PLASMA_VERT,
-        PLASMA_FRAG,
-        { uScale: { value: d.scale }, uSpeed: { value: d.speed }, uOpacity: { value: d.op } },
-        THREE.DoubleSide,
-      );
-      mat.depthTest = true;
-      const m = new THREE.Mesh(new THREE.SphereGeometry(d.r, 64, 48), mat);
-      m.frustumCulled = false;
-      this.spinner(m, d.w);
+  private buildEmbers() {
+    const COUNT = 3500;
+    const dir = new Float32Array(COUNT * 3);
+    const rn = new Float32Array(COUNT * 4);
+    for (let i = 0; i < COUNT; i++) {
+      const d = randDir();
+      dir.set([d.x, d.y, d.z], i * 3);
+      rn.set([Math.random(), rnd(0.5, 1.4), Math.random(), Math.random()], i * 4);
     }
-  }
-
-  /** Retículas geodésicas (como mallas de energía) con ondas de luz y nodos. */
-  private buildLattices() {
-    const defs = [
-      { r: 4.3, detail: 3, w: 0.03, op: 0.55 },
-      { r: 2.9, detail: 2, w: -0.045, op: 0.6 },
-    ];
-    for (const d of defs) {
-      const ico = new THREE.IcosahedronGeometry(d.r, d.detail);
-      const edges = new THREE.EdgesGeometry(ico);
-      const grp = new THREE.Group();
-      const lines = new THREE.LineSegments(
-        edges,
-        this.addMat(LATT_VERT, LATT_FRAG, { uOpacity: { value: d.op } }),
-      );
-      lines.frustumCulled = false;
-      const pts = new THREE.Points(
-        ico,
-        this.addMat(NODE_VERT, DOT_FRAG, { uOpacity: { value: 0.35 } }),
-      );
-      pts.frustumCulled = false;
-      grp.add(lines, pts);
-      this.spinner(grp, d.w);
-      ico.deleteAttribute("normal");
-    }
-  }
-
-  /** Miles de partículas en órbitas inclinadas. */
-  private buildOrbits() {
-    const orbit: number[] = [];
-    const rot: number[] = [];
-    const ORB = 90;
-    for (let k = 0; k < ORB; k++) {
-      const R = 0.5 + Math.pow(Math.random(), 1.6) * 4.9;
-      const tilt = rnd(0, Math.PI);
-      const az = rnd(0, TAU);
-      const sp = (Math.random() < 0.5 ? -1 : 1) * (0.25 + 0.9 / Math.sqrt(R));
-      const n = Math.round(60 + R * 22);
-      for (let i = 0; i < n; i++) {
-        orbit.push(R * (1 + rnd(-0.015, 0.015)), sp * rnd(0.92, 1.08), rnd(0, TAU), rnd(0.8, 2.2));
-        rot.push(tilt + rnd(-0.01, 0.01), az, Math.random());
-      }
-    }
-    const count = orbit.length / 4;
     const g = new THREE.BufferGeometry();
-    g.setAttribute("position", new THREE.Float32BufferAttribute(new Float32Array(count * 3), 3));
-    g.setAttribute("aOrbit", new THREE.Float32BufferAttribute(orbit, 4));
-    g.setAttribute("aRot", new THREE.Float32BufferAttribute(rot, 3));
-    const p = new THREE.Points(g, this.addMat(ORBIT_VERT, DOT_FRAG, { uOpacity: { value: 0.9 } }));
+    g.setAttribute("position", new THREE.Float32BufferAttribute(new Float32Array(COUNT * 3), 3));
+    g.setAttribute("aDir", new THREE.Float32BufferAttribute(dir, 3));
+    g.setAttribute("aRnd", new THREE.Float32BufferAttribute(rn, 4));
+    const mat = new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      vertexShader: EMBER_VERT,
+      fragmentShader: DOT_FRAG,
+      uniforms: { ...this.u, uR0: this.fu.uR0, uH: this.fu.uH, uOpacity: { value: 0.9 } },
+    });
+    const p = new THREE.Points(g, mat);
     p.frustumCulled = false;
     this.orb.add(p);
-  }
-
-  /** Rayos entre capas: casi invisibles hasta que destellan. */
-  private buildArcs() {
-    const pos: number[] = [],
-      us: number[] = [],
-      seeds: number[] = [],
-      jit: number[] = [];
-    const STEPS = 14;
-    for (let i = 0; i < 160; i++) {
-      const d0 = randDir();
-      const d1 =
-        Math.random() < 0.7 ? d0.clone().add(randDir().multiplyScalar(0.5)).normalize() : randDir();
-      const a = d0.multiplyScalar(rnd(1.3, 2.4));
-      const b = d1.multiplyScalar(rnd(3.0, 4.4));
-      const c = a.clone().add(b).multiplyScalar(0.5).add(randDir().multiplyScalar(0.8));
-      const seed = Math.random();
-      const j = randDir();
-      const at = (u: number) =>
-        new THREE.Vector3(
-          (1 - u) * (1 - u) * a.x + 2 * (1 - u) * u * c.x + u * u * b.x,
-          (1 - u) * (1 - u) * a.y + 2 * (1 - u) * u * c.y + u * u * b.y,
-          (1 - u) * (1 - u) * a.z + 2 * (1 - u) * u * c.z + u * u * b.z,
-        );
-      for (let k = 0; k < STEPS; k++) {
-        for (const u of [k / STEPS, (k + 1) / STEPS]) {
-          const p = at(u);
-          pos.push(p.x, p.y, p.z);
-          us.push(u);
-          seeds.push(seed);
-          jit.push(j.x + rnd(-0.4, 0.4), j.y + rnd(-0.4, 0.4), j.z + rnd(-0.4, 0.4));
-        }
-      }
-    }
-    const g = new THREE.BufferGeometry();
-    g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
-    g.setAttribute("aU", new THREE.Float32BufferAttribute(us, 1));
-    g.setAttribute("aSeed", new THREE.Float32BufferAttribute(seeds, 1));
-    g.setAttribute("aJit", new THREE.Float32BufferAttribute(jit, 3));
-    const l = new THREE.LineSegments(
-      g,
-      this.addMat(ARC_VERT, ARC_FRAG, { uOpacity: { value: 1 } }),
-    );
-    l.frustumCulled = false;
-    this.spinner(l, 0.02);
-  }
-
-  /** Ondas de choque que salen del centro una tras otra. */
-  private buildWaves() {
-    for (let k = 0; k < 3; k++) {
-      const mat = this.addMat(
-        WAVE_VERT,
-        WAVE_FRAG,
-        { uLife: { value: 0 }, uOpacity: { value: 0.7 } },
-        THREE.DoubleSide,
-      );
-      const m = new THREE.Mesh(new THREE.SphereGeometry(1, 48, 32), mat);
-      m.frustumCulled = false;
-      this.orb.add(m);
-      this.waves.push({ m, mat, k });
-    }
-  }
-
-  /** Anillos exteriores con marcas. */
-  private buildHuds() {
-    const defs = [
-      { r: 5.3, tilt: [1.25, 0.2], w: 0.1 },
-      { r: 5.9, tilt: [0.4, 1.0], w: -0.07 },
-    ];
-    for (const d of defs) {
-      const pos: number[] = [],
-        a: number[] = [],
-        seed: number[] = [];
-      const push = (x0: number, y0: number, x1: number, y1: number, al: number, s: number) => {
-        pos.push(x0, y0, 0, x1, y1, 0);
-        a.push(al, al);
-        seed.push(s, s);
-      };
-      const N = 260,
-        arcs = Math.floor(rnd(3, 6));
-      for (let i = 0; i < N; i++) {
-        const a0 = (i / N) * TAU,
-          a1 = ((i + 1) / N) * TAU;
-        if (Math.sin(a0 * arcs) > 0.7) continue;
-        push(
-          Math.cos(a0) * d.r,
-          Math.sin(a0) * d.r,
-          Math.cos(a1) * d.r,
-          Math.sin(a1) * d.r,
-          0.5,
-          Math.random(),
-        );
-        if (i % 2 === 0) {
-          const major = i % 10 === 0;
-          const r2 = d.r + (major ? 0.16 : 0.06);
-          push(
-            Math.cos(a0) * d.r,
-            Math.sin(a0) * d.r,
-            Math.cos(a0) * r2,
-            Math.sin(a0) * r2,
-            major ? 0.8 : 0.45,
-            Math.random(),
-          );
-        }
-      }
-      const g = new THREE.BufferGeometry();
-      g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
-      g.setAttribute("aA", new THREE.Float32BufferAttribute(a, 1));
-      g.setAttribute("aSeed", new THREE.Float32BufferAttribute(seed, 1));
-      const l = new THREE.LineSegments(
-        g,
-        this.addMat(HUD_VERT, HUD_FRAG, { uOpacity: { value: 0.75 } }),
-      );
-      l.frustumCulled = false;
-      const grp = new THREE.Group();
-      grp.rotation.set(d.tilt[0]!, d.tilt[1]!, 0);
-      grp.add(l);
-      this.orb.add(grp);
-      // el anillo gira sobre su propio eje (z local)
-      this.spinners.push({ o: l, axis: new THREE.Vector3(0, 0, 1), w: d.w });
-    }
-  }
-
-  /** Brasa azul muy tenue en el centro. */
-  private buildGlow() {
-    this.glow = new THREE.Sprite(
-      new THREE.SpriteMaterial({
-        map: this.tex,
-        color: new THREE.Color(0.08, 0.35, 1),
-        transparent: true,
-        opacity: 0.08,
-        depthWrite: false,
-        blending: THREE.AdditiveBlending,
-      }),
-    );
-    this.glow.scale.set(4, 4, 1);
-    this.orb.add(this.glow);
   }
 
   /* ---------- API ---------- */
 
   setState(s: V2State) {
+    if (s === "thinking" && this.target.think < 0.5) this.kick = 1; // ignición: las llamas estallan
     this.target = { ...STATE_TARGET[s] };
     this.speaking = s === "speaking";
-    if (s === "idle") this.pulseV = Math.max(this.pulseV, 0.6);
   }
 
   setAmplitude(v: number) {
@@ -911,6 +764,8 @@ export class OrbScene {
     this.camera.updateProjectionMatrix();
     this.renderer.setSize(w, h);
     this.composer.setSize(w, h);
+    const fs = this.fireScale(w, h);
+    this.fireRT.setSize(Math.ceil(w * fs), Math.ceil(h * fs));
   };
 
   private loop = () => {
@@ -920,40 +775,40 @@ export class OrbScene {
     const t = this.clock.elapsedTime;
     const k = 1 - Math.pow(0.002, dt);
 
-    this.cur.energy += (this.target.energy - this.cur.energy) * k;
     this.cur.think += (this.target.think - this.cur.think) * k;
     this.cur.err += (this.target.err - this.cur.err) * k;
     const synth =
       this.speaking && this.amp < 0.02 ? 0.3 + 0.25 * Math.sin(t * 9) * Math.sin(t * 3.1) : 0;
     this.ampS += (Math.max(this.amp, synth) - this.ampS) * Math.min(1, dt * 12);
-    this.pulseV = Math.max(0, this.pulseV - dt * 0.9);
+    this.kick = Math.max(0, this.kick - dt * 0.55);
 
-    const speedMul =
-      0.6 + this.cur.think * 2.2 + this.cur.energy * 0.3 + this.ampS * 1.6 + this.cur.err * 0.8;
-    this.spin += dt * speedMul;
+    const T = this.cur.think;
+    const kick = this.kick * this.kick;
+    const throb = Math.pow(0.5 + 0.5 * Math.sin(t * 2.4), 2);
+
+    // el tiempo de las llamas se acelera al pensar → avanzan y estallan hacia afuera
+    this.fireT += dt * (1.0 + T * 2.4 + kick * 3.0 + this.ampS * 1.5);
+    this.spin += dt * (0.6 + T * 2.2 + this.ampS * 1.6);
+
+    const f = this.fu;
+    f.uFlame.value = this.fireT * 1.4;
+    f.uTime.value = t;
+    f.uR0.value = 2.2 + T * 0.3 + kick * 0.4;
+    f.uH.value = 2.0 + T * (2.3 + throb * 0.9) + kick * 2.4 + this.ampS * 0.9;
+    f.uTurb.value = 0.2 + T * 1.0 + kick * 0.6;
+    f.uBright.value = 1.0 + T * 0.45 + kick * 0.7 + this.ampS * 0.5;
+    f.uErr.value = this.cur.err;
+
     const u = this.u;
     u.uTime.value = t;
     u.uSpin.value = this.spin;
-    u.uEnergy.value = this.cur.energy;
-    u.uThink.value = this.cur.think;
+    u.uThink.value = T;
     u.uAmp.value = this.ampS;
     u.uErr.value = this.cur.err;
 
-    for (const s of this.spinners) s.o.rotateOnAxis(s.axis, s.w * dt * speedMul);
+    for (const s of this.spinners) s.o.rotateOnAxis(s.axis, s.w * dt * (0.6 + T * 2));
 
-    // ondas de choque
-    for (const w of this.waves) {
-      const life = (this.spin * 0.1 + w.k / this.waves.length) % 1;
-      w.mat.uniforms["uLife"]!.value = life;
-      w.m.scale.setScalar(0.4 + life * 6.4);
-    }
-
-    const breath = 1 + 0.05 * Math.sin(t * 1.4) + this.ampS * 0.3 + this.pulseV * 0.3;
-    this.glow.scale.setScalar(4 * breath);
-    (this.glow.material as THREE.SpriteMaterial).opacity =
-      0.06 + this.cur.think * 0.06 + this.ampS * 0.05;
-
-    this.bloom.strength = 0.28 + this.cur.energy * 0.14 + this.ampS * 0.12 + this.pulseV * 0.1;
+    this.bloom.strength = 0.36 + T * 0.22 + kick * 0.3 + this.ampS * 0.12;
 
     this.controls.update(dt);
     const dist = this.camera.position.distanceTo(this.controls.target);
@@ -969,6 +824,12 @@ export class OrbScene {
       this.inSecretV3 = inside;
       window.dispatchEvent(new CustomEvent("juspross:secret-v3", { detail: { active: inside } }));
     }
+
+    // 1) fuego a baja resolución  2) escena completa con bloom
+    this.camera.updateMatrixWorld();
+    this.renderer.setRenderTarget(this.fireRT);
+    this.renderer.render(this.fireScene, this.camera);
+    this.renderer.setRenderTarget(null);
     this.composer.render();
   };
 
@@ -986,9 +847,16 @@ export class OrbScene {
       else mat?.dispose();
       if ((o as THREE.InstancedMesh).isInstancedMesh) (o as THREE.InstancedMesh).dispose();
     });
+    this.fireScene.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (m.geometry) m.geometry.dispose();
+    });
     this.geoCache.forEach((g) => g.dispose());
     this.gearMat.dispose();
-    this.tex.dispose();
+    this.fireMat.dispose();
+    this.blitMat.dispose();
+    this.fireRT.dispose();
+    this.noiseTex.dispose();
     this.composer.dispose();
     this.renderer.dispose();
     this.renderer.domElement.remove();
