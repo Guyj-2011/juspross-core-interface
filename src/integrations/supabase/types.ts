@@ -14,7 +14,30 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      speech_gateway_state: {
+        Row: {
+          blocked: boolean
+          id: string
+          message: string
+          status_code: number
+          updated_at: string
+        }
+        Insert: {
+          blocked?: boolean
+          id: string
+          message: string
+          status_code: number
+          updated_at?: string
+        }
+        Update: {
+          blocked?: boolean
+          id?: string
+          message?: string
+          status_code?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
