@@ -330,7 +330,7 @@ const FIRE_FRAG = /* glsl */ `
   uniform sampler3D uNoise;
   uniform mat4 uProjInv, uCamWorld;
   uniform vec3 uCamPos;
-  uniform float uFlame, uTime, uR0, uH, uTurb, uBright, uErr;
+  uniform float uFlame, uTime, uR0, uYtop, uHs, uWide, uTurb, uBright, uErr;
   varying vec2 vUv;
 
   vec3 N3(vec3 p){ return texture(uNoise, p).rgb; }
@@ -344,34 +344,96 @@ const FIRE_FRAG = /* glsl */ `
     return vec2(-b - h, -b + h);
   }
 
-  // densidad de llama: nace en la superficie (r = uR0) y sube hacia afuera; el interior se apaga rápido
-  float fireDensity(vec3 p, out float s, out float n){
-    float r = length(p);
-    vec3 dir = p / max(r, 1e-4);
-    float h = r - uR0;
-    s = clamp(h / uH, 0.0, 1.0);
-    vec3 q = (p - dir * uFlame) * 0.22;
-    vec3 w = N3(q * 0.9 + vec3(0.31, 0.77, 0.13)) - 0.5;
-    q += w * (0.22 + uTurb * 0.3);
+  // cilindro vertical (eje y) que envuelve la bola y la columna de llamas
+  vec2 hitCyl(vec3 ro, vec3 rd, float Rc, float y0, float y1){
+    float a = dot(rd.xz, rd.xz);
+    float b = dot(ro.xz, rd.xz);
+    float c = dot(ro.xz, ro.xz) - Rc * Rc;
+    float t0;
+    float t1;
+    if (a < 1e-8) {
+      if (c > 0.0) return vec2(-1.0);
+      t0 = -1e9;
+      t1 = 1e9;
+    } else {
+      float h = b * b - a * c;
+      if (h < 0.0) return vec2(-1.0);
+      h = sqrt(h);
+      t0 = (-b - h) / a;
+      t1 = (-b + h) / a;
+    }
+    if (abs(rd.y) < 1e-6) {
+      if (ro.y < y0 || ro.y > y1) return vec2(-1.0);
+    } else {
+      float ta = (y0 - ro.y) / rd.y;
+      float tb = (y1 - ro.y) / rd.y;
+      t0 = max(t0, min(ta, tb));
+      t1 = min(t1, max(ta, tb));
+    }
+    if (t1 < t0) return vec2(-1.0);
+    return vec2(t0, t1);
+  }
+
+  float plumeRadius(float y){
+    float u = clamp(y / uYtop, 0.0, 1.0);
+    return uR0 * uWide * pow(1.0 - u, 0.6);
+  }
+  float sdBall(vec3 p){ return length(p) - uR0; }
+  float sdPlume(vec3 p){
+    float dxz = length(p.xz) - plumeRadius(p.y);
+    float dy = max(-p.y, p.y - uYtop);
+    return max(dxz * 0.7, dy);
+  }
+
+  // densidad: piel de llamas sobre la bola (interior oscuro, borde brillante) + columna que sube con la caída
+  float fireDensity(vec3 p, vec3 rd, out vec3 col){
+    float sb = sdBall(p);
+    float sp = sdPlume(p);
+    float hgt = clamp(p.y / uYtop, 0.0, 1.0);
+    float sway = (0.2 + hgt) * (0.4 + uTurb);
+    vec3 pw = p;
+    pw.x += sin(uTime * 1.7 + p.y * 1.1) * 0.22 * sway;
+    pw.z += cos(uTime * 1.3 + p.y * 0.9 + 1.7) * 0.22 * sway;
+    float ang = pw.y * 0.3 + uTime * 0.35;
+    float ca = cos(ang);
+    float sa = sin(ang);
+    pw.xz = vec2(pw.x * ca - pw.z * sa, pw.x * sa + pw.z * ca);
+    // ruido estirado en vertical y subiendo: lenguas largas que flamean
+    vec3 q = (vec3(pw.x, pw.y * 0.2, pw.z) - vec3(0.0, uFlame * 0.2, 0.0)) * 0.38;
+    vec3 w = N3(q * 0.8 + vec3(0.17, 0.53, 0.91)) - 0.5;
+    q += w * (0.7 + 0.22 * uTurb);
     float a = 0.5;
-    n = 0.0;
+    float n = 0.0;
     vec3 qq = q;
     for (int i = 0; i < 4; i++) {
       n += a * N3(qq).r;
       qq = qq * 2.03 + vec3(0.13, 0.27, 0.31);
       a *= 0.5;
     }
-    float d = smoothstep(0.0, 1.0, n * 1.35 - 0.22 - s * 1.1);
-    return d * exp(min(h, 0.0) * 2.2);
-  }
-
-  // azul en la raíz → blanco azulado → amarillo → ámbar en las puntas
-  vec3 fireCol(float s, float n){
-    float k = clamp(s * 1.25 + (n - 0.5) * 0.35, 0.0, 1.0);
-    vec3 c = mix(vec3(0.03, 0.2, 1.0), vec3(0.55, 0.82, 1.0), smoothstep(0.0, 0.3, k));
-    c = mix(c, vec3(1.0, 0.82, 0.18), smoothstep(0.3, 0.62, k));
-    c = mix(c, vec3(0.95, 0.4, 0.05), smoothstep(0.62, 1.0, k));
-    return c;
+    float rdg = 1.0 - abs(2.0 * n - 1.0);
+    float rdg2 = rdg * rdg;
+    float rdg3 = rdg2 * rdg;
+    // piel sobre la bola: brilla en el borde (más camino visto de canto) y casi vacía de frente
+    float rimv = 1.0 - abs(dot(normalize(p), rd));
+    float skinT = uHs * (0.7 + 0.8 * n);
+    float baseS = 1.0 - abs(sb - 0.12) / (0.5 * skinT + 0.25);
+    float skinD = smoothstep(0.0, 0.45, baseS + (n - 0.5) * 1.3) * (0.05 + rdg3 * rdg) * (0.3 + 1.6 * rimv * rimv);
+    // columna de llamas con bordes irregulares (lenguas)
+    float ep = clamp(-sp / 0.9, -0.6, 1.0);
+    float outb = smoothstep(-0.05, 0.6, sb);
+    float val = (n - 0.45) * 2.0 + ep * 0.5 + (1.0 - hgt) * 0.4 - 0.35;
+    float plumeD = smoothstep(0.0, 0.3, val) * (1.0 - smoothstep(0.4, 0.7, sp)) * outb * (0.5 + 1.3 * rdg3) * (1.0 - smoothstep(0.7, 1.0, hgt));
+    float d = skinD + plumeD;
+    col = vec3(0.0);
+    if (d > 0.003) {
+      float kSkin = clamp(sb / (uHs * 1.2), 0.0, 1.0);
+      float k = clamp(max(kSkin * 0.8, hgt * 1.1) + (n - 0.5) * 0.3, 0.0, 1.0);
+      vec3 c = mix(vec3(0.02, 0.1, 0.9), vec3(0.1, 0.45, 1.0), smoothstep(0.0, 0.35, k));
+      c = mix(c, vec3(0.8, 0.92, 1.0), pow(rdg, 6.0) * 0.2);
+      c = mix(c, vec3(1.0, 0.1, 0.12), smoothstep(0.78, 1.0, k) * 0.75);
+      col = c * (0.7 + 1.6 * rdg2);
+    }
+    return d;
   }
 
   void main(){
@@ -379,44 +441,36 @@ const FIRE_FRAG = /* glsl */ `
     vp /= vp.w;
     vec3 rd = normalize((uCamWorld * vec4(vp.xyz, 0.0)).xyz);
     vec3 ro = uCamPos;
-    float Rout = uR0 + uH + 0.4;
-    float Rin = max(0.0, uR0 - 1.6);
-    vec2 ho = hitSphere(ro, rd, Rout);
+    float edge = 1.5 * uHs + 0.15;
+    float Rc = uR0 * uWide + 1.5 * uHs + 0.5;
+    vec2 hc = hitCyl(ro, rd, Rc, -uR0 - edge, uYtop + 0.5);
     vec3 L = vec3(0.0);
     float T = 1.0;
-    if (ho.y > 0.0) {
-      float a0 = max(ho.x, 0.0);
-      float a1 = ho.y;
+    if (hc.y > 0.0) {
+      float t = max(hc.x, 0.0);
+      float t1 = hc.y;
+      float Rin = max(0.0, uR0 - 0.7);
       vec2 hi = hitSphere(ro, rd, Rin);
-      bool skip = hi.y > 0.0 && Rin > 0.0;
+      bool hasIn = hi.y > 0.0 && Rin > 0.0;
       float dith = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
-      for (int sg = 0; sg < 2; sg++) {
-        float t0 = a0;
-        float t1 = a1;
-        if (skip) {
-          if (sg == 0) { t1 = min(hi.x, a1); }
-          else { t0 = max(hi.y, a0); }
-        } else if (sg == 1) {
-          break;
+      t += 0.09 * dith;
+      for (int i = 0; i < 120; i++) {
+        if (t >= t1) break;
+        vec3 p = ro + rd * t;
+        if (hasIn && t > hi.x && t < hi.y) { t = hi.y; continue; }
+        float sd = min(sdBall(p), sdPlume(p));
+        if (sd > edge) {
+          t += clamp((sd - edge) * 0.6, 0.09, 0.7);
+          continue;
         }
-        if (t1 <= t0) continue;
-        float dt = (t1 - t0) / 40.0;
-        float t = t0 + dt * dith;
-        for (int i = 0; i < 40; i++) {
-          vec3 p = ro + rd * t;
-          float s;
-          float n;
-          float d = fireDensity(p, s, n);
-          if (d > 0.003) {
-            vec3 c = fireCol(s, n);
-            c = mix(c, vec3(1.0, 0.12, 0.05) * dot(c, vec3(0.66)), uErr);
-            float emis = d * (1.5 - s * 0.9) * uBright;
-            L += T * c * emis * dt * 1.7;
-            T *= exp(-d * 2.4 * dt);
-          }
-          t += dt;
-          if (T < 0.02) break;
+        vec3 col;
+        float d = fireDensity(p, rd, col);
+        if (d > 0.003) {
+          vec3 c = mix(col, vec3(1.0, 0.12, 0.05) * dot(col, vec3(0.66)), uErr);
+          L += T * c * d * uBright * 0.09 * 1.7 * 0.5;
+          T *= exp(-d * 1.8 * 0.09);
         }
+        t += 0.09;
         if (T < 0.02) break;
       }
     }
@@ -435,20 +489,20 @@ const BLIT_FRAG = /* glsl */ `
 const EMBER_VERT = /* glsl */ `
   attribute vec3 aDir;
   attribute vec4 aRnd;
-  uniform float uTime, uSpin, uR0, uH, uThink, uDpr, uErr;
+  uniform float uTime, uSpin, uR0, uYtop, uThink, uDpr, uErr;
   varying vec3 vColor;
   varying float vA;
   void main(){
     float u = fract(aRnd.x + uSpin * aRnd.y * 0.16);
-    float reach = uH * (0.9 + aRnd.z * 1.6) * (1.0 + uThink * 0.6);
-    float r = uR0 * 0.97 + u * reach;
-    vec3 off = vec3(sin(u * 7.0 + aRnd.w * 40.0), cos(u * 6.0 + aRnd.w * 23.0), sin(u * 5.0 + aRnd.w * 57.0)) * 0.25 * u * (1.0 + uThink);
-    vec3 p = aDir * r + off;
+    vec3 base = aDir * uR0;
+    float rise = u * uYtop * (0.45 + aRnd.z * 0.9) * (1.0 + uThink * 0.5);
+    vec3 drift = vec3(sin(u * 7.0 + aRnd.w * 40.0), 0.0, cos(u * 6.0 + aRnd.w * 23.0)) * (0.1 + 0.6 * u) * (1.0 + uThink);
+    vec3 p = base + vec3(0.0, rise, 0.0) + drift;
     vec4 mv = modelViewMatrix * vec4(p, 1.0);
     gl_Position = projectionMatrix * mv;
     float life = 1.0 - u;
     vA = pow(life, 1.4) * (0.5 + 0.5 * sin(uTime * (6.0 + aRnd.w * 10.0) + aRnd.w * 50.0));
-    vec3 c = mix(mix(vec3(0.7, 0.85, 1.0), vec3(1.0, 0.78, 0.15), smoothstep(0.0, 0.25, u)), vec3(0.95, 0.38, 0.05), smoothstep(0.35, 0.9, u));
+    vec3 c = mix(vec3(0.55, 0.8, 1.0), vec3(1.0, 0.15, 0.1), smoothstep(0.25, 0.85, u));
     vColor = mix(c, vec3(1.0, 0.15, 0.08), uErr);
     gl_PointSize = (1.0 + 2.2 * aRnd.z * life) * uDpr * (12.0 / max(0.05, -mv.z));
   }
@@ -488,7 +542,9 @@ export class OrbScene {
     uFlame: THREE.IUniform<number>;
     uTime: THREE.IUniform<number>;
     uR0: THREE.IUniform<number>;
-    uH: THREE.IUniform<number>;
+    uYtop: THREE.IUniform<number>;
+    uHs: THREE.IUniform<number>;
+    uWide: THREE.IUniform<number>;
     uTurb: THREE.IUniform<number>;
     uBright: THREE.IUniform<number>;
     uErr: THREE.IUniform<number>;
@@ -555,8 +611,10 @@ export class OrbScene {
       uCamPos: { value: this.camera.position },
       uFlame: { value: 0 },
       uTime: { value: 0 },
-      uR0: { value: 2.2 },
-      uH: { value: 2.0 },
+      uR0: { value: 2.0 },
+      uYtop: { value: 5.4 },
+      uHs: { value: 0.65 },
+      uWide: { value: 1.0 },
       uTurb: { value: 0.2 },
       uBright: { value: 1 },
       uErr: { value: 0 },
@@ -724,6 +782,8 @@ export class OrbScene {
     const rn = new Float32Array(COUNT * 4);
     for (let i = 0; i < COUNT; i++) {
       const d = randDir();
+      d.y = Math.abs(d.y) * 0.9 + 0.1;
+      d.normalize();
       dir.set([d.x, d.y, d.z], i * 3);
       rn.set([Math.random(), rnd(0.5, 1.4), Math.random(), Math.random()], i * 4);
     }
@@ -737,7 +797,7 @@ export class OrbScene {
       blending: THREE.AdditiveBlending,
       vertexShader: EMBER_VERT,
       fragmentShader: DOT_FRAG,
-      uniforms: { ...this.u, uR0: this.fu.uR0, uH: this.fu.uH, uOpacity: { value: 0.9 } },
+      uniforms: { ...this.u, uR0: this.fu.uR0, uYtop: this.fu.uYtop, uOpacity: { value: 0.9 } },
     });
     const p = new THREE.Points(g, mat);
     p.frustumCulled = false;
@@ -793,8 +853,10 @@ export class OrbScene {
     const f = this.fu;
     f.uFlame.value = this.fireT * 1.4;
     f.uTime.value = t;
-    f.uR0.value = 2.2 + T * 0.3 + kick * 0.4;
-    f.uH.value = 2.0 + T * (2.3 + throb * 0.9) + kick * 2.4 + this.ampS * 0.9;
+    f.uR0.value = 2.0 + T * 0.1 + kick * 0.2;
+    f.uWide.value = 1.0 + T * 0.3 + kick * 0.35;
+    f.uYtop.value = f.uR0.value + 4.2 + T * (3.0 + throb * 1.0) + kick * 3.4 + this.ampS * 1.0;
+    f.uHs.value = 0.65 + T * 0.45 + kick * 0.6;
     f.uTurb.value = 0.2 + T * 1.0 + kick * 0.6;
     f.uBright.value = 1.0 + T * 0.45 + kick * 0.7 + this.ampS * 0.5;
     f.uErr.value = this.cur.err;
