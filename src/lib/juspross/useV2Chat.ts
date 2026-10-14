@@ -1,4 +1,4 @@
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { AiError, AiUnreachable, chat, simulate, type AiMsg } from "./ai";
 import { speak } from "./useSpeech";
 import { useV2 } from "./v2Store";
@@ -7,6 +7,13 @@ import { useV2 } from "./v2Store";
 export function useV2Chat() {
   const abortRef = useRef<AbortController | null>(null);
   const stopSpeakRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => () => {
+    abortRef.current?.abort();
+    stopSpeakRef.current?.();
+    useV2.getState().setAmplitude(0);
+    useV2.getState().setState("idle");
+  }, []);
 
   const stop = useCallback(() => {
     abortRef.current?.abort();

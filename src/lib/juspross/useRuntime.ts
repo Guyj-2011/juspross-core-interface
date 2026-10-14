@@ -16,6 +16,12 @@ export function useRuntime() {
   const abortRef = useRef<AbortController | null>(null);
   const stopSpeakRef = useRef<(() => void) | null>(null);
 
+  useEffect(() => () => {
+    abortRef.current?.abort();
+    stopSpeakRef.current?.();
+    jp().setAmplitude(0);
+  }, []);
+
   useEffect(() => {
     const saved = typeof window !== "undefined" ? localStorage.getItem("juspross.webhook") : null;
     if (saved) useJuspross.setState({ webhookUrl: saved });
