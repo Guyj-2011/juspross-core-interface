@@ -146,6 +146,7 @@ export class OrbScene {
   private ampS = 0;
   private pulseV = 0;
   private speaking = false;
+  private inSecretV3 = false;
 
   constructor(private container: HTMLElement) {
     const dpr = Math.min(2, window.devicePixelRatio || 1);
@@ -162,7 +163,7 @@ export class OrbScene {
     this.renderer.setClearColor(0x000000, 1); // fondo completamente negro
     container.appendChild(this.renderer.domElement);
 
-    this.camera = new THREE.PerspectiveCamera(50, w / h, 0.1, 200);
+    this.camera = new THREE.PerspectiveCamera(50, w / h, 0.02, 200);
     this.camera.position.set(0, 1.2, w / h < 1 ? 13 : 9.6);
 
     this.shared = {
@@ -174,8 +175,8 @@ export class OrbScene {
       uDpr: { value: dpr },
     };
 
-    this.buildShell(9000, 3.0, 0.14, 1.0, 0.85);
-    this.buildShell(2400, 2.05, 0.1, 0.8, 0.6);
+    this.buildShell(6500, 3.0, 0.14, 0.78, 0.72);
+    this.buildShell(1800, 2.05, 0.1, 0.62, 0.55);
     this.buildRings();
     this.buildShards();
     this.buildSpokes();
@@ -190,7 +191,7 @@ export class OrbScene {
     this.controls.dampingFactor = 0.06;
     this.controls.rotateSpeed = 0.75;
     this.controls.zoomSpeed = 0.6;
-    this.controls.minDistance = 3.4;
+    this.controls.minDistance = 0.38;
     this.controls.maxDistance = 17;
     this.controls.autoRotate = true;
     this.controls.autoRotateSpeed = 0.55;
@@ -207,7 +208,7 @@ export class OrbScene {
     this.composer.setPixelRatio(dpr);
     this.composer.setSize(w, h);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(w, h), 0.85, 0.6, 0.1);
+    this.bloom = new UnrealBloomPass(new THREE.Vector2(w, h), 0.42, 0.45, 0.18);
     this.composer.addPass(this.bloom);
     this.composer.addPass(new OutputPass());
 
@@ -371,7 +372,7 @@ export class OrbScene {
         seed.push(s);
       }
     };
-    for (let i = 0; i < 1100; i++) {
+    for (let i = 0; i < 560; i++) {
       const n = randDir();
       const r = rnd(2.1, 3.4);
       const p = n.clone().multiplyScalar(r);
@@ -408,7 +409,7 @@ export class OrbScene {
       a: number[] = [],
       seed: number[] = [];
     const STEPS = 8;
-    for (let i = 0; i < 70; i++) {
+    for (let i = 0; i < 28; i++) {
       const n = randDir();
       const r0 = rnd(0.5, 1.2);
       const r1 = rnd(3.4, 5.2);
@@ -573,9 +574,14 @@ export class OrbScene {
       0.16 + this.cur.think * 0.3 + this.cur.err * 0.25;
     (g[2]!.s.material as THREE.SpriteMaterial).opacity = 0.4 + e * 0.35;
 
-    this.bloom.strength = 0.75 + e * 0.5 + this.ampS * 0.4 + this.pulseV * 0.4;
+    this.bloom.strength = 0.34 + e * 0.18 + this.ampS * 0.12 + this.pulseV * 0.12;
 
     this.controls.update(dt);
+    const inside = this.camera.position.distanceTo(this.controls.target) < 1.15;
+    if (inside !== this.inSecretV3) {
+      this.inSecretV3 = inside;
+      window.dispatchEvent(new CustomEvent("juspross:secret-v3", { detail: { active: inside } }));
+    }
     this.composer.render();
   };
 
