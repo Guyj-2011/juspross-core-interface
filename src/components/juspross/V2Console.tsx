@@ -34,10 +34,18 @@ export function V2Console() {
   const [open, setOpen] = useState(false);
   const [listening, setListening] = useState(false);
   const [micOk, setMicOk] = useState(false);
+  const [secretV3, setSecretV3] = useState(false);
   const recRef = useRef<SRLike | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => setMicOk(speechSupported()), []);
+  useEffect(() => {
+    const onSecretV3 = (event: Event) => {
+      setSecretV3((event as CustomEvent<{ active: boolean }>).detail.active);
+    };
+    window.addEventListener("juspross:secret-v3", onSecretV3);
+    return () => window.removeEventListener("juspross:secret-v3", onSecretV3);
+  }, []);
   useEffect(() => () => recRef.current?.stop(), []);
   useEffect(() => {
     logRef.current?.scrollTo({ top: logRef.current.scrollHeight, behavior: "smooth" });
@@ -99,6 +107,19 @@ export function V2Console() {
           ? "SIN CONEXIÓN · SIMULADO"
           : "IA SIMULADA";
   const linkColor = link === "online" ? "#34d399" : link === "offline" ? "#f87171" : BLUE;
+
+  if (secretV3) {
+    return (
+      <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center bg-black/20">
+        <div className="text-center animate-rise">
+          <p className="font-mono text-[10px] tracking-[0.55em] text-[#8ab5ff]/70">ACCESO OCULTO · NÚCLEO ATRAVESADO</p>
+          <h1 className="mt-5 font-light text-[clamp(42px,8vw,92px)] tracking-[0.38em] text-white/90">JUSPROSS <span className="text-[#6ea8ff]">3.0</span></h1>
+          <p className="mt-5 font-mono text-sm tracking-[0.7em] text-[#9cc0ff]">HOLA</p>
+          <p className="mt-4 font-mono text-[9px] tracking-[0.25em] text-white/35">ALEJA LA RUEDA PARA REGRESAR</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="pointer-events-none absolute inset-0 z-30">
