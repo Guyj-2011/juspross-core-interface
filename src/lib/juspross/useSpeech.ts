@@ -191,6 +191,7 @@ export function speakCalm(
   text: string,
   onLevel: (v: number) => void,
   onEnd: () => void,
+  onUnavailable?: (reason: string) => void,
 ): () => void {
   if (typeof window === "undefined") return speak(text, onLevel, onEnd);
 
@@ -247,10 +248,11 @@ export function speakCalm(
     raf = requestAnimationFrame(tick);
   };
 
-  const fallback = () => {
+  const fallback = (reason: string) => {
     if (cancelled || finished || fallbackStarted) return;
     fallbackStarted = true;
     window.clearTimeout(timer);
+    onUnavailable?.(reason);
     clearPlayback();
     fallbackCancel = speak(text, onLevel, onEnd);
   };
@@ -271,22 +273,34 @@ export function speakCalm(
       if (!response.ok) throw new Error(`XTTS respondió ${response.status}`);
       const blob = await response.blob();
       if (cancelled) return;
-      if (blob.size < 64) throw new Error("XTTS devolvió un audio vacío");
+      const contentType = response.headers.get("content-type") || blob.type;
+      if (/application\/json|text\/html/i.test(contentType)) {
+        throw new Error("XTTS respondió texto/JSON en vez de audio. El endpoint /tts debe devolver un archivo WAV reproducible.");
+      }
+      if (blob.size < 64) throw new Error("XTTS devolvió un audio vacío.");
       objectUrl = URL.createObjectURL(blob);
       audio = new Audio(objectUrl);
       audio.preload = "auto";
       audio.onplay = tick;
       audio.onended = finish;
-      audio.onerror = fallback;
+      audio.onerror = () => fallback("El servidor respondió, pero el audio XTTS no se pudo reproducir. Comprueba que /tts devuelva WAV o MP3.");
       try {
         await audio.play();
       } catch {
-        fallback();
+        fallback("El navegador bloqueó la reproducción del audio XTTS.");
       }
     })
-    .catch(() => {
+    .catch((error: unknown) => {
       if (cancelled) return;
-      if (timedOut || !fallbackStarted) fallback();
+      if (timedOut) {
+        fallback("XTTS tardó más de 15 segundos en responder.");
+        return;
+      }
+      const detail = error instanceof Error ? error.message : String(error);
+      const reason = detail === "Failed to fetch" || error instanceof TypeError
+        ? "No se pudo conectar con http://127.0.0.1:8000/tts. Revisa que el servidor esté encendido y permita CORS desde el dominio de Lovable."
+        : detail || "Falló la solicitud al servidor XTTS.";
+      fallback(reason);
     });
 
   return () => {
