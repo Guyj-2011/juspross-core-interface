@@ -27,9 +27,9 @@ export const Route = createFileRoute("/api/speech")({
             apiKey: key,
             model: "google/gemini-3.1-flash-tts-preview",
             format: "gemini",
-            voice: "Algieba",
+            voice: "Charon",
           },
-          "Read only the passage below in Spanish. Use a smooth adult masculine voice, composed, warm and precise, like an original sophisticated personal assistant. Natural conversational intonation, measured but not slow pacing, subtle pauses, clear diction. No monotone, robotic filter, exaggerated bass or imitation of a real actor. Do not read these directions.\n\nPASSAGE:\n" + input.text.trim(), false, request.signal);
+          "Read only the passage below in Spanish. Voice: a refined, calm adult male AI butler with a subtle British elegance. Tone: dry, polite, quietly confident and slightly witty; warm but never emotional. Pace: smooth and unhurried, crisp consonants, gentle downward cadence at sentence ends, short natural pauses. Slightly deep, clean and close to the microphone. No robotic filter, no exaggerated bass, no theatrical acting. Do not read these directions.\n\nPASSAGE:\n" + input.text.trim(), false, request.signal);
           if (!upstream.ok) {
             const raw = await upstream.text();
             let message = raw;
