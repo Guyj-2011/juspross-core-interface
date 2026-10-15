@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import {
   AlertCircle,
   File as FileIcon,
@@ -31,7 +31,7 @@ interface DirectoryHandleLike {
 
 type DirectoryEntryLike = FileHandleLike | DirectoryHandleLike;
 
-interface WindowWithDirectoryPicker extends Window {
+interface WindowWithDirectoryPicker {
   showDirectoryPicker?: (options?: {
     id?: string;
     mode?: "read" | "readwrite";
@@ -118,7 +118,7 @@ export function DesktopExplorer() {
 
   const chooseFolder = async () => {
     setError("");
-    const pickerWindow = window as WindowWithDirectoryPicker;
+    const pickerWindow = window as unknown as WindowWithDirectoryPicker;
 
     if (!pickerWindow.showDirectoryPicker) {
       setLoading(false);
@@ -175,7 +175,7 @@ export function DesktopExplorer() {
     if (!hasSelectedFolder) void chooseFolder();
   };
 
-  const handleFallbackInput = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFallbackInput = (event: ChangeEvent<HTMLInputElement>) => {
     const selected = Array.from(event.currentTarget.files ?? []);
     event.currentTarget.value = "";
     if (!selected.length) return;
