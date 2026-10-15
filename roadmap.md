@@ -8,3 +8,4 @@
 
 # Voice
 - [x] Replace robotic speech with a natural, composed masculine voice in both modes and verify playback.
+- [x] Revert to the original voice (Algieba, composed personal-assistant style) after the butler variant was rejected; verified audio playback.
