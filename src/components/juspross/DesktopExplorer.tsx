@@ -49,7 +49,8 @@ async function scanDirectory(
     const path = prefix ? `${prefix}/${entry.name}` : entry.name;
 
     if (entry.kind === "directory") {
-      files.push(...(await scanDirectory(entry, path)));
+      const nestedFiles = await scanDirectory(entry, path);
+      for (const nestedFile of nestedFiles) files.push(nestedFile);
       continue;
     }
 
@@ -191,14 +192,10 @@ export function DesktopExplorer() {
     setFolderName(rootName);
     setFiles(nextFiles.sort((a, b) => a.path.localeCompare(b.path, "es")));
     setHasSelectedFolder(true);
-    setDirectoryFallbackNotice();
+    directoryRef.current = null;
     setQuery("");
     setError("");
     setLoading(false);
-  };
-
-  const setDirectoryFallbackNotice = () => {
-    directoryRef.current = null;
   };
 
   return (
