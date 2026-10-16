@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowUp, Mic, Settings2, Square, Trash2, Volume2, VolumeX, X } from "lucide-react";
-import { testAi } from "@/lib/juspross/ai";
+import { AiUnreachable, testAi } from "@/lib/juspross/ai";
 import { useV2Chat } from "@/lib/juspross/useV2Chat";
 import { speechSupported } from "@/lib/juspross/useSpeech";
 import { useV2 } from "@/lib/juspross/v2Store";
@@ -30,6 +30,8 @@ export function V2Console() {
   const link = useV2((s) => s.aiLink);
   const detail = useV2((s) => s.aiDetail);
   const voice = useV2((s) => s.voiceReplies);
+  const aiEndpoint = useV2((s) => s.aiEndpoint);
+  const aiModel = useV2((s) => s.aiModel);
   const [value, setValue] = useState("");
   const [open, setOpen] = useState(false);
   const [listening, setListening] = useState(false);
@@ -39,6 +41,57 @@ export function V2Console() {
   const logRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => setMicOk(speechSupported()), []);
+
+  // Connect automatically after entering 2.0, refreshing Lovable, or reopening the app.
+  // Retry while Ollama is starting after a Windows login/restart.
+  useEffect(() => {
+    let cancelled = false;
+    let retryTimer: number | undefined;
+    let attempts = 0;
+    const maxAttempts = 20;
+
+    const connect = async () => {
+      attempts += 1;
+      const current = useV2.getState();
+      const endpoint = current.aiEndpoint || "http://localhost:11434";
+      const wantedModel = current.aiModel.trim() || "qwen3:8b";
+      current.setLink(
+        "checking",
+        attempts === 1
+          ? "Conectando automáticamente con Qwen3 8B…"
+          : `Esperando a Ollama… reintento ${attempts}/${maxAttempts}`,
+      );
+
+      try {
+        const resolvedModel = await testAi(endpoint, wantedModel);
+        if (cancelled) return;
+        const latest = useV2.getState();
+        latest.setAi({ endpoint, model: resolvedModel });
+        latest.setLink("online", `Conectado automáticamente · modelo: ${resolvedModel}`);
+      } catch (error) {
+        if (cancelled) return;
+        const message = error instanceof Error ? error.message : "No se pudo conectar con Ollama.";
+
+        if (error instanceof AiUnreachable && attempts < maxAttempts) {
+          useV2.getState().setLink(
+            "checking",
+            `Ollama no responde todavía. Reintentando automáticamente (${attempts}/${maxAttempts})…`,
+          );
+          retryTimer = window.setTimeout(() => void connect(), 3000);
+          return;
+        }
+
+        useV2.getState().setLink("offline", message);
+      }
+    };
+
+    void connect();
+    return () => {
+      cancelled = true;
+      if (retryTimer !== undefined) window.clearTimeout(retryTimer);
+    };
+  }, [aiEndpoint, aiModel]);
+
   useEffect(() => {
     const onSecretV3 = (event: Event) => {
       setSecretV3((event as CustomEvent<{ active: boolean }>).detail.active);
@@ -298,13 +351,13 @@ function AiSettings({ onClose }: { onClose: () => void }) {
       </label>
       <label className="block space-y-1">
         <span className="font-mono text-[9px] tracking-[0.2em] text-white/50">
-          MODELO (vacío = detectar Qwen)
+          MODELO DE IA (predeterminado: qwen3:8b)
         </span>
         <input
           className={field}
           value={md}
           onChange={(e) => setMd(e.target.value)}
-          placeholder="auto"
+          placeholder="qwen3:8b"
         />
       </label>
       <div className="flex items-center gap-2">
