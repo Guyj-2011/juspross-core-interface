@@ -313,56 +313,6 @@ function makeNoise3D(): THREE.Data3DTexture {
   return t;
 }
 
-/** Red neuronal del interior: sinapsis con pulsos viajando y neuronas que destellan. */
-const NEURON_EDGE_VERT = /* glsl */ `
-  attribute float aU;
-  attribute float aSeed;
-  attribute float aSpeed;
-  uniform float uTime, uThink, uAmp, uErr;
-  varying vec3 vC;
-  varying float vA;
-  float hash(float n){ return fract(sin(n * 127.1) * 43758.5453); }
-  void main(){
-    float rate = 0.45 + uThink * 1.5 + uAmp * 0.8;
-    float t = uTime * aSpeed * rate + aSeed * 10.0;
-    float head = fract(t) * 1.5;
-    float on = step(hash(floor(t) + aSeed * 91.0), 0.2 + uThink * 0.55);
-    float d = head - aU;
-    float pulse = (d > 0.0 && d < 0.6) ? exp(-d * 9.0) * on : 0.0;
-    float red = step(0.92, fract(aSeed * 7.13 + 0.31));
-    vec3 base = mix(vec3(0.1, 0.42, 1.0), vec3(1.0, 0.25, 0.1), red);
-    vec3 c = base * (0.3 + pulse * 2.2) + vec3(0.5, 0.7, 1.0) * pulse * 0.35 * (1.0 - red);
-    vC = mix(c, vec3(c.b, c.g * 0.2, c.r * 0.2), uErr);
-    vA = 0.12 + pulse * 0.85;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-  }
-`;
-const NEURON_EDGE_FRAG = /* glsl */ `
-  precision highp float;
-  uniform float uOpacity;
-  varying vec3 vC;
-  varying float vA;
-  void main(){ gl_FragColor = vec4(vC, vA * uOpacity); }
-`;
-const NEURON_PT_VERT = /* glsl */ `
-  attribute float aSeed;
-  attribute float aSize;
-  uniform float uTime, uThink, uAmp, uDpr, uErr;
-  varying vec3 vColor;
-  varying float vA;
-  void main(){
-    float flash = pow(max(0.0, sin(uTime * (1.2 + uThink * 3.0) * (0.5 + aSeed) + aSeed * 40.0)), 14.0) * (0.35 + uThink);
-    float red = step(0.92, fract(aSeed * 7.13 + 0.31));
-    vec3 base = mix(vec3(0.15, 0.5, 1.0), vec3(1.0, 0.3, 0.12), red);
-    vec3 c = base * (0.5 + flash * 2.0) + vec3(flash * 0.3);
-    vColor = mix(c, vec3(c.b, c.g * 0.2, c.r * 0.2), uErr);
-    vA = 0.45 + 0.55 * min(1.0, flash);
-    vec4 mv = modelViewMatrix * vec4(position, 1.0);
-    gl_Position = projectionMatrix * mv;
-    gl_PointSize = aSize * (1.0 + flash * 2.2 + uAmp * 0.5) * uDpr * (12.0 / max(0.05, -mv.z));
-  }
-`;
-
 /* ---------- shaders del fuego ---------- */
 
 const FS_VERT = /* glsl */ `
@@ -394,6 +344,7 @@ const FIRE_FRAG = /* glsl */ `
     return vec2(-b - h, -b + h);
   }
 
+  // cilindro vertical (eje y) que envuelve la bola y la columna de llamas
   vec2 hitCyl(vec3 ro, vec3 rd, float Rc, float y0, float y1){
     float a = dot(rd.xz, rd.xz);
     float b = dot(ro.xz, rd.xz);
@@ -434,10 +385,8 @@ const FIRE_FRAG = /* glsl */ `
     return max(dxz * 0.7, dy);
   }
 
-  // humo azul abstracto: forma orgánica que respira, láminas desordenadas y venas tenues
-  float fireDensity(vec3 p0, vec3 rd, float gA, out vec3 col, out vec3 vem){
-    vec3 g = N3(p0 * 0.17 + vec3(0.37, 0.37 - uFlame * 0.02, 0.37)) - 0.5;
-    vec3 p = p0 + g * gA;
+  // densidad: piel de llamas sobre la bola (interior oscuro, borde brillante) + columna que sube con la caída
+  float fireDensity(vec3 p, vec3 rd, out vec3 col){
     float sb = sdBall(p);
     float sp = sdPlume(p);
     float hgt = clamp(p.y / uYtop, 0.0, 1.0);
@@ -449,9 +398,10 @@ const FIRE_FRAG = /* glsl */ `
     float ca = cos(ang);
     float sa = sin(ang);
     pw.xz = vec2(pw.x * ca - pw.z * sa, pw.x * sa + pw.z * ca);
-    vec3 q = (vec3(pw.x, pw.y * 0.4, pw.z) - vec3(0.0, uFlame * 0.4, 0.0)) * 0.34;
-    q += (N3(q * 0.7 + vec3(0.17, 0.53, 0.91)) - 0.5) * (1.1 + 0.2 * uTurb);
-    q += (N3(q * 1.7 + vec3(0.71, 0.29, 0.43)) - 0.5) * 0.5;
+    // ruido estirado en vertical y subiendo: lenguas largas que flamean
+    vec3 q = (vec3(pw.x, pw.y * 0.2, pw.z) - vec3(0.0, uFlame * 0.2, 0.0)) * 0.38;
+    vec3 w = N3(q * 0.8 + vec3(0.17, 0.53, 0.91)) - 0.5;
+    q += w * (0.7 + 0.22 * uTurb);
     float a = 0.5;
     float n = 0.0;
     vec3 qq = q;
@@ -462,31 +412,26 @@ const FIRE_FRAG = /* glsl */ `
     }
     float rdg = 1.0 - abs(2.0 * n - 1.0);
     float rdg2 = rdg * rdg;
-    float rdg4 = rdg2 * rdg2;
+    float rdg3 = rdg2 * rdg;
+    // piel sobre la bola: brilla en el borde (más camino visto de canto) y casi vacía de frente
     float rimv = 1.0 - abs(dot(normalize(p), rd));
-    float skinT = uHs * (0.8 + 1.6 * n);
+    float skinT = uHs * (0.7 + 0.8 * n);
     float baseS = 1.0 - abs(sb - 0.12) / (0.5 * skinT + 0.25);
-    float skinM = smoothstep(0.0, 0.45, baseS + (n - 0.5) * 1.4);
-    float rimW = 0.25 + 1.2 * rimv * rimv;
-    float skinD = skinM * 1.6 * rdg4 * rimW;
-    float skinE = skinM * rimW;
+    float skinD = smoothstep(0.0, 0.45, baseS + (n - 0.5) * 1.3) * (0.05 + rdg3 * rdg) * (0.3 + 1.6 * rimv * rimv);
+    // columna de llamas con bordes irregulares (lenguas)
     float ep = clamp(-sp / 0.9, -0.6, 1.0);
     float outb = smoothstep(-0.05, 0.6, sb);
-    float val = (n - 0.45) * 2.4 + ep * 0.4 + (1.0 - hgt) * 0.3 - 0.3;
-    float plumeM = smoothstep(0.0, 0.3, val) * (1.0 - smoothstep(0.4, 0.7, sp)) * outb * (1.0 - smoothstep(0.7, 1.0, hgt));
-    float plumeD = plumeM * 1.8 * rdg4;
+    float val = (n - 0.45) * 2.0 + ep * 0.5 + (1.0 - hgt) * 0.4 - 0.35;
+    float plumeD = smoothstep(0.0, 0.3, val) * (1.0 - smoothstep(0.4, 0.7, sp)) * outb * (0.5 + 1.3 * rdg3) * (1.0 - smoothstep(0.7, 1.0, hgt));
     float d = skinD + plumeD;
-    float env = skinE + plumeM * 0.9;
-    float vein = env * pow(rdg, 22.0) * 1.6;
-    vem = mix(vec3(0.15, 0.6, 1.0), vec3(0.75, 0.95, 1.0), clamp(vein, 0.0, 1.0)) * vein * 1.3;
     col = vec3(0.0);
     if (d > 0.003) {
       float kSkin = clamp(sb / (uHs * 1.2), 0.0, 1.0);
       float k = clamp(max(kSkin * 0.8, hgt * 1.1) + (n - 0.5) * 0.3, 0.0, 1.0);
-      vec3 c = mix(vec3(0.02, 0.08, 0.8), vec3(0.08, 0.4, 0.95), smoothstep(0.0, 0.35, k));
-      c = mix(c, vec3(0.8, 0.92, 1.0), pow(rdg, 6.0) * 0.15);
-      c = mix(c, vec3(1.0, 0.1, 0.12), smoothstep(0.8, 1.0, k) * 0.6);
-      col = c * (0.4 + rdg2);
+      vec3 c = mix(vec3(0.02, 0.1, 0.9), vec3(0.1, 0.45, 1.0), smoothstep(0.0, 0.35, k));
+      c = mix(c, vec3(0.8, 0.92, 1.0), pow(rdg, 6.0) * 0.2);
+      c = mix(c, vec3(1.0, 0.1, 0.12), smoothstep(0.78, 1.0, k) * 0.75);
+      col = c * (0.7 + 1.6 * rdg2);
     }
     return d;
   }
@@ -496,41 +441,36 @@ const FIRE_FRAG = /* glsl */ `
     vp /= vp.w;
     vec3 rd = normalize((uCamWorld * vec4(vp.xyz, 0.0)).xyz);
     vec3 ro = uCamPos;
-    float gA = 0.9 + 0.5 * uTurb;
-    float edge = 1.5 * uHs + 0.2 + 0.5 * gA;
-    float Rc = uR0 * uWide + 1.5 * uHs + 0.5 + gA * 0.8;
-    vec2 hc = hitCyl(ro, rd, Rc, -uR0 - edge - 0.4, uYtop + 0.5 + gA * 0.5);
+    float edge = 1.5 * uHs + 0.15;
+    float Rc = uR0 * uWide + 1.5 * uHs + 0.5;
+    vec2 hc = hitCyl(ro, rd, Rc, -uR0 - edge, uYtop + 0.5);
     vec3 L = vec3(0.0);
     float T = 1.0;
     if (hc.y > 0.0) {
       float t = max(hc.x, 0.0);
       float t1 = hc.y;
-      float Rin = max(0.0, uR0 - 0.7 - gA * 0.5);
+      float Rin = max(0.0, uR0 - 0.7);
       vec2 hi = hitSphere(ro, rd, Rin);
       bool hasIn = hi.y > 0.0 && Rin > 0.0;
       float dith = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
-      const float DT = 0.07;
-      t += DT * dith;
-      for (int i = 0; i < 170; i++) {
+      t += 0.09 * dith;
+      for (int i = 0; i < 120; i++) {
         if (t >= t1) break;
         vec3 p = ro + rd * t;
         if (hasIn && t > hi.x && t < hi.y) { t = hi.y; continue; }
         float sd = min(sdBall(p), sdPlume(p));
         if (sd > edge) {
-          t += clamp((sd - edge) * 0.6, DT, 0.7);
+          t += clamp((sd - edge) * 0.6, 0.09, 0.7);
           continue;
         }
         vec3 col;
-        vec3 vem;
-        float d = fireDensity(p, rd, gA, col, vem);
+        float d = fireDensity(p, rd, col);
         if (d > 0.003) {
           vec3 c = mix(col, vec3(1.0, 0.12, 0.05) * dot(col, vec3(0.66)), uErr);
-          L += T * c * d * uBright * DT * 1.7 * 0.26;
-          T *= exp(-d * 1.5 * DT);
+          L += T * c * d * uBright * 0.09 * 1.7 * 0.5;
+          T *= exp(-d * 1.8 * 0.09);
         }
-        vec3 v2 = mix(vem, vec3(1.0, 0.12, 0.05) * dot(vem, vec3(0.66)), uErr);
-        L += T * v2 * DT * uBright;
-        t += DT;
+        t += 0.09;
         if (T < 0.02) break;
       }
     }
@@ -549,21 +489,22 @@ const BLIT_FRAG = /* glsl */ `
 const EMBER_VERT = /* glsl */ `
   attribute vec3 aDir;
   attribute vec4 aRnd;
-  uniform float uTime, uThink, uDpr, uErr, uR0;
+  uniform float uTime, uSpin, uR0, uYtop, uThink, uDpr, uErr;
   varying vec3 vColor;
   varying float vA;
   void main(){
-    float r = mix(uR0 * 0.9, 13.0, pow(aRnd.x, 0.75)) * (1.0 + uThink * 0.35);
-    vec3 drift = vec3(sin(uTime * 0.21 + aRnd.w * 40.0), cos(uTime * 0.17 + aRnd.w * 23.0), sin(uTime * 0.13 + aRnd.w * 57.0)) * (0.3 + 0.5 * aRnd.z);
-    vec3 p = aDir * r + drift;
+    float u = fract(aRnd.x + uSpin * aRnd.y * 0.16);
+    vec3 base = aDir * uR0;
+    float rise = u * uYtop * (0.45 + aRnd.z * 0.9) * (1.0 + uThink * 0.5);
+    vec3 drift = vec3(sin(u * 7.0 + aRnd.w * 40.0), 0.0, cos(u * 6.0 + aRnd.w * 23.0)) * (0.1 + 0.6 * u) * (1.0 + uThink);
+    vec3 p = base + vec3(0.0, rise, 0.0) + drift;
     vec4 mv = modelViewMatrix * vec4(p, 1.0);
     gl_Position = projectionMatrix * mv;
-    float tw = pow(max(0.0, sin(uTime * (1.0 + aRnd.y * 3.0) + aRnd.w * 80.0)), 6.0);
-    vA = 0.2 + 0.8 * tw;
-    float warm = step(0.93, aRnd.w);
-    vec3 c = mix(vec3(0.7, 0.9, 1.0), vec3(1.0, 0.55, 0.15), warm);
-    vColor = mix(c, vec3(1.0, 0.2, 0.1), uErr);
-    gl_PointSize = (1.0 + 1.6 * aRnd.z) * uDpr * (12.0 / max(0.05, -mv.z));
+    float life = 1.0 - u;
+    vA = pow(life, 1.4) * (0.5 + 0.5 * sin(uTime * (6.0 + aRnd.w * 10.0) + aRnd.w * 50.0));
+    vec3 c = mix(vec3(0.55, 0.8, 1.0), vec3(1.0, 0.15, 0.1), smoothstep(0.25, 0.85, u));
+    vColor = mix(c, vec3(1.0, 0.15, 0.08), uErr);
+    gl_PointSize = (1.0 + 2.2 * aRnd.z * life) * uDpr * (12.0 / max(0.05, -mv.z));
   }
 `;
 
@@ -671,8 +612,8 @@ export class OrbScene {
       uFlame: { value: 0 },
       uTime: { value: 0 },
       uR0: { value: 2.0 },
-      uYtop: { value: 5.8 },
-      uHs: { value: 0.5 },
+      uYtop: { value: 5.4 },
+      uHs: { value: 0.65 },
       uWide: { value: 1.0 },
       uTurb: { value: 0.2 },
       uBright: { value: 1 },
@@ -712,7 +653,6 @@ export class OrbScene {
     this.scene.add(blit);
 
     this.buildGears();
-    this.buildNeurons();
     this.buildEmbers();
     this.orb.add(this.gearRoot);
     this.scene.add(this.orb);
@@ -834,119 +774,16 @@ export class OrbScene {
     this.gearRoot.visible = false;
   }
 
-  /* ---------- neuronas trabajando dentro de la bola ---------- */
-
-  private buildNeurons() {
-    const R = 1.75;
-    const n: THREE.Vector3[] = [];
-    for (let i = 0; i < 850; i++) {
-      const d = randDir();
-      n.push(d.multiplyScalar(R * (0.25 + 0.75 * Math.pow(Math.random(), 0.55))));
-    }
-    const pos: number[] = [],
-      us: number[] = [],
-      seeds: number[] = [],
-      speeds: number[] = [];
-    const curve = (
-      a: THREE.Vector3,
-      b: THREE.Vector3,
-      c: THREE.Vector3,
-      steps: number,
-      speed: number,
-    ) => {
-      const seed = Math.random();
-      const at = (u: number) =>
-        new THREE.Vector3(
-          (1 - u) * (1 - u) * a.x + 2 * (1 - u) * u * c.x + u * u * b.x,
-          (1 - u) * (1 - u) * a.y + 2 * (1 - u) * u * c.y + u * u * b.y,
-          (1 - u) * (1 - u) * a.z + 2 * (1 - u) * u * c.z + u * u * b.z,
-        );
-      for (let k = 0; k < steps; k++) {
-        const u0 = k / steps,
-          u1 = (k + 1) / steps;
-        const p0 = at(u0),
-          p1 = at(u1);
-        pos.push(p0.x, p0.y, p0.z, p1.x, p1.y, p1.z);
-        us.push(u0, u1);
-        seeds.push(seed, seed);
-        speeds.push(speed, speed);
-      }
-    };
-    const seen = new Set<number>();
-    for (let i = 0; i < n.length; i++) {
-      const a = n[i]!;
-      const near: { j: number; d: number }[] = [];
-      for (let j = 0; j < n.length; j++) {
-        if (j === i) continue;
-        const d = a.distanceToSquared(n[j]!);
-        if (d < 0.5 * 0.5) near.push({ j, d });
-      }
-      near.sort((x, y) => x.d - y.d);
-      for (const { j } of near.slice(0, 3)) {
-        const key = Math.min(i, j) * 5000 + Math.max(i, j);
-        if (seen.has(key)) continue;
-        seen.add(key);
-        const b = n[j]!;
-        const c = a
-          .clone()
-          .add(b)
-          .multiplyScalar(0.5)
-          .add(randDir().multiplyScalar(a.distanceTo(b) * 0.25));
-        curve(a, b, c, 8, rnd(0.8, 1.3));
-      }
-    }
-    // conexiones largas que cruzan el interior
-    for (let t = 0; t < 110; t++) {
-      const a = n[Math.floor(Math.random() * n.length)]!;
-      const b = n[Math.floor(Math.random() * n.length)]!;
-      if (a.distanceTo(b) < 1.6) continue;
-      const c = a.clone().add(b).multiplyScalar(0.18).add(randDir().multiplyScalar(0.35));
-      curve(a, b, c, 22, rnd(1.1, 1.8));
-    }
-    const g = new THREE.BufferGeometry();
-    g.setAttribute("position", new THREE.Float32BufferAttribute(pos, 3));
-    g.setAttribute("aU", new THREE.Float32BufferAttribute(us, 1));
-    g.setAttribute("aSeed", new THREE.Float32BufferAttribute(seeds, 1));
-    g.setAttribute("aSpeed", new THREE.Float32BufferAttribute(speeds, 1));
-    const mk = (vs: string, fs: string, op: number) =>
-      new THREE.ShaderMaterial({
-        transparent: true,
-        depthWrite: false,
-        blending: THREE.AdditiveBlending,
-        vertexShader: vs,
-        fragmentShader: fs,
-        uniforms: { ...this.u, uOpacity: { value: op } },
-      });
-    const grp = new THREE.Group();
-    const lines = new THREE.LineSegments(g, mk(NEURON_EDGE_VERT, NEURON_EDGE_FRAG, 0.8));
-    lines.frustumCulled = false;
-    const pp: number[] = [],
-      ps: number[] = [],
-      pz: number[] = [];
-    for (const v of n) {
-      pp.push(v.x, v.y, v.z);
-      ps.push(Math.random());
-      pz.push(rnd(1.4, 3.0));
-    }
-    const pg = new THREE.BufferGeometry();
-    pg.setAttribute("position", new THREE.Float32BufferAttribute(pp, 3));
-    pg.setAttribute("aSeed", new THREE.Float32BufferAttribute(ps, 1));
-    pg.setAttribute("aSize", new THREE.Float32BufferAttribute(pz, 1));
-    const pts = new THREE.Points(pg, mk(NEURON_PT_VERT, DOT_FRAG, 0.9));
-    pts.frustumCulled = false;
-    grp.add(lines, pts);
-    this.orb.add(grp);
-    this.spinners.push({ o: grp, axis: randDir(), w: 0.03 });
-  }
-
   /* ---------- chispas ---------- */
 
   private buildEmbers() {
-    const COUNT = 3000;
+    const COUNT = 3500;
     const dir = new Float32Array(COUNT * 3);
     const rn = new Float32Array(COUNT * 4);
     for (let i = 0; i < COUNT; i++) {
       const d = randDir();
+      d.y = Math.abs(d.y) * 0.9 + 0.1;
+      d.normalize();
       dir.set([d.x, d.y, d.z], i * 3);
       rn.set([Math.random(), rnd(0.5, 1.4), Math.random(), Math.random()], i * 4);
     }
@@ -960,7 +797,7 @@ export class OrbScene {
       blending: THREE.AdditiveBlending,
       vertexShader: EMBER_VERT,
       fragmentShader: DOT_FRAG,
-      uniforms: { ...this.u, uR0: this.fu.uR0, uOpacity: { value: 0.9 } },
+      uniforms: { ...this.u, uR0: this.fu.uR0, uYtop: this.fu.uYtop, uOpacity: { value: 0.9 } },
     });
     const p = new THREE.Points(g, mat);
     p.frustumCulled = false;
@@ -1018,10 +855,10 @@ export class OrbScene {
     f.uTime.value = t;
     f.uR0.value = 2.0 + T * 0.1 + kick * 0.2;
     f.uWide.value = 1.0 + T * 0.3 + kick * 0.35;
-    f.uYtop.value = f.uR0.value + 3.8 + T * (2.6 + throb * 0.9) + kick * 3.0 + this.ampS * 0.9;
-    f.uHs.value = 0.5 + T * 0.35 + kick * 0.5;
+    f.uYtop.value = f.uR0.value + 4.2 + T * (3.0 + throb * 1.0) + kick * 3.4 + this.ampS * 1.0;
+    f.uHs.value = 0.65 + T * 0.45 + kick * 0.6;
     f.uTurb.value = 0.2 + T * 1.0 + kick * 0.6;
-    f.uBright.value = 0.8 + T * 0.4 + kick * 0.6 + this.ampS * 0.4;
+    f.uBright.value = 1.0 + T * 0.45 + kick * 0.7 + this.ampS * 0.5;
     f.uErr.value = this.cur.err;
 
     const u = this.u;
@@ -1033,7 +870,7 @@ export class OrbScene {
 
     for (const s of this.spinners) s.o.rotateOnAxis(s.axis, s.w * dt * (0.6 + T * 2));
 
-    this.bloom.strength = 0.26 + T * 0.16 + kick * 0.22 + this.ampS * 0.1;
+    this.bloom.strength = 0.36 + T * 0.22 + kick * 0.3 + this.ampS * 0.12;
 
     this.controls.update(dt);
     const dist = this.camera.position.distanceTo(this.controls.target);
