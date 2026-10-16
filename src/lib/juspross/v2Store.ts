@@ -22,7 +22,7 @@ interface V2Store {
   amplitude: number;
   messages: V2Message[];
   aiEndpoint: string;
-  /** vacío = detectar automáticamente un modelo Qwen instalado */
+  /** Modelo fijado por defecto para el lado 2.0. */
   aiModel: string;
   aiLink: AiLink;
   aiDetail: string;
@@ -63,7 +63,7 @@ export const useV2 = create<V2Store>((set, get) => ({
   amplitude: 0,
   messages: [],
   aiEndpoint: "http://localhost:11434",
-  aiModel: "",
+  aiModel: "qwen3:8b",
   aiLink: "simulated",
   aiDetail: "Qwen aún no está conectado: las respuestas son simuladas.",
   voiceReplies: false,
@@ -82,7 +82,7 @@ export const useV2 = create<V2Store>((set, get) => ({
       set({
         mode: p.mode === "v2" ? "v2" : "calm",
         aiEndpoint: p.endpoint || "http://localhost:11434",
-        aiModel: p.model ?? "",
+        aiModel: p.model?.trim() || "qwen3:8b",
         voiceReplies: !!p.voice,
       });
     } catch {
@@ -106,7 +106,7 @@ export const useV2 = create<V2Store>((set, get) => ({
   setAi: ({ endpoint, model }) => {
     set((s) => ({
       aiEndpoint: (endpoint ?? s.aiEndpoint).trim().replace(/\/+$/, "") || "http://localhost:11434",
-      aiModel: (model ?? s.aiModel).trim(),
+      aiModel: (model ?? s.aiModel).trim() || "qwen3:8b",
       aiLink: "simulated",
       aiDetail: "Configuración cambiada: pulsa «Probar conexión».",
     }));
