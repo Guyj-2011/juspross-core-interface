@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowUp, Mic, Settings2, Square, Trash2, Volume2, VolumeX, X } from "lucide-react";
+import { ArrowUp, History, Mic, Settings2, Square, Trash2, Volume2, VolumeX, X } from "lucide-react";
 import { AiUnreachable, testAi } from "@/lib/juspross/ai";
 import { useV2Chat } from "@/lib/juspross/useV2Chat";
 import { speechSupported } from "@/lib/juspross/useSpeech";
@@ -35,6 +35,7 @@ export function V2Console() {
   const autoConnect = useV2((s) => s.autoConnect);
   const [value, setValue] = useState("");
   const [open, setOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [listening, setListening] = useState(false);
   const [micOk, setMicOk] = useState(false);
   const [secretV3, setSecretV3] = useState(false);
@@ -119,8 +120,10 @@ export function V2Console() {
   }, []);
   useEffect(() => () => recRef.current?.stop(), []);
   useEffect(() => {
-    logRef.current?.scrollTo({ top: logRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages]);
+    if (historyOpen) {
+      logRef.current?.scrollTo({ top: logRef.current.scrollHeight, behavior: "smooth" });
+    }
+  }, [messages, historyOpen]);
 
   const busy = state === "thinking" || state === "speaking";
 
@@ -211,10 +214,11 @@ export function V2Console() {
       </div>
 
       {/* ajustes */}
-      <div className="pointer-events-auto absolute top-4 right-5">
+      <div className="pointer-events-auto absolute top-4 right-5 z-40">
         <button
           onClick={() => setOpen((o) => !o)}
           aria-label="Ajustes de la IA"
+          title="Ajustes de la IA"
           className="flex size-9 items-center justify-center rounded-full border border-white/10 bg-black/60 text-white/60 backdrop-blur-md transition-colors hover:text-white"
         >
           {open ? <X className="size-4" /> : <Settings2 className="size-4" />}
@@ -222,40 +226,90 @@ export function V2Console() {
         {open && <AiSettings onClose={() => setOpen(false)} />}
       </div>
 
-      {/* conversación + entrada */}
-      <div className="absolute bottom-5 left-1/2 w-[min(720px,calc(100vw-260px))] min-w-[300px] -translate-x-1/2">
-        {messages.length > 0 && (
+      {/* botón de historial, en el lateral derecho */}
+      <div className="pointer-events-auto absolute top-16 right-5 z-40">
+        <button
+          onClick={() => setHistoryOpen((shown) => !shown)}
+          aria-label={historyOpen ? "Cerrar historial del chat" : "Abrir historial del chat"}
+          aria-expanded={historyOpen}
+          title={historyOpen ? "Cerrar historial" : "Historial del chat"}
+          className={cn(
+            "relative flex size-9 items-center justify-center rounded-full border bg-black/60 text-white/70 backdrop-blur-md transition-colors hover:text-white",
+            historyOpen ? "border-[#6ea8ff]/60 text-[#9cc0ff]" : "border-white/10",
+          )}
+        >
+          {historyOpen ? <X className="size-4" /> : <History className="size-4" />}
+          {messages.length > 0 && !historyOpen && (
+            <span className="absolute -right-1 -top-1 flex min-w-4 items-center justify-center rounded-full border border-black bg-[#6ea8ff] px-1 font-mono text-[9px] leading-4 text-black">
+              {messages.length > 99 ? "99+" : messages.length}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {/* historial desplegable a la derecha */}
+      {historyOpen && (
+        <aside
+          aria-label="Historial del chat"
+          className="pointer-events-auto absolute right-5 top-28 bottom-20 z-40 flex w-[min(390px,calc(100vw-32px))] flex-col overflow-hidden rounded-xl border border-white/10 bg-black/85 shadow-2xl backdrop-blur-xl"
+        >
+          <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+            <div>
+              <p className="font-mono text-[10px] tracking-[0.25em] text-[#6ea8ff]">
+                HISTORIAL DEL CHAT
+              </p>
+              <p className="mt-1 text-[11px] text-white/45">
+                {messages.length} {messages.length === 1 ? "mensaje" : "mensajes"}
+              </p>
+            </div>
+            <button
+              onClick={() => setHistoryOpen(false)}
+              aria-label="Cerrar historial"
+              className="flex size-8 items-center justify-center rounded-md border border-white/10 text-white/60 transition-colors hover:text-white"
+            >
+              <X className="size-4" />
+            </button>
+          </div>
           <div
             ref={logRef}
-            className="pointer-events-auto mb-3 max-h-[34vh] space-y-3 overflow-y-auto pr-1 [mask-image:linear-gradient(to_bottom,transparent,black_14%)]"
+            className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3 [scrollbar-color:rgba(255,255,255,0.25)_transparent]"
           >
-            {messages.map((m) => (
-              <div
-                key={m.id}
-                className={cn("flex", m.role === "user" ? "justify-end" : "justify-start")}
-              >
-                <div
-                  className={cn(
-                    "max-w-[88%] rounded-lg px-3.5 py-2 text-[13.5px] leading-relaxed whitespace-pre-wrap backdrop-blur-sm",
-                    m.role === "user"
-                      ? "border border-white/10 bg-white/5 text-white/70"
-                      : m.error
-                        ? "border border-red-500/40 bg-red-950/40 text-red-200"
-                        : "border border-[#3d7bff]/25 bg-black/55 text-white/90",
-                  )}
-                >
-                  {m.text || <span className="animate-pulse text-white/40">…</span>}
-                  {m.simulated && (
-                    <span className="mt-1 block font-mono text-[9px] tracking-[0.2em] text-[#6ea8ff]/70">
-                      RESPUESTA SIMULADA
-                    </span>
-                  )}
-                </div>
+            {messages.length === 0 ? (
+              <div className="flex flex-1 items-center justify-center px-5 text-center text-sm text-white/40">
+                Tus mensajes aparecerán aquí cuando empieces a conversar con Juspross.
               </div>
-            ))}
+            ) : (
+              messages.map((m) => (
+                <div
+                  key={m.id}
+                  className={cn("flex w-full", m.role === "user" ? "justify-end" : "justify-start")}
+                >
+                  <div
+                    className={cn(
+                      "max-w-[92%] break-words rounded-lg px-3 py-2 text-[13px] leading-relaxed whitespace-pre-wrap",
+                      m.role === "user"
+                        ? "border border-white/10 bg-white/5 text-white/75"
+                        : m.error
+                          ? "border border-red-500/40 bg-red-950/40 text-red-200"
+                          : "border border-[#3d7bff]/25 bg-[#090d16]/90 text-white/90",
+                    )}
+                  >
+                    {m.text || <span className="animate-pulse text-white/40">…</span>}
+                    {m.simulated && (
+                      <span className="mt-1 block font-mono text-[9px] tracking-[0.2em] text-[#6ea8ff]/70">
+                        RESPUESTA SIMULADA
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
           </div>
-        )}
+        </aside>
+      )}
 
+      {/* cuadro de entrada fijo abajo; los mensajes viven en el panel lateral */}
+      <div className="absolute bottom-5 left-1/2 w-[min(720px,calc(100vw-260px))] min-w-[300px] -translate-x-1/2">
         <div
           className={cn(
             "pointer-events-auto flex items-end gap-2 rounded-xl border bg-black/70 px-3 py-2 backdrop-blur-md transition-shadow",

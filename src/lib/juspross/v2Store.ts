@@ -106,7 +106,8 @@ export const useV2 = create<V2Store>((set, get) => ({
   setAmplitude: (amplitude) => set({ amplitude }),
   addMessage: (m) => {
     const id = uid();
-    set((s) => ({ messages: [...s.messages.slice(-60), { ...m, id }] }));
+    // Keep the complete in-session conversation available in the history panel.
+    set((s) => ({ messages: [...s.messages, { ...m, id }] }));
     return id;
   },
   patchMessage: (id, patch) =>
