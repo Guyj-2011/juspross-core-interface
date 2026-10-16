@@ -49,6 +49,7 @@ export function V2Console() {
     let cancelled = false;
     let retryTimer: number | undefined;
     let attempts = 0;
+    const healthCheckMs = 15_000;
 
     if (!autoConnect) {
       useV2.getState().setLink(
@@ -59,39 +60,46 @@ export function V2Console() {
     }
 
     const connect = async () => {
+      if (cancelled) return;
       attempts += 1;
       const current = useV2.getState();
       const endpoint = current.aiEndpoint || "http://localhost:11434";
       const wantedModel = current.aiModel.trim() || "qwen3:8b";
-      current.setLink(
-        "checking",
-        attempts === 1
-          ? "Conectando automáticamente con Qwen3 8B…"
-          : `Esperando a Ollama… nuevo intento en curso (${attempts}).`,
-      );
+      const wasOnline = current.aiLink === "online";
+
+      // Keep the connected indicator steady during background health checks.
+      if (!wasOnline) {
+        current.setLink(
+          "checking",
+          attempts === 1
+            ? "Conectando automáticamente con Qwen3 8B…"
+            : `Esperando a Ollama… nuevo intento en curso (${attempts}).`,
+        );
+      }
 
       try {
         const resolvedModel = await testAi(endpoint, wantedModel);
         if (cancelled) return;
+        attempts = 0;
         useV2.getState().setLink(
           "online",
-          `Conexión automática establecida · ${resolvedModel}`,
+          `Conexión automática establecida · ${resolvedModel}. Se comprobará en segundo plano y se reconectará si se interrumpe.`,
         );
+        // Periodically detect server exits instead of assuming the first success lasts forever.
+        retryTimer = window.setTimeout(() => void connect(), healthCheckMs);
       } catch (error) {
         if (cancelled) return;
         const message = error instanceof Error ? error.message : "No se pudo conectar con Ollama.";
-
-        if (error instanceof AiUnreachable) {
-          const retrySeconds = Math.min(5 * attempts, 20);
-          useV2.getState().setLink(
-            "offline",
-            `${message} Se volverá a intentar automáticamente en ${retrySeconds} segundos.`,
-          );
-          retryTimer = window.setTimeout(() => void connect(), retrySeconds * 1000);
-          return;
-        }
-
-        useV2.getState().setLink("offline", message);
+        const retrySeconds = Math.min(5 * attempts, 20);
+        const retryMessage = error instanceof AiUnreachable
+          ? "Se volverá a intentar automáticamente"
+          : "Se volverá a comprobar automáticamente";
+        useV2.getState().setLink(
+          "offline",
+          `${message} ${retryMessage} en ${retrySeconds} segundos.`,
+        );
+        // Retry any failure, including CORS/permissions or a temporarily missing model.
+        retryTimer = window.setTimeout(() => void connect(), retrySeconds * 1000);
       }
     };
 
