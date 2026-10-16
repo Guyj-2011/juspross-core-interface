@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { OrbCanvas } from "@/components/juspross/OrbCanvas";
+import { MediaCanvas } from "@/components/juspross/MediaCanvas";
 import { V2Console } from "@/components/juspross/V2Console";
 import { ModeSwitch } from "@/components/juspross/ModeSwitch";
 import { useV2 } from "@/lib/juspross/v2Store";
@@ -44,7 +45,7 @@ function Index() {
     <main
       className={cn(
         "relative h-screen w-screen overflow-hidden",
-        mode === "v2" ? "bg-black" : "bg-background",
+        mode === "calm" ? "bg-background" : "bg-black",
       )}
     >
       {mode === "calm" ? (
@@ -59,6 +60,8 @@ function Index() {
             <CommandBar />
           </div>
         </>
+      ) : mode === "media" ? (
+        <MediaCanvas />
       ) : (
         <>
           <OrbCanvas />

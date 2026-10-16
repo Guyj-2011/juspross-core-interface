@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-export type Mode = "calm" | "v2";
+export type Mode = "calm" | "v2" | "media";
 export type V2State = "idle" | "thinking" | "speaking" | "error";
 /** simulated = sin IA conectada · online = Qwen respondiendo · offline = no se alcanzó */
 export type AiLink = "simulated" | "checking" | "online" | "offline";
@@ -70,7 +70,8 @@ export const useV2 = create<V2Store>((set, get) => ({
   aiModel: "qwen3:8b",
   autoConnect: true,
   aiLink: "checking",
-  aiDetail: "Conexión automática con Ollama activada. Si Chrome lo solicita, permite el acceso a la red de bucle invertido (loopback).",
+  aiDetail:
+    "Conexión automática con Ollama activada. Si Chrome lo solicita, permite el acceso a la red de bucle invertido (loopback).",
   voiceReplies: false,
 
   hydrate: () => {
@@ -86,7 +87,7 @@ export const useV2 = create<V2Store>((set, get) => ({
         autoConnect?: boolean;
       };
       set({
-        mode: p.mode === "v2" ? "v2" : "calm",
+        mode: p.mode === "v2" || p.mode === "media" ? p.mode : "calm",
         aiEndpoint: p.endpoint || "http://localhost:11434",
         aiModel: p.model?.trim() || "qwen3:8b",
         voiceReplies: !!p.voice,
