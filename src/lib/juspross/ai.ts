@@ -15,14 +15,15 @@ export class AiError extends Error {}
 export class AiUnreachable extends Error {}
 
 /**
- * Tell modern Chromium that this request intentionally targets the local
- * machine. This does not bypass CORS or Chrome's Local Network Access prompt;
- * it lets the browser classify localhost as a local-network request.
+ * Tell modern Chromium that this request intentionally targets the loopback
+ * address space (localhost / 127.0.0.1). Using "local" here mismatches the
+ * actual loopback destination and can make Chrome reject the request.
+ * This does not bypass CORS or Chrome's Local Network Access permission.
  */
-type LocalRequestInit = RequestInit & { targetAddressSpace?: "local" };
+type LocalRequestInit = RequestInit & { targetAddressSpace?: "loopback" };
 
 function fetchLocal(url: string, init: RequestInit = {}): Promise<Response> {
-  return fetch(url, { ...init, targetAddressSpace: "local" } as LocalRequestInit);
+  return fetch(url, { ...init, targetAddressSpace: "loopback" } as LocalRequestInit);
 }
 
 function connectionHint(endpoint: string, error: unknown): string {
