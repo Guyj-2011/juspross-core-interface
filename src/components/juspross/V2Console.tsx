@@ -53,7 +53,7 @@ export function V2Console() {
     if (!autoConnect) {
       useV2.getState().setLink(
         "simulated",
-        "La reconexión automática aún no está autorizada. Abre Ajustes y pulsa «CONECTAR Y RECORDAR» una vez. Tras conectarse, Juspross guardará esta preferencia.",
+        "La conexión automática está desactivada temporalmente mientras se prueba la conexión.",
       );
       return;
     }
@@ -344,10 +344,12 @@ function AiSettings({ onClose }: { onClose: () => void }) {
         `Conectado · ${m}. La reconexión automática quedó activada para las próximas aperturas.`,
       );
     } catch (e) {
-      useV2.getState().setAutoConnect(false);
+      // Keep automatic retries enabled even when this manual probe fails.
+      // The connection effect will keep retrying while Ollama / permissions are fixed.
+      useV2.getState().setAutoConnect(true);
       useV2.getState().setLink(
         "offline",
-        e instanceof Error ? e.message : "No se pudo conectar. Revisa Ollama, el permiso de red local y OLLAMA_ORIGINS.",
+        e instanceof Error ? e.message : "No se pudo conectar. Revisa Ollama, el permiso de loopback y OLLAMA_ORIGINS.",
       );
     }
   };

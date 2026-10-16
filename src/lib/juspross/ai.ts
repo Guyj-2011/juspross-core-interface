@@ -34,8 +34,9 @@ function connectionHint(endpoint: string, error: unknown): string {
   const origin = typeof window !== "undefined" ? window.location.origin : "origen desconocido";
   return (
     `No se pudo leer la API de Ollama en ${endpoint}. Origen de Juspross: ${origin}. ` +
-    `Comprueba que Ollama esté ejecutándose, que OLLAMA_ORIGINS incluya exactamente ese origen ` +
-    `y que el navegador permita el acceso a la red local para este sitio. Detalle del navegador: ${detail}`
+    `Comprueba que Ollama esté ejecutándose y que OLLAMA_ORIGINS incluya exactamente ese origen. ` +
+    `En Chrome permite también «Red de bucle invertido» (loopback network), que es distinta de «Red local». ` +
+    `Detalle del navegador: ${detail}`
   );
 }
 
