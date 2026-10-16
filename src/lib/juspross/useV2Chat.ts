@@ -61,7 +61,11 @@ export function useV2Chat() {
             signal: ctrl.signal,
             onToken,
           });
-          useV2.getState().setLink("online", "Qwen conectado.");
+          useV2.getState().setAutoConnect(true);
+          useV2.getState().setLink(
+            "online",
+            "Qwen conectado. La reconexión automática quedó activada.",
+          );
         } catch (e) {
           if ((e as Error).name === "AbortError") throw e;
           if (e instanceof AiUnreachable) {
