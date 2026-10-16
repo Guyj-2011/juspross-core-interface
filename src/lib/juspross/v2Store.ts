@@ -24,7 +24,7 @@ interface V2Store {
   aiEndpoint: string;
   /** Modelo fijado por defecto para el lado 2.0. */
   aiModel: string;
-  /** Enabled only after a user-initiated connection succeeds. */
+  /** Persist and retry the local Ollama connection automatically on page startup. */
   autoConnect: boolean;
   aiLink: AiLink;
   aiDetail: string;
@@ -68,9 +68,9 @@ export const useV2 = create<V2Store>((set, get) => ({
   messages: [],
   aiEndpoint: "http://localhost:11434",
   aiModel: "qwen3:8b",
-  autoConnect: false,
-  aiLink: "simulated",
-  aiDetail: "Pulsa «CONECTAR Y RECORDAR» una vez para autorizar la conexión. Después, Juspross intentará reconectarse automáticamente.",
+  autoConnect: true,
+  aiLink: "checking",
+  aiDetail: "Conexión automática con Ollama activada. Si Chrome lo solicita, permite el acceso a la red de bucle invertido (loopback).",
   voiceReplies: false,
 
   hydrate: () => {
@@ -90,7 +90,9 @@ export const useV2 = create<V2Store>((set, get) => ({
         aiEndpoint: p.endpoint || "http://localhost:11434",
         aiModel: p.model?.trim() || "qwen3:8b",
         voiceReplies: !!p.voice,
-        autoConnect: !!p.autoConnect,
+        // This integration should always reconnect automatically, including for
+        // users whose older localStorage entry stored autoConnect=false.
+        autoConnect: true,
       });
     } catch {
       /* datos corruptos: se ignoran */
