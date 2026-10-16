@@ -32,6 +32,7 @@ export function V2Console() {
   const voice = useV2((s) => s.voiceReplies);
   const aiEndpoint = useV2((s) => s.aiEndpoint);
   const aiModel = useV2((s) => s.aiModel);
+  const autoConnect = useV2((s) => s.autoConnect);
   const [value, setValue] = useState("");
   const [open, setOpen] = useState(false);
   const [listening, setListening] = useState(false);
@@ -42,13 +43,20 @@ export function V2Console() {
 
   useEffect(() => setMicOk(speechSupported()), []);
 
-  // Connect automatically after entering 2.0, refreshing Lovable, or reopening the app.
-  // Retry while Ollama is starting after a Windows login/restart.
+  // After one successful, user-initiated connection, reconnect on every page open.
+  // If Ollama starts later, keep retrying with backoff instead of silently giving up after 20 tries.
   useEffect(() => {
     let cancelled = false;
     let retryTimer: number | undefined;
     let attempts = 0;
-    const maxAttempts = 20;
+
+    if (!autoConnect) {
+      useV2.getState().setLink(
+        "simulated",
+        "La reconexión automática aún no está autorizada. Abre Ajustes y pulsa «CONECTAR Y RECORDAR» una vez. Tras conectarse, Juspross guardará esta preferencia.",
+      );
+      return;
+    }
 
     const connect = async () => {
       attempts += 1;
@@ -59,25 +67,27 @@ export function V2Console() {
         "checking",
         attempts === 1
           ? "Conectando automáticamente con Qwen3 8B…"
-          : `Esperando a Ollama… reintento ${attempts}/${maxAttempts}`,
+          : `Esperando a Ollama… nuevo intento en curso (${attempts}).`,
       );
 
       try {
         const resolvedModel = await testAi(endpoint, wantedModel);
         if (cancelled) return;
-        const latest = useV2.getState();
-        latest.setAi({ endpoint, model: resolvedModel });
-        latest.setLink("online", `Conectado automáticamente · modelo: ${resolvedModel}`);
+        useV2.getState().setLink(
+          "online",
+          `Conexión automática establecida · ${resolvedModel}`,
+        );
       } catch (error) {
         if (cancelled) return;
         const message = error instanceof Error ? error.message : "No se pudo conectar con Ollama.";
 
-        if (error instanceof AiUnreachable && attempts < maxAttempts) {
+        if (error instanceof AiUnreachable) {
+          const retrySeconds = Math.min(5 * attempts, 20);
           useV2.getState().setLink(
-            "checking",
-            `Ollama no responde todavía. Reintentando automáticamente (${attempts}/${maxAttempts})…`,
+            "offline",
+            `${message} Se volverá a intentar automáticamente en ${retrySeconds} segundos.`,
           );
-          retryTimer = window.setTimeout(() => void connect(), 3000);
+          retryTimer = window.setTimeout(() => void connect(), retrySeconds * 1000);
           return;
         }
 
@@ -90,7 +100,7 @@ export function V2Console() {
       cancelled = true;
       if (retryTimer !== undefined) window.clearTimeout(retryTimer);
     };
-  }, [aiEndpoint, aiModel]);
+  }, [aiEndpoint, aiModel, autoConnect]);
 
   useEffect(() => {
     const onSecretV3 = (event: Event) => {
@@ -319,14 +329,26 @@ function AiSettings({ onClose }: { onClose: () => void }) {
   const [md, setMd] = useState(model);
 
   const test = async () => {
+    // A click is intentional: Chrome may require a user gesture for first local-network access.
     const s = useV2.getState();
+    s.setAutoConnect(false);
     s.setAi({ endpoint: ep, model: md });
-    s.setLink("checking", "Probando conexión…");
+    s.setLink("checking", "Autorizando y comprobando conexión con Ollama…");
     try {
-      const m = await testAi(useV2.getState().aiEndpoint, useV2.getState().aiModel);
-      useV2.getState().setLink("online", `Conectado · modelo: ${m}`);
+      const current = useV2.getState();
+      const m = await testAi(current.aiEndpoint, current.aiModel);
+      useV2.getState().setAi({ endpoint: current.aiEndpoint, model: m });
+      useV2.getState().setAutoConnect(true);
+      useV2.getState().setLink(
+        "online",
+        `Conectado · ${m}. La reconexión automática quedó activada para las próximas aperturas.`,
+      );
     } catch (e) {
-      useV2.getState().setLink("offline", e instanceof Error ? e.message : "No se pudo conectar.");
+      useV2.getState().setAutoConnect(false);
+      useV2.getState().setLink(
+        "offline",
+        e instanceof Error ? e.message : "No se pudo conectar. Revisa Ollama, el permiso de red local y OLLAMA_ORIGINS.",
+      );
     }
   };
 
@@ -365,7 +387,7 @@ function AiSettings({ onClose }: { onClose: () => void }) {
           onClick={() => void test()}
           className="flex-1 rounded-md border border-[#3d7bff]/50 bg-[#3d7bff]/15 py-1.5 font-mono text-[10px] tracking-[0.2em] text-[#9cc0ff] hover:bg-[#3d7bff]/25"
         >
-          PROBAR CONEXIÓN
+          CONECTAR Y RECORDAR
         </button>
         <button
           onClick={() => {

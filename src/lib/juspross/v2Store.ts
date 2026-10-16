@@ -24,6 +24,8 @@ interface V2Store {
   aiEndpoint: string;
   /** Modelo fijado por defecto para el lado 2.0. */
   aiModel: string;
+  /** Enabled only after a user-initiated connection succeeds. */
+  autoConnect: boolean;
   aiLink: AiLink;
   aiDetail: string;
   voiceReplies: boolean;
@@ -36,6 +38,7 @@ interface V2Store {
   patchMessage: (id: string, patch: Partial<V2Message>) => void;
   clear: () => void;
   setAi: (p: { endpoint?: string; model?: string }) => void;
+  setAutoConnect: (enabled: boolean) => void;
   setLink: (l: AiLink, detail?: string) => void;
   setVoiceReplies: (v: boolean) => void;
 }
@@ -50,6 +53,7 @@ function persist(s: V2Store) {
         endpoint: s.aiEndpoint,
         model: s.aiModel,
         voice: s.voiceReplies,
+        autoConnect: s.autoConnect,
       }),
     );
   } catch {
@@ -64,8 +68,9 @@ export const useV2 = create<V2Store>((set, get) => ({
   messages: [],
   aiEndpoint: "http://localhost:11434",
   aiModel: "qwen3:8b",
+  autoConnect: false,
   aiLink: "simulated",
-  aiDetail: "Qwen aún no está conectado: las respuestas son simuladas.",
+  aiDetail: "Pulsa «CONECTAR Y RECORDAR» una vez para autorizar la conexión. Después, Juspross intentará reconectarse automáticamente.",
   voiceReplies: false,
 
   hydrate: () => {
@@ -78,12 +83,14 @@ export const useV2 = create<V2Store>((set, get) => ({
         endpoint?: string;
         model?: string;
         voice?: boolean;
+        autoConnect?: boolean;
       };
       set({
         mode: p.mode === "v2" ? "v2" : "calm",
         aiEndpoint: p.endpoint || "http://localhost:11434",
         aiModel: p.model?.trim() || "qwen3:8b",
         voiceReplies: !!p.voice,
+        autoConnect: !!p.autoConnect,
       });
     } catch {
       /* datos corruptos: se ignoran */
@@ -110,6 +117,10 @@ export const useV2 = create<V2Store>((set, get) => ({
       aiLink: "simulated",
       aiDetail: "Configuración cambiada: pulsa «Probar conexión».",
     }));
+    persist(get());
+  },
+  setAutoConnect: (autoConnect) => {
+    set({ autoConnect });
     persist(get());
   },
   setLink: (aiLink, detail) => set((s) => ({ aiLink, aiDetail: detail ?? s.aiDetail })),

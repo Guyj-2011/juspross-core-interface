@@ -14,6 +14,30 @@ export class AiError extends Error {}
 /** No se pudo alcanzar el servidor (apagado, CORS, bloqueo del navegador). */
 export class AiUnreachable extends Error {}
 
+/**
+ * Tell modern Chromium that this request intentionally targets the local
+ * machine. This does not bypass CORS or Chrome's Local Network Access prompt;
+ * it lets the browser classify localhost as a local-network request.
+ */
+type LocalRequestInit = RequestInit & { targetAddressSpace?: "local" };
+
+function fetchLocal(url: string, init: RequestInit = {}): Promise<Response> {
+  return fetch(url, { ...init, targetAddressSpace: "local" } as LocalRequestInit);
+}
+
+function connectionHint(endpoint: string, error: unknown): string {
+  const detail =
+    error instanceof Error
+      ? `${error.name}${error.message ? `: ${error.message}` : ""}`
+      : String(error);
+  const origin = typeof window !== "undefined" ? window.location.origin : "origen desconocido";
+  return (
+    `No se pudo leer la API de Ollama en ${endpoint}. Origen de Juspross: ${origin}. ` +
+    `Comprueba que Ollama esté ejecutándose, que OLLAMA_ORIGINS incluya exactamente ese origen ` +
+    `y que el navegador permita el acceso a la red local para este sitio. Detalle del navegador: ${detail}`
+  );
+}
+
 export const SYSTEM_PROMPT =
   "Eres Juspross 2.0, una inteligencia artificial serena y precisa que vive dentro de un núcleo holográfico. " +
   "Responde siempre en español, de forma natural y breve (2 a 5 frases) salvo que te pidan más detalle.";
@@ -27,11 +51,9 @@ const clean = (t: string) =>
 async function tags(endpoint: string): Promise<string[]> {
   let res: Response;
   try {
-    res = await fetch(`${endpoint}/api/tags`, { signal: AbortSignal.timeout(4000) });
-  } catch {
-    throw new AiUnreachable(
-      `No se pudo conectar con ${endpoint}. ¿Está Ollama abierto? Si sí, falta permitir esta página (OLLAMA_ORIGINS).`,
-    );
+    res = await fetchLocal(`${endpoint}/api/tags`, { signal: AbortSignal.timeout(8000) });
+  } catch (error) {
+    throw new AiUnreachable(connectionHint(endpoint, error));
   }
   if (!res.ok) throw new AiError(`Ollama respondió ${res.status}`);
   const j = (await res.json()) as { models?: { name: string }[] };
@@ -63,7 +85,7 @@ export async function chat(
   const model = await resolveModel(o.endpoint, o.model);
   let res: Response;
   try {
-    res = await fetch(`${o.endpoint}/api/chat`, {
+    res = await fetchLocal(`${o.endpoint}/api/chat`, {
       method: "POST",
       signal: o.signal,
       headers: { "Content-Type": "application/json" },
@@ -76,7 +98,7 @@ export async function chat(
     });
   } catch (e) {
     if ((e as Error).name === "AbortError") throw e;
-    throw new AiUnreachable(`Se perdió la conexión con ${o.endpoint}.`);
+    throw new AiUnreachable(connectionHint(o.endpoint, e));
   }
   if (!res.ok || !res.body) {
     const body = await res.text().catch(() => "");
