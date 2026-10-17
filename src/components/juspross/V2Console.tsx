@@ -308,14 +308,15 @@ export function V2Console() {
       cleanupVoiceRef.current = releaseMicrophone;
 
       const startRecorder = () => {
-        if (!voiceSessionRef.current || transcribingRef.current || !streamRef.current) return;
+        const activeStream = streamRef.current;
+        if (!voiceSessionRef.current || transcribingRef.current || !activeStream) return;
         chunksRef.current = [];
         speechDetectedRef.current = false;
         lastVoiceAtRef.current = 0;
 
         let recorder: MediaRecorder;
         try {
-          recorder = options ? new MediaRecorder(streamRef.current, options) : new MediaRecorder(streamRef.current);
+          recorder = options ? new MediaRecorder(activeStream, options) : new MediaRecorder(activeStream);
         } catch (error) {
           voiceSessionRef.current = false;
           setListening(false);
