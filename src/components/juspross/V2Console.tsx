@@ -5,21 +5,50 @@ import { useV2Chat } from "@/lib/juspross/useV2Chat";
 import { useV2 } from "@/lib/juspross/v2Store";
 import { cn } from "@/lib/utils";
 
-interface SRLike {
-  lang: string;
-  interimResults: boolean;
-  continuous: boolean;
-  start(): void;
-  stop(): void;
-  onresult:
-    | ((e: {
-        resultIndex: number;
-        results: { length: number; [i: number]: { 0: { transcript: string }; isFinal: boolean } };
-      }) => void)
-    | null;
-  onerror: ((event?: { error?: string }) => void) | null;
-  onstart: (() => void) | null;
-  onend: (() => void) | null;
+function extractTranscript(payload: unknown): string {
+  if (typeof payload === "string") return payload.trim();
+  if (!payload || typeof payload !== "object") return "";
+
+  const data = payload as Record<string, unknown>;
+  const directKeys = ["text", "transcription", "transcripcion", "output", "resultado", "mensaje"];
+  for (const key of directKeys) {
+    const value = data[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+
+  for (const key of ["segmentos", "segments"]) {
+    const segments = data[key];
+    if (!Array.isArray(segments)) continue;
+    const text = segments
+      .map((entry) => {
+        if (typeof entry === "string") return entry.trim();
+        if (!entry || typeof entry !== "object") return "";
+        const segment = entry as Record<string, unknown>;
+        for (const field of ["text", "texto", "transcription", "transcripcion"]) {
+          const value = segment[field];
+          if (typeof value === "string" && value.trim()) return value.trim();
+        }
+        const words = segment["palabras"] ?? segment["words"];
+        if (Array.isArray(words)) {
+          return words
+            .map((word) => {
+              if (typeof word === "string") return word;
+              if (!word || typeof word !== "object") return "";
+              const item = word as Record<string, unknown>;
+              return String(item["texto"] ?? item["palabra"] ?? item["word"] ?? item["text"] ?? "");
+            })
+            .filter(Boolean)
+            .join(" ");
+        }
+        return "";
+      })
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+    if (text) return text;
+  }
+
+  return "";
 }
 
 const BLUE = "#6ea8ff";
@@ -40,12 +69,18 @@ export function V2Console() {
   const [listening, setListening] = useState(false);
   const [voiceNotice, setVoiceNotice] = useState("");
   const [secretV3, setSecretV3] = useState(false);
-  const recRef = useRef<SRLike | null>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
   const voiceSessionRef = useRef(false);
-  const restartTimerRef = useRef<number | undefined>(undefined);
-  const phraseTimerRef = useRef<number | undefined>(undefined);
-  const pendingSpeechRef = useRef("");
-  const voiceEndNoticeRef = useRef<string | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const animationFrameRef = useRef<number | undefined>(undefined);
+  const chunksRef = useRef<Blob[]>([]);
+  const speechDetectedRef = useRef(false);
+  const lastVoiceAtRef = useRef(0);
+  const transcribingRef = useRef(false);
+  const startRecorderRef = useRef<(() => void) | null>(null);
+  const cleanupVoiceRef = useRef<(() => void) | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
 
   // After one successful, user-initiated connection, reconnect on every page open.
@@ -125,9 +160,18 @@ export function V2Console() {
   useEffect(
     () => () => {
       voiceSessionRef.current = false;
-      if (restartTimerRef.current !== undefined) window.clearTimeout(restartTimerRef.current);
-      if (phraseTimerRef.current !== undefined) window.clearTimeout(phraseTimerRef.current);
-      recRef.current?.stop();
+      if (animationFrameRef.current !== undefined) cancelAnimationFrame(animationFrameRef.current);
+      const recorder = recorderRef.current;
+      if (recorder && recorder.state !== "inactive") {
+        recorder.onstop = null;
+        try { recorder.stop(); } catch { /* cierre de componente */ }
+      }
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+      const context = audioContextRef.current;
+      if (context && context.state !== "closed") void context.close();
+      streamRef.current = null;
+      audioContextRef.current = null;
+      analyserRef.current = null;
     },
     [],
   );
@@ -145,159 +189,257 @@ export function V2Console() {
     setValue("");
   };
 
-  const toggleMic = () => {
-    const flushPendingSpeech = () => {
-      if (phraseTimerRef.current !== undefined) {
-        window.clearTimeout(phraseTimerRef.current);
-        phraseTimerRef.current = undefined;
+  const toggleMic = async () => {
+    const releaseMicrophone = () => {
+      if (animationFrameRef.current !== undefined) cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = undefined;
+      streamRef.current?.getTracks().forEach((track) => track.stop());
+      streamRef.current = null;
+      analyserRef.current = null;
+      const context = audioContextRef.current;
+      audioContextRef.current = null;
+      if (context && context.state !== "closed") void context.close();
+      recorderRef.current = null;
+      startRecorderRef.current = null;
+      cleanupVoiceRef.current = null;
+    };
+
+    const transcribeAudio = async (blob: Blob) => {
+      const endpoint = "http://127.0.0.1:8001/transcribe";
+      const form = new FormData();
+      const extension = blob.type.includes("ogg") ? "ogg" : blob.type.includes("wav") ? "wav" : "webm";
+      form.append("file", blob, `juspross-voz.${extension}`);
+
+      let response: Response;
+      try {
+        response = await fetch(endpoint, {
+          method: "POST",
+          body: form,
+          signal: AbortSignal.timeout(60_000),
+        });
+      } catch (error) {
+        const detail = error instanceof Error ? error.message : String(error);
+        throw new Error(
+          `No pude llegar al servidor local de transcripción (${endpoint}). Comprueba que JusprossTranscripcion esté ejecutándose y que permita solicitudes desde este origen. Detalle: ${detail}`,
+        );
       }
-      const recognized = pendingSpeechRef.current.trim();
-      pendingSpeechRef.current = "";
-      if (!recognized) return;
+
+      if (!response.ok) {
+        const detail = await response.text().catch(() => "");
+        throw new Error(
+          `El servidor de transcripción respondió HTTP ${response.status}${detail ? `: ${detail.slice(0, 180)}` : ""}.`,
+        );
+      }
+
+      let payload: unknown;
+      try {
+        payload = await response.json();
+      } catch {
+        throw new Error("El servidor de transcripción respondió, pero no devolvió JSON válido.");
+      }
+
+      const transcript = extractTranscript(payload);
+      if (!transcript) {
+        throw new Error("El servidor recibió el audio, pero no devolvió texto reconocido. Habla más cerca del micrófono y vuelve a probar.");
+      }
+
+      setVoiceNotice(`Te escuché: «${transcript}»`);
       setValue("");
-      setVoiceNotice(`Te escuché: «${recognized}» · Puedes seguir hablando.`);
-      void send(recognized, true);
+      void send(transcript, true);
     };
 
     if (voiceSessionRef.current) {
       voiceSessionRef.current = false;
-      if (restartTimerRef.current !== undefined) {
-        window.clearTimeout(restartTimerRef.current);
-        restartTimerRef.current = undefined;
-      }
       setVoiceNotice("Cerrando micrófono…");
-      recRef.current?.stop();
+      const recorder = recorderRef.current;
+      if (recorder && recorder.state !== "inactive") {
+        try {
+          recorder.stop();
+        } catch {
+          releaseMicrophone();
+          setListening(false);
+          setVoiceNotice("Micrófono apagado.");
+        }
+      } else {
+        releaseMicrophone();
+        setListening(false);
+        setVoiceNotice("Micrófono apagado.");
+      }
       return;
     }
 
-    const w = window as unknown as {
-      SpeechRecognition?: new () => SRLike;
-      webkitSpeechRecognition?: new () => SRLike;
-    };
-    const Ctor = w.SpeechRecognition ?? w.webkitSpeechRecognition;
-    if (!Ctor) {
-      setVoiceNotice(
-        "Este navegador no ofrece reconocimiento de voz. Abre Juspross en una versión actual de Chrome o Edge para usar el micrófono.",
-      );
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+      setVoiceNotice("Este navegador no permite capturar audio con MediaRecorder. Prueba Juspross en Chrome o Edge actualizado.");
       return;
     }
 
     voiceSessionRef.current = true;
-    voiceEndNoticeRef.current = null;
-    pendingSpeechRef.current = "";
     setListening(true);
-    setVoiceNotice("Escuchando… habla con naturalidad. Pulsa el micrófono para terminar.");
+    setVoiceNotice("Solicitando acceso al micrófono…");
 
-    const startRecognizer = () => {
-      if (!voiceSessionRef.current) return;
-      const rec = new Ctor();
-      rec.lang = "es-MX";
-      rec.interimResults = true;
-      rec.continuous = true;
-
-      rec.onresult = (e) => {
-        let interimText = "";
-        let recognizedFinal = "";
-        const startAt = Math.max(0, e.resultIndex ?? 0);
-        for (let i = startAt; i < e.results.length; i++) {
-          const result = e.results[i];
-          if (!result) continue;
-          const transcript = result[0].transcript.trim();
-          if (!transcript) continue;
-          if (result.isFinal) recognizedFinal += (recognizedFinal ? " " : "") + transcript;
-          else interimText += (interimText ? " " : "") + transcript;
-        }
-
-        if (recognizedFinal) {
-          pendingSpeechRef.current = [pendingSpeechRef.current, recognizedFinal]
-            .filter(Boolean)
-            .join(" ")
-            .trim();
-          if (phraseTimerRef.current !== undefined) window.clearTimeout(phraseTimerRef.current);
-          // Send each complete phrase after a short pause, without turning the mic session off.
-          phraseTimerRef.current = window.setTimeout(flushPendingSpeech, 1400);
-          setVoiceNotice("Te escucho… enviaré tu frase cuando hagas una pausa.");
-        }
-
-        const visibleText = [pendingSpeechRef.current, interimText].filter(Boolean).join(" ").trim();
-        if (visibleText) setValue(visibleText);
-      };
-
-      rec.onstart = () => {
-        if (voiceSessionRef.current) {
-          setListening(true);
-          setVoiceNotice("Escuchando… habla con naturalidad. Pulsa el micrófono para terminar.");
-        }
-      };
-
-      rec.onerror = (event) => {
-        const reason = event?.error ?? "unknown";
-        const fatalMessages: Record<string, string> = {
-          "not-allowed": "El micrófono está bloqueado. Permite el acceso al micrófono para Juspross en los permisos del navegador.",
-          "service-not-allowed": "El navegador no permite el reconocimiento de voz en esta página.",
-          "audio-capture": "No se encontró un micrófono disponible. Comprueba los dispositivos de entrada de Windows.",
-          "language-not-supported": "El reconocimiento de voz en español no está disponible en este navegador.",
-        };
-        const fatalMessage = fatalMessages[reason];
-        if (fatalMessage) {
-          voiceSessionRef.current = false;
-          voiceEndNoticeRef.current = fatalMessage;
-          if (restartTimerRef.current !== undefined) window.clearTimeout(restartTimerRef.current);
-          restartTimerRef.current = undefined;
-          flushPendingSpeech();
-          setListening(false);
-          setVoiceNotice(fatalMessage);
-          return;
-        }
-        if (reason === "no-speech") {
-          // Silence is normal during a hands-free session: the onend handler will restart it.
-          return;
-        }
-        setVoiceNotice(
-          reason === "network"
-            ? "Se interrumpió el reconocimiento de voz por la conexión; intentaré reactivarlo."
-            : `El reconocimiento se interrumpió (${reason}); intentando reactivarlo.`,
-        );
-      };
-
-      rec.onend = () => {
-        if (recRef.current === rec) recRef.current = null;
-        if (!voiceSessionRef.current) {
-          setListening(false);
-          flushPendingSpeech();
-          const endNotice = voiceEndNoticeRef.current;
-          voiceEndNoticeRef.current = null;
-          setVoiceNotice(endNotice ?? "Micrófono apagado.");
-          return;
-        }
-        // SpeechRecognition may end by itself after a pause. Keep the user's listening
-        // session alive and start a fresh recognizer unless they tapped the mic to stop.
-        setVoiceNotice("Reactivando el micrófono…");
-        if (restartTimerRef.current !== undefined) window.clearTimeout(restartTimerRef.current);
-        restartTimerRef.current = window.setTimeout(() => {
-          restartTimerRef.current = undefined;
-          startRecognizer();
-        }, 500);
-      };
-
-      recRef.current = rec;
-      try {
-        rec.start();
-      } catch (error) {
-        if (error instanceof Error && error.name === "InvalidStateError") {
-          restartTimerRef.current = window.setTimeout(startRecognizer, 650);
-          return;
-        }
-        voiceSessionRef.current = false;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+      });
+      if (!voiceSessionRef.current) {
+        stream.getTracks().forEach((track) => track.stop());
         setListening(false);
-        recRef.current = null;
-        setVoiceNotice("No se pudo activar el micrófono. Comprueba los permisos del navegador y vuelve a intentarlo.");
+        return;
       }
-    };
 
-    startRecognizer();
+      streamRef.current = stream;
+      const audioContext = new AudioContext();
+      audioContextRef.current = audioContext;
+      await audioContext.resume();
+      const source = audioContext.createMediaStreamSource(stream);
+      const analyser = audioContext.createAnalyser();
+      analyser.fftSize = 2048;
+      analyser.smoothingTimeConstant = 0.55;
+      source.connect(analyser);
+      analyserRef.current = analyser;
+
+      const options: MediaRecorderOptions | undefined =
+        MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+          ? { mimeType: "audio/webm;codecs=opus" }
+          : MediaRecorder.isTypeSupported("audio/webm")
+            ? { mimeType: "audio/webm" }
+            : undefined;
+
+      cleanupVoiceRef.current = releaseMicrophone;
+
+      const startRecorder = () => {
+        if (!voiceSessionRef.current || transcribingRef.current || !streamRef.current) return;
+        chunksRef.current = [];
+        speechDetectedRef.current = false;
+        lastVoiceAtRef.current = 0;
+
+        let recorder: MediaRecorder;
+        try {
+          recorder = options ? new MediaRecorder(streamRef.current, options) : new MediaRecorder(streamRef.current);
+        } catch (error) {
+          voiceSessionRef.current = false;
+          setListening(false);
+          setVoiceNotice(
+            `No pude iniciar la grabación de audio. ${error instanceof Error ? error.message : ""}`,
+          );
+          releaseMicrophone();
+          return;
+        }
+
+        recorderRef.current = recorder;
+        recorder.ondataavailable = (event) => {
+          if (!event.data || event.data.size === 0) return;
+          if (speechDetectedRef.current) chunksRef.current.push(event.data);
+          else chunksRef.current = [];
+        };
+        recorder.onerror = () => {
+          setVoiceNotice("El navegador interrumpió la grabación del micrófono. Vuelve a pulsar el botón para intentarlo.");
+        };
+        recorder.onstart = () => {
+          setListening(true);
+          setVoiceNotice("Micrófono activo. Habla con naturalidad; enviaré tu frase después de una pausa.");
+        };
+        recorder.onstop = () => {
+          if (recorderRef.current === recorder) recorderRef.current = null;
+          const blob = new Blob(chunksRef.current, { type: recorder.mimeType || "audio/webm" });
+          const hadSpeech = speechDetectedRef.current;
+          chunksRef.current = [];
+          speechDetectedRef.current = false;
+
+          void (async () => {
+            if (hadSpeech && blob.size > 1200) {
+              transcribingRef.current = true;
+              setVoiceNotice("Procesando tu voz con el transcriptor local…");
+              try {
+                await transcribeAudio(blob);
+              } catch (error) {
+                setVoiceNotice(error instanceof Error ? error.message : "No se pudo transcribir el audio.");
+              } finally {
+                transcribingRef.current = false;
+              }
+            } else if (voiceSessionRef.current) {
+              setVoiceNotice("No detecté una frase clara todavía. Puedes seguir hablando.");
+            }
+
+            if (voiceSessionRef.current) {
+              startRecorder();
+            } else {
+              releaseMicrophone();
+              setListening(false);
+              if (!hadSpeech || blob.size <= 1200) setVoiceNotice("Micrófono apagado.");
+            }
+          })();
+        };
+
+        try {
+          recorder.start(250);
+        } catch (error) {
+          if (error instanceof Error && error.name === "InvalidStateError") {
+            window.setTimeout(startRecorder, 300);
+            return;
+          }
+          voiceSessionRef.current = false;
+          setListening(false);
+          setVoiceNotice("No se pudo iniciar la grabación. Comprueba que otra aplicación no esté bloqueando el micrófono.");
+          releaseMicrophone();
+        }
+      };
+
+      startRecorderRef.current = startRecorder;
+      startRecorder();
+
+      const samples = new Uint8Array(analyser.fftSize);
+      const monitorAudio = () => {
+        if (!voiceSessionRef.current) {
+          animationFrameRef.current = undefined;
+          return;
+        }
+
+        const activeAnalyser = analyserRef.current;
+        if (activeAnalyser) {
+          activeAnalyser.getByteTimeDomainData(samples);
+          let sum = 0;
+          for (let i = 0; i < samples.length; i++) {
+            const normalized = (samples[i]! - 128) / 128;
+            sum += normalized * normalized;
+          }
+          const rms = Math.sqrt(sum / samples.length);
+          const now = performance.now();
+          if (rms > 0.014) {
+            speechDetectedRef.current = true;
+            lastVoiceAtRef.current = now;
+          } else if (
+            speechDetectedRef.current &&
+            lastVoiceAtRef.current > 0 &&
+            now - lastVoiceAtRef.current > 1550 &&
+            recorderRef.current?.state === "recording" &&
+            !transcribingRef.current
+          ) {
+            try {
+              recorderRef.current.stop();
+            } catch {
+              /* el grabador ya se está deteniendo */
+            }
+          }
+        }
+        animationFrameRef.current = requestAnimationFrame(monitorAudio);
+      };
+
+      animationFrameRef.current = requestAnimationFrame(monitorAudio);
+    } catch (error) {
+      voiceSessionRef.current = false;
+      setListening(false);
+      const name = error instanceof Error ? error.name : "";
+      const messages: Record<string, string> = {
+        NotAllowedError: "El acceso al micrófono está bloqueado. Permite el micrófono para Juspross en los permisos del navegador o de Lively Wallpaper.",
+        NotFoundError: "No se encontró ningún micrófono. Comprueba el dispositivo de entrada seleccionado en Windows.",
+        NotReadableError: "El micrófono está ocupado por otra aplicación o Windows no permite abrirlo.",
+        SecurityError: "El navegador bloqueó el micrófono por permisos de seguridad.",
+      };
+      setVoiceNotice(messages[name] ?? `No se pudo activar el micrófono: ${error instanceof Error ? error.message : String(error)}`);
+      cleanupVoiceRef.current?.();
+    }
   };
-
   const linkLabel =
     link === "online"
       ? "QWEN CONECTADO"
