@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowUp, History, Mic, Settings2, Square, Trash2, Volume2, VolumeX, X } from "lucide-react";
 import { AiUnreachable, testAi } from "@/lib/juspross/ai";
 import { useV2Chat } from "@/lib/juspross/useV2Chat";
-import { speechSupported } from "@/lib/juspross/useSpeech";
 import { useV2 } from "@/lib/juspross/v2Store";
 import { cn } from "@/lib/utils";
 
@@ -17,7 +16,7 @@ interface SRLike {
         results: { length: number; [i: number]: { 0: { transcript: string }; isFinal: boolean } };
       }) => void)
     | null;
-  onerror: (() => void) | null;
+  onerror: ((event?: { error?: string }) => void) | null;
   onend: (() => void) | null;
 }
 
@@ -37,12 +36,10 @@ export function V2Console() {
   const [open, setOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [listening, setListening] = useState(false);
-  const [micOk, setMicOk] = useState(false);
+  const [voiceNotice, setVoiceNotice] = useState("");
   const [secretV3, setSecretV3] = useState(false);
   const recRef = useRef<SRLike | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => setMicOk(speechSupported()), []);
 
   // After one successful, user-initiated connection, reconnect on every page open.
   // If Ollama starts later, keep retrying with backoff instead of silently giving up after 20 tries.
@@ -136,40 +133,90 @@ export function V2Console() {
   const toggleMic = () => {
     if (listening) {
       recRef.current?.stop();
+      setVoiceNotice("Terminando de escuchar…");
       return;
     }
+
     const w = window as unknown as {
       SpeechRecognition?: new () => SRLike;
       webkitSpeechRecognition?: new () => SRLike;
     };
     const Ctor = w.SpeechRecognition ?? w.webkitSpeechRecognition;
-    if (!Ctor) return;
+    if (!Ctor) {
+      setVoiceNotice(
+        "Este navegador no ofrece reconocimiento de voz. Abre Juspross en una versión actual de Chrome o Edge para usar el micrófono.",
+      );
+      return;
+    }
+
     const rec = new Ctor();
-    rec.lang = "es-ES";
+    rec.lang = "es-MX";
     rec.interimResults = true;
     rec.continuous = false;
     let finalText = "";
     rec.onresult = (e) => {
-      let txt = "";
-      for (let i = 0; i < e.results.length; i++) {
-        const r = e.results[i]!;
-        txt += r[0].transcript;
-        if (r.isFinal) finalText = txt;
+      let interimText = "";
+      let recognizedFinal = "";
+      for (let i = e.results.length - 1; i >= 0; i--) {
+        const result = e.results[i];
+        if (!result) continue;
+        if (result.isFinal) {
+          recognizedFinal = result[0].transcript;
+          break;
+        }
+        interimText = result[0].transcript;
       }
-      setValue(txt);
+      if (recognizedFinal.trim()) {
+        finalText = recognizedFinal.trim();
+        setValue(finalText);
+      } else if (interimText.trim()) {
+        setValue(interimText.trim());
+      }
     };
-    rec.onerror = () => setListening(false);
+    rec.onerror = (event) => {
+      setListening(false);
+      recRef.current = null;
+      const reason = event?.error ?? "unknown";
+      const messages: Record<string, string> = {
+        "not-allowed": "El micrófono está bloqueado. Permite el micrófono para Juspross en los permisos del navegador y vuelve a intentarlo.",
+        "service-not-allowed": "El navegador no permite el servicio de reconocimiento de voz en esta página.",
+        "audio-capture": "No se encontró un micrófono disponible. Comprueba que esté conectado y habilitado en Windows.",
+        "no-speech": "No detecté voz. Pulsa el micrófono y habla después del aviso «Escuchando…».",
+        network: "El reconocimiento de voz necesita conexión con el servicio del navegador. Comprueba Internet e inténtalo otra vez.",
+        "language-not-supported": "El reconocimiento de voz en español no está disponible en este navegador.",
+      };
+      setVoiceNotice(messages[reason] ?? `No se pudo escuchar la voz (${reason}). Comprueba los permisos del micrófono.`);
+    };
     rec.onend = () => {
       setListening(false);
       recRef.current = null;
       if (finalText.trim()) {
-        void send(finalText, true);
+        setVoiceNotice(`Te escuché: «${finalText}»`);
         setValue("");
+        void send(finalText, true);
+      } else {
+        setVoiceNotice((notice) =>
+          notice === "Escuchando… habla ahora." || !notice
+            ? "No detecté ninguna frase. Pulsa el micrófono y vuelve a hablar."
+            : notice,
+        );
       }
     };
+
     recRef.current = rec;
     setListening(true);
-    rec.start();
+    setVoiceNotice("Escuchando… habla ahora.");
+    try {
+      rec.start();
+    } catch (error) {
+      setListening(false);
+      recRef.current = null;
+      setVoiceNotice(
+        error instanceof Error && error.name === "InvalidStateError"
+          ? "El micrófono ya estaba iniciándose. Espera un momento y vuelve a probar."
+          : "No se pudo activar el micrófono. Comprueba los permisos del navegador.",
+      );
+    }
   };
 
   const linkLabel =
@@ -331,18 +378,18 @@ export function V2Console() {
             placeholder={listening ? "Escuchando…" : "Escríbele a Juspross 2.0…"}
             className="max-h-32 min-h-9 flex-1 resize-none bg-transparent py-2 text-sm text-white placeholder:text-white/35 focus:outline-none"
           />
-          {micOk && (
-            <button
-              onClick={toggleMic}
-              aria-label={listening ? "Detener micrófono" : "Hablar"}
-              className={cn(
-                "flex size-9 shrink-0 items-center justify-center rounded-md transition-colors",
-                listening ? "bg-[#ff3b4e]/20 text-[#ff6b7a]" : "text-white/55 hover:text-white",
-              )}
-            >
-              <Mic className="size-4.5" strokeWidth={1.6} />
-            </button>
-          )}
+          <button
+            onClick={toggleMic}
+            aria-label={listening ? "Detener micrófono" : "Hablar con Juspross"}
+            title={listening ? "Detener escucha" : "Pulsa para hablar con Juspross"}
+            aria-pressed={listening}
+            className={cn(
+              "flex size-9 shrink-0 items-center justify-center rounded-md transition-colors",
+              listening ? "animate-pulse bg-[#ff3b4e]/20 text-[#ff6b7a]" : "text-white/55 hover:text-white",
+            )}
+          >
+            <Mic className="size-4.5" strokeWidth={1.6} />
+          </button>
           <button
             onClick={() => useV2.getState().setVoiceReplies(!voice)}
             aria-label={voice ? "Silenciar respuestas habladas" : "Leer respuestas en voz alta"}
@@ -374,8 +421,20 @@ export function V2Console() {
             </button>
           )}
         </div>
+        {voiceNotice && (
+          <p
+            role="status"
+            aria-live="polite"
+            className={cn(
+              "pointer-events-none mt-2 text-center text-[11px] leading-snug",
+              listening ? "text-[#ff8c98]" : "text-white/65",
+            )}
+          >
+            {voiceNotice}
+          </p>
+        )}
         <p className="pointer-events-none mt-2 text-center font-mono text-[9px] tracking-[0.25em] text-white/30">
-          ARRASTRA PARA GIRAR EL NÚCLEO · RUEDA PARA ACERCAR
+          PULSA EL MICRÓFONO, HABLA Y JUSPROSS ENVIARÁ TU MENSAJE
         </p>
       </div>
     </div>
