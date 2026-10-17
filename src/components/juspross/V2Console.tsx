@@ -438,9 +438,10 @@ export function V2Console() {
         SecurityError: "El navegador bloqueó el micrófono por permisos de seguridad.",
       };
       setVoiceNotice(messages[name] ?? `No se pudo activar el micrófono: ${error instanceof Error ? error.message : String(error)}`);
-      cleanupVoiceRef.current?.();
+      releaseMicrophone();
     }
   };
+
   const linkLabel =
     link === "online"
       ? "QWEN CONECTADO"
