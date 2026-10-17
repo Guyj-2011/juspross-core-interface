@@ -498,6 +498,18 @@ export function V2Console() {
       return;
     }
 
+    // Lively runs this page in an embedded WebView. In that mode, skip remote
+    // browser speech recognition and request the microphone immediately from the
+    // button click, preserving the browser's user-activation context. Enable with
+    // ?lively=1 (or ?voice=local) on the wallpaper URL.
+    const voiceParams = new URLSearchParams(window.location.search);
+    const directLocalVoice = voiceParams.get("lively") === "1" || voiceParams.get("voice") === "local";
+    if (directLocalVoice) {
+      setVoiceNotice("Modo Lively: abriendo el micrófono local directamente…");
+      await startLocalMicrophone();
+      return;
+    }
+
     const w = window as unknown as {
       SpeechRecognition?: BrowserSpeechConstructor;
       webkitSpeechRecognition?: BrowserSpeechConstructor;
