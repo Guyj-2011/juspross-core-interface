@@ -816,6 +816,27 @@ export class OrbScene {
     this.amp = v;
   }
 
+  /** Zoom por botones: Lively no entrega de forma fiable eventos de rueda al wallpaper. */
+  zoomIn() {
+    this.controls.dollyIn(1.25);
+    this.controls.update();
+    this.pauseAutoRotateAfterZoom();
+  }
+
+  zoomOut() {
+    this.controls.dollyOut(1.25);
+    this.controls.update();
+    this.pauseAutoRotateAfterZoom();
+  }
+
+  private pauseAutoRotateAfterZoom() {
+    this.controls.autoRotate = false;
+    window.clearTimeout(this.resumeTimer);
+    this.resumeTimer = window.setTimeout(() => {
+      if (!this.disposed) this.controls.autoRotate = true;
+    }, 4500);
+  }
+
   private onResize = () => {
     const w = this.container.clientWidth;
     const h = this.container.clientHeight;
