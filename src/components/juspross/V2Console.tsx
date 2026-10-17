@@ -18,6 +18,7 @@ interface SRLike {
       }) => void)
     | null;
   onerror: ((event?: { error?: string }) => void) | null;
+  onstart: (() => void) | null;
   onend: (() => void) | null;
 }
 
@@ -44,6 +45,7 @@ export function V2Console() {
   const restartTimerRef = useRef<number | undefined>(undefined);
   const phraseTimerRef = useRef<number | undefined>(undefined);
   const pendingSpeechRef = useRef("");
+  const voiceEndNoticeRef = useRef<string | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
 
   // After one successful, user-initiated connection, reconnect on every page open.
@@ -181,6 +183,7 @@ export function V2Console() {
     }
 
     voiceSessionRef.current = true;
+    voiceEndNoticeRef.current = null;
     pendingSpeechRef.current = "";
     setListening(true);
     setVoiceNotice("Escuchando… habla con naturalidad. Pulsa el micrófono para terminar.");
@@ -220,6 +223,13 @@ export function V2Console() {
         if (visibleText) setValue(visibleText);
       };
 
+      rec.onstart = () => {
+        if (voiceSessionRef.current) {
+          setListening(true);
+          setVoiceNotice("Escuchando… habla con naturalidad. Pulsa el micrófono para terminar.");
+        }
+      };
+
       rec.onerror = (event) => {
         const reason = event?.error ?? "unknown";
         const fatalMessages: Record<string, string> = {
@@ -231,11 +241,12 @@ export function V2Console() {
         const fatalMessage = fatalMessages[reason];
         if (fatalMessage) {
           voiceSessionRef.current = false;
-          setListening(false);
-          setVoiceNotice(fatalMessage);
+          voiceEndNoticeRef.current = fatalMessage;
           if (restartTimerRef.current !== undefined) window.clearTimeout(restartTimerRef.current);
           restartTimerRef.current = undefined;
           flushPendingSpeech();
+          setListening(false);
+          setVoiceNotice(fatalMessage);
           return;
         }
         if (reason === "no-speech") {
@@ -254,7 +265,9 @@ export function V2Console() {
         if (!voiceSessionRef.current) {
           setListening(false);
           flushPendingSpeech();
-          setVoiceNotice("Micrófono apagado.");
+          const endNotice = voiceEndNoticeRef.current;
+          voiceEndNoticeRef.current = null;
+          setVoiceNotice(endNotice ?? "Micrófono apagado.");
           return;
         }
         // SpeechRecognition may end by itself after a pause. Keep the user's listening
