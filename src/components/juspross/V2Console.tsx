@@ -13,10 +13,12 @@ interface SRLike {
   stop(): void;
   onresult:
     | ((e: {
+        resultIndex: number;
         results: { length: number; [i: number]: { 0: { transcript: string }; isFinal: boolean } };
       }) => void)
     | null;
   onerror: ((event?: { error?: string }) => void) | null;
+  onstart: (() => void) | null;
   onend: (() => void) | null;
 }
 
@@ -39,6 +41,11 @@ export function V2Console() {
   const [voiceNotice, setVoiceNotice] = useState("");
   const [secretV3, setSecretV3] = useState(false);
   const recRef = useRef<SRLike | null>(null);
+  const voiceSessionRef = useRef(false);
+  const restartTimerRef = useRef<number | undefined>(undefined);
+  const phraseTimerRef = useRef<number | undefined>(undefined);
+  const pendingSpeechRef = useRef("");
+  const voiceEndNoticeRef = useRef<string | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
 
   // After one successful, user-initiated connection, reconnect on every page open.
@@ -115,7 +122,15 @@ export function V2Console() {
     window.addEventListener("juspross:secret-v3", onSecretV3);
     return () => window.removeEventListener("juspross:secret-v3", onSecretV3);
   }, []);
-  useEffect(() => () => recRef.current?.stop(), []);
+  useEffect(
+    () => () => {
+      voiceSessionRef.current = false;
+      if (restartTimerRef.current !== undefined) window.clearTimeout(restartTimerRef.current);
+      if (phraseTimerRef.current !== undefined) window.clearTimeout(phraseTimerRef.current);
+      recRef.current?.stop();
+    },
+    [],
+  );
   useEffect(() => {
     if (historyOpen) {
       logRef.current?.scrollTo({ top: logRef.current.scrollHeight, behavior: "smooth" });
@@ -131,9 +146,27 @@ export function V2Console() {
   };
 
   const toggleMic = () => {
-    if (listening) {
+    const flushPendingSpeech = () => {
+      if (phraseTimerRef.current !== undefined) {
+        window.clearTimeout(phraseTimerRef.current);
+        phraseTimerRef.current = undefined;
+      }
+      const recognized = pendingSpeechRef.current.trim();
+      pendingSpeechRef.current = "";
+      if (!recognized) return;
+      setValue("");
+      setVoiceNotice(`Te escuché: «${recognized}» · Puedes seguir hablando.`);
+      void send(recognized, true);
+    };
+
+    if (voiceSessionRef.current) {
+      voiceSessionRef.current = false;
+      if (restartTimerRef.current !== undefined) {
+        window.clearTimeout(restartTimerRef.current);
+        restartTimerRef.current = undefined;
+      }
+      setVoiceNotice("Cerrando micrófono…");
       recRef.current?.stop();
-      setVoiceNotice("Terminando de escuchar…");
       return;
     }
 
@@ -149,74 +182,120 @@ export function V2Console() {
       return;
     }
 
-    const rec = new Ctor();
-    rec.lang = "es-MX";
-    rec.interimResults = true;
-    rec.continuous = false;
-    let finalText = "";
-    rec.onresult = (e) => {
-      let interimText = "";
-      let recognizedFinal = "";
-      for (let i = e.results.length - 1; i >= 0; i--) {
-        const result = e.results[i];
-        if (!result) continue;
-        if (result.isFinal) {
-          recognizedFinal = result[0].transcript;
-          break;
+    voiceSessionRef.current = true;
+    voiceEndNoticeRef.current = null;
+    pendingSpeechRef.current = "";
+    setListening(true);
+    setVoiceNotice("Escuchando… habla con naturalidad. Pulsa el micrófono para terminar.");
+
+    const startRecognizer = () => {
+      if (!voiceSessionRef.current) return;
+      const rec = new Ctor();
+      rec.lang = "es-MX";
+      rec.interimResults = true;
+      rec.continuous = true;
+
+      rec.onresult = (e) => {
+        let interimText = "";
+        let recognizedFinal = "";
+        const startAt = Math.max(0, e.resultIndex ?? 0);
+        for (let i = startAt; i < e.results.length; i++) {
+          const result = e.results[i];
+          if (!result) continue;
+          const transcript = result[0].transcript.trim();
+          if (!transcript) continue;
+          if (result.isFinal) recognizedFinal += (recognizedFinal ? " " : "") + transcript;
+          else interimText += (interimText ? " " : "") + transcript;
         }
-        interimText = result[0].transcript;
-      }
-      if (recognizedFinal.trim()) {
-        finalText = recognizedFinal.trim();
-        setValue(finalText);
-      } else if (interimText.trim()) {
-        setValue(interimText.trim());
-      }
-    };
-    rec.onerror = (event) => {
-      setListening(false);
-      recRef.current = null;
-      const reason = event?.error ?? "unknown";
-      const messages: Record<string, string> = {
-        "not-allowed": "El micrófono está bloqueado. Permite el micrófono para Juspross en los permisos del navegador y vuelve a intentarlo.",
-        "service-not-allowed": "El navegador no permite el servicio de reconocimiento de voz en esta página.",
-        "audio-capture": "No se encontró un micrófono disponible. Comprueba que esté conectado y habilitado en Windows.",
-        "no-speech": "No detecté voz. Pulsa el micrófono y habla después del aviso «Escuchando…».",
-        network: "El reconocimiento de voz necesita conexión con el servicio del navegador. Comprueba Internet e inténtalo otra vez.",
-        "language-not-supported": "El reconocimiento de voz en español no está disponible en este navegador.",
+
+        if (recognizedFinal) {
+          pendingSpeechRef.current = [pendingSpeechRef.current, recognizedFinal]
+            .filter(Boolean)
+            .join(" ")
+            .trim();
+          if (phraseTimerRef.current !== undefined) window.clearTimeout(phraseTimerRef.current);
+          // Send each complete phrase after a short pause, without turning the mic session off.
+          phraseTimerRef.current = window.setTimeout(flushPendingSpeech, 1400);
+          setVoiceNotice("Te escucho… enviaré tu frase cuando hagas una pausa.");
+        }
+
+        const visibleText = [pendingSpeechRef.current, interimText].filter(Boolean).join(" ").trim();
+        if (visibleText) setValue(visibleText);
       };
-      setVoiceNotice(messages[reason] ?? `No se pudo escuchar la voz (${reason}). Comprueba los permisos del micrófono.`);
-    };
-    rec.onend = () => {
-      setListening(false);
-      recRef.current = null;
-      if (finalText.trim()) {
-        setVoiceNotice(`Te escuché: «${finalText}»`);
-        setValue("");
-        void send(finalText, true);
-      } else {
-        setVoiceNotice((notice) =>
-          notice === "Escuchando… habla ahora." || !notice
-            ? "No detecté ninguna frase. Pulsa el micrófono y vuelve a hablar."
-            : notice,
+
+      rec.onstart = () => {
+        if (voiceSessionRef.current) {
+          setListening(true);
+          setVoiceNotice("Escuchando… habla con naturalidad. Pulsa el micrófono para terminar.");
+        }
+      };
+
+      rec.onerror = (event) => {
+        const reason = event?.error ?? "unknown";
+        const fatalMessages: Record<string, string> = {
+          "not-allowed": "El micrófono está bloqueado. Permite el acceso al micrófono para Juspross en los permisos del navegador.",
+          "service-not-allowed": "El navegador no permite el reconocimiento de voz en esta página.",
+          "audio-capture": "No se encontró un micrófono disponible. Comprueba los dispositivos de entrada de Windows.",
+          "language-not-supported": "El reconocimiento de voz en español no está disponible en este navegador.",
+        };
+        const fatalMessage = fatalMessages[reason];
+        if (fatalMessage) {
+          voiceSessionRef.current = false;
+          voiceEndNoticeRef.current = fatalMessage;
+          if (restartTimerRef.current !== undefined) window.clearTimeout(restartTimerRef.current);
+          restartTimerRef.current = undefined;
+          flushPendingSpeech();
+          setListening(false);
+          setVoiceNotice(fatalMessage);
+          return;
+        }
+        if (reason === "no-speech") {
+          // Silence is normal during a hands-free session: the onend handler will restart it.
+          return;
+        }
+        setVoiceNotice(
+          reason === "network"
+            ? "Se interrumpió el reconocimiento de voz por la conexión; intentaré reactivarlo."
+            : `El reconocimiento se interrumpió (${reason}); intentando reactivarlo.`,
         );
+      };
+
+      rec.onend = () => {
+        if (recRef.current === rec) recRef.current = null;
+        if (!voiceSessionRef.current) {
+          setListening(false);
+          flushPendingSpeech();
+          const endNotice = voiceEndNoticeRef.current;
+          voiceEndNoticeRef.current = null;
+          setVoiceNotice(endNotice ?? "Micrófono apagado.");
+          return;
+        }
+        // SpeechRecognition may end by itself after a pause. Keep the user's listening
+        // session alive and start a fresh recognizer unless they tapped the mic to stop.
+        setVoiceNotice("Reactivando el micrófono…");
+        if (restartTimerRef.current !== undefined) window.clearTimeout(restartTimerRef.current);
+        restartTimerRef.current = window.setTimeout(() => {
+          restartTimerRef.current = undefined;
+          startRecognizer();
+        }, 500);
+      };
+
+      recRef.current = rec;
+      try {
+        rec.start();
+      } catch (error) {
+        if (error instanceof Error && error.name === "InvalidStateError") {
+          restartTimerRef.current = window.setTimeout(startRecognizer, 650);
+          return;
+        }
+        voiceSessionRef.current = false;
+        setListening(false);
+        recRef.current = null;
+        setVoiceNotice("No se pudo activar el micrófono. Comprueba los permisos del navegador y vuelve a intentarlo.");
       }
     };
 
-    recRef.current = rec;
-    setListening(true);
-    setVoiceNotice("Escuchando… habla ahora.");
-    try {
-      rec.start();
-    } catch (error) {
-      setListening(false);
-      recRef.current = null;
-      setVoiceNotice(
-        error instanceof Error && error.name === "InvalidStateError"
-          ? "El micrófono ya estaba iniciándose. Espera un momento y vuelve a probar."
-          : "No se pudo activar el micrófono. Comprueba los permisos del navegador.",
-      );
-    }
+    startRecognizer();
   };
 
   const linkLabel =
