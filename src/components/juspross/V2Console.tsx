@@ -5,6 +5,30 @@ import { useV2Chat } from "@/lib/juspross/useV2Chat";
 import { useV2 } from "@/lib/juspross/v2Store";
 import { cn } from "@/lib/utils";
 
+interface BrowserSpeechResult {
+  0: { transcript: string };
+  isFinal: boolean;
+}
+
+interface BrowserSpeechEvent {
+  resultIndex: number;
+  results: { length: number; [index: number]: BrowserSpeechResult };
+}
+
+interface BrowserSpeechLike {
+  lang: string;
+  continuous: boolean;
+  interimResults: boolean;
+  start(): void;
+  stop(): void;
+  onresult: ((event: BrowserSpeechEvent) => void) | null;
+  onerror: ((event?: { error?: string }) => void) | null;
+  onstart: (() => void) | null;
+  onend: (() => void) | null;
+}
+
+type BrowserSpeechConstructor = new () => BrowserSpeechLike;
+
 function extractTranscript(payload: unknown): string {
   if (typeof payload === "string") return payload.trim();
   if (!payload || typeof payload !== "object") return "";
@@ -70,7 +94,13 @@ export function V2Console() {
   const [voiceNotice, setVoiceNotice] = useState("");
   const [secretV3, setSecretV3] = useState(false);
   const recorderRef = useRef<MediaRecorder | null>(null);
+  const browserSpeechRef = useRef<BrowserSpeechLike | null>(null);
+  const voiceEngineRef = useRef<"browser" | "local" | "switching" | null>(null);
   const voiceSessionRef = useRef(false);
+  const browserFallbackTimerRef = useRef<number | undefined>(undefined);
+  const browserRestartTimerRef = useRef<number | undefined>(undefined);
+  const browserHadResultRef = useRef(false);
+  const browserStartedAtRef = useRef(0);
   const streamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
@@ -79,8 +109,6 @@ export function V2Console() {
   const speechDetectedRef = useRef(false);
   const lastVoiceAtRef = useRef(0);
   const transcribingRef = useRef(false);
-  const startRecorderRef = useRef<(() => void) | null>(null);
-  const cleanupVoiceRef = useRef<(() => void) | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
 
   // After one successful, user-initiated connection, reconnect on every page open.
@@ -161,6 +189,10 @@ export function V2Console() {
     () => () => {
       voiceSessionRef.current = false;
       if (animationFrameRef.current !== undefined) cancelAnimationFrame(animationFrameRef.current);
+      if (browserFallbackTimerRef.current !== undefined) window.clearTimeout(browserFallbackTimerRef.current);
+      if (browserRestartTimerRef.current !== undefined) window.clearTimeout(browserRestartTimerRef.current);
+      browserSpeechRef.current?.stop();
+      browserSpeechRef.current = null;
       const recorder = recorderRef.current;
       if (recorder && recorder.state !== "inactive") {
         recorder.onstop = null;
@@ -172,6 +204,7 @@ export function V2Console() {
       streamRef.current = null;
       audioContextRef.current = null;
       analyserRef.current = null;
+      voiceEngineRef.current = null;
     },
     [],
   );
@@ -189,7 +222,7 @@ export function V2Console() {
     setValue("");
   };
 
-  const toggleMic = async () => {
+  const startLocalMicrophone = async () => {
     const releaseMicrophone = () => {
       if (animationFrameRef.current !== undefined) cancelAnimationFrame(animationFrameRef.current);
       animationFrameRef.current = undefined;
@@ -200,8 +233,7 @@ export function V2Console() {
       audioContextRef.current = null;
       if (context && context.state !== "closed") void context.close();
       recorderRef.current = null;
-      startRecorderRef.current = null;
-      cleanupVoiceRef.current = null;
+      if (voiceEngineRef.current === "local") voiceEngineRef.current = null;
     };
 
     const transcribeAudio = async (blob: Blob) => {
@@ -274,8 +306,9 @@ export function V2Console() {
     }
 
     voiceSessionRef.current = true;
+    voiceEngineRef.current = "local";
     setListening(true);
-    setVoiceNotice("Solicitando acceso al micrófono…");
+    setVoiceNotice("Solicitando acceso al micrófono local…");
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -304,8 +337,6 @@ export function V2Console() {
           : MediaRecorder.isTypeSupported("audio/webm")
             ? { mimeType: "audio/webm" }
             : undefined;
-
-      cleanupVoiceRef.current = releaseMicrophone;
 
       const startRecorder = () => {
         const activeStream = streamRef.current;
@@ -386,7 +417,6 @@ export function V2Console() {
         }
       };
 
-      startRecorderRef.current = startRecorder;
       startRecorder();
 
       const samples = new Uint8Array(analyser.fftSize);
@@ -440,6 +470,166 @@ export function V2Console() {
       setVoiceNotice(messages[name] ?? `No se pudo activar el micrófono: ${error instanceof Error ? error.message : String(error)}`);
       releaseMicrophone();
     }
+  };
+
+  const toggleMic = async () => {
+    // If the local Whisper capture is active, reuse its existing stop/finalize path.
+    if (voiceSessionRef.current) {
+      if (voiceEngineRef.current === "local") {
+        await startLocalMicrophone();
+        return;
+      }
+
+      voiceSessionRef.current = false;
+      if (browserFallbackTimerRef.current !== undefined) window.clearTimeout(browserFallbackTimerRef.current);
+      if (browserRestartTimerRef.current !== undefined) window.clearTimeout(browserRestartTimerRef.current);
+      browserFallbackTimerRef.current = undefined;
+      browserRestartTimerRef.current = undefined;
+      voiceEngineRef.current = null;
+      browserSpeechRef.current?.stop();
+      browserSpeechRef.current = null;
+      setListening(false);
+      setVoiceNotice("Micrófono apagado.");
+      return;
+    }
+
+    if (transcribingRef.current) {
+      setVoiceNotice("Estoy procesando la frase anterior. Espera a que termine antes de hablar de nuevo.");
+      return;
+    }
+
+    const w = window as unknown as {
+      SpeechRecognition?: BrowserSpeechConstructor;
+      webkitSpeechRecognition?: BrowserSpeechConstructor;
+    };
+    const SpeechCtor = w.SpeechRecognition ?? w.webkitSpeechRecognition;
+
+    // The browser engine is the proven path in Lovable preview. If it is absent,
+    // fails, or returns no transcript, fall back to local audio capture + Whisper.
+    if (!SpeechCtor) {
+      void startLocalMicrophone();
+      return;
+    }
+
+    const fallbackToLocal = (reason: string) => {
+      if (!voiceSessionRef.current || voiceEngineRef.current !== "browser") return;
+      if (browserHadResultRef.current) return;
+      if (browserFallbackTimerRef.current !== undefined) window.clearTimeout(browserFallbackTimerRef.current);
+      if (browserRestartTimerRef.current !== undefined) window.clearTimeout(browserRestartTimerRef.current);
+      browserFallbackTimerRef.current = undefined;
+      browserRestartTimerRef.current = undefined;
+      voiceEngineRef.current = "switching";
+      setVoiceNotice(`${reason} Cambiando al transcriptor local…`);
+      const current = browserSpeechRef.current;
+      browserSpeechRef.current = null;
+      try { current?.stop(); } catch { /* el reconocimiento ya terminó */ }
+
+      window.setTimeout(() => {
+        if (!voiceSessionRef.current || voiceEngineRef.current !== "switching") return;
+        voiceSessionRef.current = false;
+        voiceEngineRef.current = null;
+        void startLocalMicrophone();
+      }, 400);
+    };
+
+    const startBrowserRecognition = () => {
+      if (!voiceSessionRef.current || voiceEngineRef.current !== "browser") return;
+      let recognition: BrowserSpeechLike;
+      try {
+        recognition = new SpeechCtor();
+      } catch {
+        fallbackToLocal("No se pudo iniciar el reconocimiento del navegador.");
+        return;
+      }
+      recognition.lang = "es-MX";
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      browserSpeechRef.current = recognition;
+
+      recognition.onstart = () => {
+        if (voiceSessionRef.current && voiceEngineRef.current === "browser") {
+          setListening(true);
+          setVoiceNotice("Escuchando con el navegador… habla normalmente. Pulsa el micrófono para terminar.");
+        }
+      };
+
+      recognition.onresult = (event) => {
+        if (voiceEngineRef.current !== "browser" || !voiceSessionRef.current) return;
+        browserHadResultRef.current = true;
+        if (browserFallbackTimerRef.current !== undefined) window.clearTimeout(browserFallbackTimerRef.current);
+        browserFallbackTimerRef.current = undefined;
+
+        const finals: string[] = [];
+        const interims: string[] = [];
+        const startIndex = Math.max(0, event.resultIndex ?? 0);
+        for (let i = startIndex; i < event.results.length; i++) {
+          const result = event.results[i];
+          if (!result) continue;
+          const transcript = result[0].transcript.trim();
+          if (!transcript) continue;
+          (result.isFinal ? finals : interims).push(transcript);
+        }
+
+        const finalText = finals.join(" ").trim();
+        const interimText = interims.join(" ").trim();
+        if (finalText) {
+          setValue("");
+          setVoiceNotice(`Te escuché: «${finalText}»`);
+          void send(finalText, true);
+        } else if (interimText) {
+          setValue(interimText);
+          setVoiceNotice(`Reconociendo: «${interimText}»`);
+        }
+      };
+
+      recognition.onerror = (event) => {
+        const reason = event?.error ?? "unknown";
+        if (["not-allowed", "service-not-allowed", "audio-capture", "network", "language-not-supported"].includes(reason)) {
+          fallbackToLocal(`El reconocimiento del navegador falló (${reason}).`);
+          return;
+        }
+        setVoiceNotice(`El navegador sigue intentando reconocer la voz (${reason}).`);
+      };
+
+      recognition.onend = () => {
+        if (browserSpeechRef.current === recognition) browserSpeechRef.current = null;
+        if (!voiceSessionRef.current || voiceEngineRef.current !== "browser") return;
+
+        if (!browserHadResultRef.current && Date.now() - browserStartedAtRef.current >= 8000) {
+          fallbackToLocal("El navegador no devolvió ninguna transcripción.");
+          return;
+        }
+
+        if (browserRestartTimerRef.current !== undefined) window.clearTimeout(browserRestartTimerRef.current);
+        browserRestartTimerRef.current = window.setTimeout(() => {
+          browserRestartTimerRef.current = undefined;
+          startBrowserRecognition();
+        }, 500);
+      };
+
+      try {
+        recognition.start();
+      } catch (error) {
+        fallbackToLocal(
+          error instanceof Error ? `No se pudo iniciar el reconocimiento (${error.name}).` : "No se pudo iniciar el reconocimiento del navegador.",
+        );
+      }
+    };
+
+    voiceSessionRef.current = true;
+    voiceEngineRef.current = "browser";
+    browserHadResultRef.current = false;
+    browserStartedAtRef.current = Date.now();
+    setListening(true);
+    setVoiceNotice("Activando el reconocimiento de voz…");
+
+    browserFallbackTimerRef.current = window.setTimeout(() => {
+      if (voiceEngineRef.current === "browser" && voiceSessionRef.current && !browserHadResultRef.current) {
+        fallbackToLocal("El navegador no ha reconocido ninguna palabra tras varios segundos.");
+      }
+    }, 8000);
+
+    startBrowserRecognition();
   };
 
   const linkLabel =
