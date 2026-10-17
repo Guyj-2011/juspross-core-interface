@@ -532,6 +532,15 @@ export function V2Console() {
       }, 400);
     };
 
+    const armBrowserFallback = () => {
+      if (browserFallbackTimerRef.current !== undefined) window.clearTimeout(browserFallbackTimerRef.current);
+      browserFallbackTimerRef.current = window.setTimeout(() => {
+        if (voiceEngineRef.current === "browser" && voiceSessionRef.current && !browserHadResultRef.current) {
+          fallbackToLocal("El navegador no ha completado una transcripción.");
+        }
+      }, 8000);
+    };
+
     const startBrowserRecognition = () => {
       if (!voiceSessionRef.current || voiceEngineRef.current !== "browser") return;
       let recognition: BrowserSpeechLike;
@@ -555,9 +564,6 @@ export function V2Console() {
 
       recognition.onresult = (event) => {
         if (voiceEngineRef.current !== "browser" || !voiceSessionRef.current) return;
-        browserHadResultRef.current = true;
-        if (browserFallbackTimerRef.current !== undefined) window.clearTimeout(browserFallbackTimerRef.current);
-        browserFallbackTimerRef.current = undefined;
 
         const finals: string[] = [];
         const interims: string[] = [];
@@ -573,12 +579,17 @@ export function V2Console() {
         const finalText = finals.join(" ").trim();
         const interimText = interims.join(" ").trim();
         if (finalText) {
+          browserHadResultRef.current = true;
+          if (browserFallbackTimerRef.current !== undefined) window.clearTimeout(browserFallbackTimerRef.current);
+          browserFallbackTimerRef.current = undefined;
           setValue("");
           setVoiceNotice(`Te escuché: «${finalText}»`);
           void send(finalText, true);
         } else if (interimText) {
+          browserStartedAtRef.current = Date.now();
           setValue(interimText);
           setVoiceNotice(`Reconociendo: «${interimText}»`);
+          armBrowserFallback();
         }
       };
 
@@ -623,12 +634,7 @@ export function V2Console() {
     setListening(true);
     setVoiceNotice("Activando el reconocimiento de voz…");
 
-    browserFallbackTimerRef.current = window.setTimeout(() => {
-      if (voiceEngineRef.current === "browser" && voiceSessionRef.current && !browserHadResultRef.current) {
-        fallbackToLocal("El navegador no ha reconocido ninguna palabra tras varios segundos.");
-      }
-    }, 8000);
-
+    armBrowserFallback();
     startBrowserRecognition();
   };
 
