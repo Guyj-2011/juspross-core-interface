@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowUp, History, Mic, Settings2, Square, Trash2, Volume2, VolumeX, X } from "lucide-react";
+import { ArrowUp, Check, Copy, History, Mic, Settings2, Square, Trash2, Volume2, VolumeX, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { collectVoiceDiagnostic, WHISPER_ENDPOINT } from "@/lib/juspross/voiceDiagnostics";
 import { AiUnreachable, testAi } from "@/lib/juspross/ai";
 import { useV2Chat } from "@/lib/juspross/useV2Chat";
 import { useV2 } from "@/lib/juspross/v2Store";
@@ -92,6 +94,9 @@ export function V2Console() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [listening, setListening] = useState(false);
   const [voiceNotice, setVoiceNotice] = useState("");
+  const [voiceError, setVoiceError] = useState("");
+  const voiceErrorRef = useRef("");
+  const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "failed">("idle");
   const [secretV3, setSecretV3] = useState(false);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const browserSpeechRef = useRef<BrowserSpeechLike | null>(null);
@@ -216,8 +221,35 @@ export function V2Console() {
 
   const busy = state === "thinking" || state === "speaking";
 
+  const clearVoiceError = () => {
+    voiceErrorRef.current = "";
+    setVoiceError("");
+    setCopyStatus("idle");
+  };
+
+  const reportVoiceError = (message: string) => {
+    voiceSessionRef.current = false;
+    voiceErrorRef.current = message;
+    setVoiceError(message);
+    setVoiceNotice("");
+    setCopyStatus("idle");
+    setListening(false);
+  };
+
+  const copyVoiceDiagnostic = async () => {
+    const error = voiceErrorRef.current;
+    try {
+      const diagnostic = await collectVoiceDiagnostic(error);
+      await navigator.clipboard.writeText(diagnostic);
+      if (voiceErrorRef.current === error) setCopyStatus("copied");
+    } catch {
+      if (voiceErrorRef.current === error) setCopyStatus("failed");
+    }
+  };
+
   const submit = () => {
     if (!value.trim()) return;
+    clearVoiceError();
     void send(value);
     setValue("");
   };
@@ -237,7 +269,7 @@ export function V2Console() {
     };
 
     const transcribeAudio = async (blob: Blob) => {
-      const endpoint = "http://127.0.0.1:8001/transcribe";
+      const endpoint = WHISPER_ENDPOINT;
       const form = new FormData();
       const extension = blob.type.includes("ogg") ? "ogg" : blob.type.includes("wav") ? "wav" : "webm";
       form.append("file", blob, `juspross-voz.${extension}`);
@@ -301,7 +333,7 @@ export function V2Console() {
     }
 
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
-      setVoiceNotice("Este navegador no permite capturar audio con MediaRecorder. Prueba Juspross en Chrome o Edge actualizado.");
+      reportVoiceError("Este navegador no permite capturar audio con MediaRecorder. Prueba Juspross en Chrome o Edge actualizado.");
       return;
     }
 
@@ -349,9 +381,7 @@ export function V2Console() {
         try {
           recorder = options ? new MediaRecorder(activeStream, options) : new MediaRecorder(activeStream);
         } catch (error) {
-          voiceSessionRef.current = false;
-          setListening(false);
-          setVoiceNotice(
+          reportVoiceError(
             `No pude iniciar la grabación de audio. ${error instanceof Error ? error.message : ""}`,
           );
           releaseMicrophone();
@@ -365,9 +395,15 @@ export function V2Console() {
           else chunksRef.current = [];
         };
         recorder.onerror = () => {
-          setVoiceNotice("El navegador interrumpió la grabación del micrófono. Vuelve a pulsar el botón para intentarlo.");
+          recorder.onstop = null;
+          reportVoiceError("El navegador interrumpió la grabación del micrófono. Vuelve a pulsar el botón para intentarlo.");
+          if (recorder.state !== "inactive") {
+            try { recorder.stop(); } catch { /* already stopped */ }
+          }
+          releaseMicrophone();
         };
         recorder.onstart = () => {
+          if (!voiceSessionRef.current || voiceErrorRef.current) return;
           setListening(true);
           setVoiceNotice("Micrófono activo. Habla con naturalidad; enviaré tu frase después de una pausa.");
         };
@@ -385,7 +421,7 @@ export function V2Console() {
               try {
                 await transcribeAudio(blob);
               } catch (error) {
-                setVoiceNotice(error instanceof Error ? error.message : "No se pudo transcribir el audio.");
+                reportVoiceError(error instanceof Error ? error.message : "No se pudo transcribir el audio.");
               } finally {
                 transcribingRef.current = false;
               }
@@ -398,7 +434,7 @@ export function V2Console() {
             } else {
               releaseMicrophone();
               setListening(false);
-              if (!hadSpeech || blob.size <= 1200) setVoiceNotice("Micrófono apagado.");
+              if (!voiceErrorRef.current && (!hadSpeech || blob.size <= 1200)) setVoiceNotice("Micrófono apagado.");
             }
           })();
         };
@@ -410,9 +446,7 @@ export function V2Console() {
             window.setTimeout(startRecorder, 300);
             return;
           }
-          voiceSessionRef.current = false;
-          setListening(false);
-          setVoiceNotice("No se pudo iniciar la grabación. Comprueba que otra aplicación no esté bloqueando el micrófono.");
+          reportVoiceError("No se pudo iniciar la grabación. Comprueba que otra aplicación no esté bloqueando el micrófono.");
           releaseMicrophone();
         }
       };
@@ -431,7 +465,7 @@ export function V2Console() {
           activeAnalyser.getByteTimeDomainData(samples);
           let sum = 0;
           for (let i = 0; i < samples.length; i++) {
-            const normalized = (samples[i]! - 128) / 128;
+            const normalized = ((samples[i] ?? 128) - 128) / 128;
             sum += normalized * normalized;
           }
           const rms = Math.sqrt(sum / samples.length);
@@ -467,12 +501,13 @@ export function V2Console() {
         NotReadableError: "El micrófono está ocupado por otra aplicación o Windows no permite abrirlo.",
         SecurityError: "El navegador bloqueó el micrófono por permisos de seguridad.",
       };
-      setVoiceNotice(messages[name] ?? `No se pudo activar el micrófono: ${error instanceof Error ? error.message : String(error)}`);
+      reportVoiceError(messages[name] ?? `No se pudo activar el micrófono: ${error instanceof Error ? error.message : String(error)}`);
       releaseMicrophone();
     }
   };
 
   const toggleMic = async () => {
+    clearVoiceError();
     // If the local Whisper capture is active, reuse its existing stop/finalize path.
     if (voiceSessionRef.current) {
       if (voiceEngineRef.current === "local") {
@@ -799,7 +834,10 @@ export function V2Console() {
           <textarea
             rows={1}
             value={value}
-            onChange={(e) => setValue(e.target.value)}
+            onChange={(e) => {
+              clearVoiceError();
+              setValue(e.target.value);
+            }}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
@@ -852,7 +890,28 @@ export function V2Console() {
             </button>
           )}
         </div>
-        {voiceNotice && (
+        {voiceError ? (
+          <div className="pointer-events-auto mt-2 flex items-start gap-2 text-destructive">
+            <p role="alert" className="min-w-0 flex-1 break-words text-center text-[11px] leading-snug">
+              {voiceError}
+            </p>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => void copyVoiceDiagnostic()}
+              aria-label="Copiar diagnóstico de voz"
+              title={copyStatus === "copied" ? "Diagnóstico copiado" : "Copiar diagnóstico de voz"}
+              className="size-7 shrink-0 text-muted-foreground hover:text-foreground"
+            >
+              {copyStatus === "copied" ? <Check /> : <Copy />}
+            </Button>
+            {copyStatus !== "idle" && (
+              <span role="status" className="text-[11px] text-muted-foreground">
+                {copyStatus === "copied" ? "Copiado" : "No se pudo copiar. Revisa el permiso del portapapeles."}
+              </span>
+            )}
+          </div>
+        ) : voiceNotice && (
           <p
             role="status"
             aria-live="polite"
