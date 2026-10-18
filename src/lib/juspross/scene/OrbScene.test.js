@@ -1,4 +1,3 @@
-/// <reference types="bun" />
 import { describe, expect, test } from "bun:test";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
@@ -11,8 +10,8 @@ function fixture() {
   controls.minDistance = 0.03;
   controls.maxDistance = 34;
   const scene = { controls, pauseAutoRotateAfterZoom() {} };
-  const zoomIn = () => OrbScene.prototype.zoomIn.call(scene as unknown as OrbScene);
-  const zoomOut = () => OrbScene.prototype.zoomOut.call(scene as unknown as OrbScene);
+  const zoomIn = () => OrbScene.prototype.zoomIn.call(scene);
+  const zoomOut = () => OrbScene.prototype.zoomOut.call(scene);
   return { camera, controls, zoomIn, zoomOut };
 }
 
