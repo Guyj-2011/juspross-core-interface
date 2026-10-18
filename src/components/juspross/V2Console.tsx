@@ -297,7 +297,7 @@ export function V2Console() {
       const endpoint = "http://127.0.0.1:8001/transcribe";
       const form = new FormData();
       const extension = blob.type.includes("ogg") ? "ogg" : blob.type.includes("wav") ? "wav" : "webm";
-      form.append("file", blob, `juspross-voz.${extension}`);
+      form.append("audio", blob, `juspross-voz.${extension}`);
 
       let response: Response;
       try {
