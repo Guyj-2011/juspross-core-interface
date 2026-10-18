@@ -301,15 +301,21 @@ export function V2Console() {
 
       let response: Response;
       try {
+        // Whisper is an HTTP service on this PC (127.0.0.1). Tell Chromium
+        // explicitly that this request targets the loopback address space, just
+        // like the Ollama client in ai.ts. Modern Chromium may otherwise reject
+        // secure-page → loopback requests before they reach FastAPI.
         response = await fetch(endpoint, {
           method: "POST",
           body: form,
           signal: AbortSignal.timeout(60_000),
-        });
+          targetAddressSpace: "loopback",
+        } as RequestInit & { targetAddressSpace: "loopback" });
       } catch (error) {
         const detail = error instanceof Error ? error.message : String(error);
+        const origin = window.location.origin;
         throw new Error(
-          `No pude llegar al servidor local de transcripción (${endpoint}). Comprueba que JusprossTranscripcion esté ejecutándose y que permita solicitudes desde este origen. Detalle: ${detail}`,
+          `No pude completar la conexión con el servidor local de transcripción (${endpoint}). Origen de Juspross: ${origin}. Detalle del navegador: ${detail}. Comprueba que la API esté ejecutándose en el puerto 8001, que FastAPI permita CORS para este origen y que Lively/Chromium permita "Red de bucle invertido" (loopback network).`,
         );
       }
 
