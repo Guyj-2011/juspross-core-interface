@@ -1,3 +1,4 @@
+/// <reference types="bun" />
 import { expect, test } from "bun:test";
 import { collectVoiceDiagnostic, formatVoiceDiagnostic, WHISPER_ENDPOINT } from "./voiceDiagnostics";
 
