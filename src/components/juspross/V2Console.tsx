@@ -107,6 +107,7 @@ export function V2Console() {
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationFrameRef = useRef<number | undefined>(undefined);
   const chunksRef = useRef<Blob[]>([]);
+  const preRollChunksRef = useRef<Blob[]>([]);
   const speechDetectedRef = useRef(false);
   const lastVoiceAtRef = useRef(0);
   const transcribingRef = useRef(false);
@@ -338,9 +339,8 @@ export function V2Console() {
         throw new Error("El servidor recibió el audio, pero no devolvió texto reconocido. Habla más cerca del micrófono y vuelve a probar.");
       }
 
-      setVoiceNotice(`Te escuché: «${transcript}»`);
-      setValue("");
-      void send(transcript, true);
+      setValue((previous) => [previous.trim(), transcript].filter(Boolean).join(" "));
+      setVoiceNotice("Transcripción añadida al cuadro de texto. Puedes seguir hablando o pulsar la flecha para enviarla.");
     };
 
     if (voiceSessionRef.current) {
@@ -405,6 +405,7 @@ export function V2Console() {
         const activeStream = streamRef.current;
         if (!voiceSessionRef.current || transcribingRef.current || !activeStream) return;
         chunksRef.current = [];
+        preRollChunksRef.current = [];
         speechDetectedRef.current = false;
         lastVoiceAtRef.current = 0;
 
@@ -424,8 +425,17 @@ export function V2Console() {
         recorderRef.current = recorder;
         recorder.ondataavailable = (event) => {
           if (!event.data || event.data.size === 0) return;
-          if (speechDetectedRef.current) chunksRef.current.push(event.data);
-          else chunksRef.current = [];
+          if (speechDetectedRef.current) {
+            // Preserve about 750ms before speech begins so the first syllable is not clipped.
+            if (preRollChunksRef.current.length) {
+              chunksRef.current = [...preRollChunksRef.current, ...chunksRef.current];
+              preRollChunksRef.current = [];
+            }
+            chunksRef.current.push(event.data);
+          } else {
+            preRollChunksRef.current.push(event.data);
+            if (preRollChunksRef.current.length > 3) preRollChunksRef.current.shift();
+          }
         };
         recorder.onerror = () => {
           setVoiceNotice("El navegador interrumpió la grabación del micrófono. Vuelve a pulsar el botón para intentarlo.");
@@ -439,6 +449,7 @@ export function V2Console() {
           const blob = new Blob(chunksRef.current, { type: recorder.mimeType || "audio/webm" });
           const hadSpeech = speechDetectedRef.current;
           chunksRef.current = [];
+          preRollChunksRef.current = [];
           speechDetectedRef.current = false;
 
           void (async () => {
@@ -505,13 +516,13 @@ export function V2Console() {
           }
           const rms = Math.sqrt(sum / samples.length);
           const now = performance.now();
-          if (rms > 0.014) {
+          if (rms > 0.009) {
             speechDetectedRef.current = true;
             lastVoiceAtRef.current = now;
           } else if (
             speechDetectedRef.current &&
             lastVoiceAtRef.current > 0 &&
-            now - lastVoiceAtRef.current > 1550 &&
+            now - lastVoiceAtRef.current > 2000 &&
             recorderRef.current?.state === "recording" &&
             !transcribingRef.current
           ) {
@@ -922,7 +933,7 @@ export function V2Console() {
           )}
         </div>
         {voiceNotice && (
-          <div className="pointer-events-auto mt-2 flex items-start justify-center gap-2 text-[11px] leading-snug">
+          <div className="pointer-events-auto mt-2 flex items-start justify-center gap-2 text-xs leading-relaxed">
             <p
               role="status"
               aria-live="polite"
