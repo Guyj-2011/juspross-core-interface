@@ -818,13 +818,15 @@ export class OrbScene {
 
   /** Zoom por botones: Lively no entrega de forma fiable eventos de rueda al wallpaper. */
   zoomIn() {
-    this.controls.dollyIn(1.25);
+    // OrbitControls.dollyOut decreases camera distance in perspective mode.
+    this.controls.dollyOut(1.25);
     this.controls.update();
     this.pauseAutoRotateAfterZoom();
   }
 
   zoomOut() {
-    this.controls.dollyOut(1.25);
+    // OrbitControls.dollyIn increases camera distance in perspective mode.
+    this.controls.dollyIn(1.25);
     this.controls.update();
     this.pauseAutoRotateAfterZoom();
   }
