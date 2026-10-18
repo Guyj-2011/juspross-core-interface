@@ -223,7 +223,6 @@ export function V2Console() {
     setValue("");
   };
 
-
   const copyVoiceDiagnostics = async () => {
     let micPermission = "no disponible";
     try {
@@ -922,7 +921,7 @@ export function V2Console() {
               role="status"
               aria-live="polite"
               className={cn(
-                "max-w-[min(620px,calc(100%-44px))] cursor-text select-text whitespace-pre-wrap break-words text-center",
+                "max-w-[620px] cursor-text select-text whitespace-pre-wrap break-words text-center",
                 listening ? "text-[#ff8c98]" : "text-white/75",
               )}
             >
