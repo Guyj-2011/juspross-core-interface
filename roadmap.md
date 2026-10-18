@@ -9,3 +9,10 @@
 # Voice
 - [x] Replace robotic speech with a natural, composed masculine voice in both modes and verify playback.
 - [x] Revert to the original voice (Algieba, composed personal-assistant style) after the butler variant was rejected; verified audio playback.
+
+# Juspross 2.0 corrections
+- [ ] Correct zoom button direction while preserving the closest gear-revealing distance.
+- [ ] Stop local transcription on failure and retain its diagnostic until user interaction.
+- [ ] Add copying of audio API, microphone permission and local Whisper diagnostics.
+- [ ] Run regression checks and verify the updated interface without publishing.
+- [ ] Compare GitHub changes (blocked: no accessible GitHub connection or repository URL).
