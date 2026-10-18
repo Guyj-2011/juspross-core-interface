@@ -247,7 +247,7 @@ export function V2Console() {
       `SpeechRecognition: ${Boolean(w.SpeechRecognition || w.webkitSpeechRecognition)}`,
       "Servidor Whisper esperado: http://127.0.0.1:8001/transcribe",
       `Navegador integrado: ${navigator.userAgent}`,
-    ].join("\\n");
+    ].join("\n");
 
     let copied = false;
     try {
@@ -448,7 +448,7 @@ export function V2Console() {
                 voiceSessionRef.current = false;
                 setListening(false);
                 setVoiceNotice(
-                  `${error instanceof Error ? error.message : "No se pudo transcribir el audio."}\\nLa escucha se detuvo para conservar este diagnóstico.`,
+                  `${error instanceof Error ? error.message : "No se pudo transcribir el audio."}\nLa escucha se detuvo para conservar este diagnóstico.`,
                 );
               } finally {
                 transcribingRef.current = false;
