@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowUp, History, Mic, Settings2, Square, Trash2, Volume2, VolumeX, X } from "lucide-react";
+import { ArrowUp, Check, Copy, History, Mic, Settings2, Square, Trash2, Volume2, VolumeX, X } from "lucide-react";
 import { AiUnreachable, testAi } from "@/lib/juspross/ai";
 import { useV2Chat } from "@/lib/juspross/useV2Chat";
 import { useV2 } from "@/lib/juspross/v2Store";
@@ -92,6 +92,7 @@ export function V2Console() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [listening, setListening] = useState(false);
   const [voiceNotice, setVoiceNotice] = useState("");
+  const [copyStatus, setCopyStatus] = useState("");
   const [secretV3, setSecretV3] = useState(false);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const browserSpeechRef = useRef<BrowserSpeechLike | null>(null);
@@ -220,6 +221,63 @@ export function V2Console() {
     if (!value.trim()) return;
     void send(value);
     setValue("");
+  };
+
+
+  const copyVoiceDiagnostics = async () => {
+    let micPermission = "no disponible";
+    try {
+      micPermission = (await navigator.permissions.query({ name: "microphone" as PermissionName })).state;
+    } catch {
+      // Algunos WebView no exponen Permissions.query para micrófonos.
+    }
+
+    const w = window as unknown as {
+      SpeechRecognition?: unknown;
+      webkitSpeechRecognition?: unknown;
+    };
+    const diagnostic = [
+      "JUSPROSS — DIAGNÓSTICO DE VOZ",
+      `Mensaje: ${voiceNotice || "No hay mensaje de estado"}`,
+      `Página: ${window.location.href}`,
+      `Modo Lively solicitado: ${new URLSearchParams(window.location.search).get("lively") === "1" || new URLSearchParams(window.location.search).get("voice") === "local"}`,
+      `Permiso de micrófono reportado por el navegador: ${micPermission}`,
+      `getUserMedia: ${Boolean(navigator.mediaDevices?.getUserMedia)}`,
+      `MediaRecorder: ${typeof MediaRecorder !== "undefined"}`,
+      `SpeechRecognition: ${Boolean(w.SpeechRecognition || w.webkitSpeechRecognition)}`,
+      "Servidor Whisper esperado: http://127.0.0.1:8001/transcribe",
+      `Navegador integrado: ${navigator.userAgent}`,
+    ].join("\\n");
+
+    let copied = false;
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(diagnostic);
+        copied = true;
+      }
+    } catch {
+      // Intentar la copia tradicional que suele estar disponible en WebView.
+    }
+
+    if (!copied) {
+      const field = document.createElement("textarea");
+      field.value = diagnostic;
+      field.setAttribute("readonly", "");
+      field.style.position = "fixed";
+      field.style.left = "-9999px";
+      field.style.top = "0";
+      document.body.appendChild(field);
+      field.focus();
+      field.select();
+      try {
+        copied = document.execCommand("copy");
+      } catch {
+        copied = false;
+      }
+      field.remove();
+    }
+
+    setCopyStatus(copied ? "copied" : "No se pudo copiar automáticamente. Mantén pulsado o selecciona el mensaje para copiarlo.");
   };
 
   const startLocalMicrophone = async () => {
@@ -385,7 +443,13 @@ export function V2Console() {
               try {
                 await transcribeAudio(blob);
               } catch (error) {
-                setVoiceNotice(error instanceof Error ? error.message : "No se pudo transcribir el audio.");
+                // Stop the capture loop on failure; otherwise the next recorder.onstart
+                // overwrites this diagnostic almost immediately with "Micrófono activo".
+                voiceSessionRef.current = false;
+                setListening(false);
+                setVoiceNotice(
+                  `${error instanceof Error ? error.message : "No se pudo transcribir el audio."}\\nLa escucha se detuvo para conservar este diagnóstico.`,
+                );
               } finally {
                 transcribingRef.current = false;
               }
@@ -853,15 +917,31 @@ export function V2Console() {
           )}
         </div>
         {voiceNotice && (
-          <p
-            role="status"
-            aria-live="polite"
-            className={cn(
-              "pointer-events-none mt-2 text-center text-[11px] leading-snug",
-              listening ? "text-[#ff8c98]" : "text-white/65",
-            )}
-          >
-            {voiceNotice}
+          <div className="pointer-events-auto mt-2 flex items-start justify-center gap-2 text-[11px] leading-snug">
+            <p
+              role="status"
+              aria-live="polite"
+              className={cn(
+                "max-w-[min(620px,calc(100%-44px))] cursor-text select-text whitespace-pre-wrap break-words text-center",
+                listening ? "text-[#ff8c98]" : "text-white/75",
+              )}
+            >
+              {voiceNotice}
+            </p>
+            <button
+              type="button"
+              onClick={() => void copyVoiceDiagnostics()}
+              aria-label="Copiar diagnóstico de voz"
+              title="Copiar diagnóstico de voz"
+              className="flex size-7 shrink-0 items-center justify-center rounded-md border border-white/15 bg-black/70 text-white/70 hover:border-[#6ea8ff]/60 hover:text-[#9cc0ff]"
+            >
+              {copyStatus === "copied" ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+            </button>
+          </div>
+        )}
+        {copyStatus && (
+          <p className="pointer-events-none mt-1 select-text text-center text-[10px] text-white/55">
+            {copyStatus === "copied" ? "Diagnóstico copiado al portapapeles." : copyStatus}
           </p>
         )}
         <p className="pointer-events-none mt-2 text-center font-mono text-[9px] tracking-[0.25em] text-white/30">
