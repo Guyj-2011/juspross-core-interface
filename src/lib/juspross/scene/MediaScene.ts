@@ -91,7 +91,10 @@ function waterNormalMap(): THREE.DataTexture {
 /* ---------- shaders ---------- */
 
 const COMMON = /* glsl */ `
-  uniform float uTime;
+  uniform float uTime, uWork, uBurst, uProg, uRing;
+  float sq(float x){ return x * x; }
+  // 1 cerca de los enteros: líneas de rejilla
+  float ln(float x, float w){ return smoothstep(0.5 - w, 0.5, abs(fract(x) - 0.5)); }
   float h31(vec3 p){ p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
   float vn3(vec3 x){
     vec3 i = floor(x);
@@ -131,7 +134,7 @@ const COMMON = /* glsl */ `
 
 /** Suelo de agua: olas grandes que viajan + anillos desde la bola. */
 const WATER_VERT = /* glsl */ `
-  uniform float uTime;
+  uniform float uTime, uWork, uRing;
   uniform vec3 uBallPos;
   varying vec3 vW;
   varying vec3 vNg;
@@ -149,13 +152,14 @@ const WATER_VERT = /* glsl */ `
     wave(p, normalize(vec2(0.3, -1.0)), 1.4, 0.045, 1.9, h, g);
     wave(p, normalize(vec2(-1.0, -0.5)), 2.3, 0.03, 2.6, h, g);
     wave(p, normalize(vec2(0.8, 0.9)), 3.4, 0.018, 3.4, h, g);
-    // anillos que nacen bajo la bola y se expanden
+    // anillos que nacen bajo la bola y se expanden (más fuertes mientras trabaja)
     vec2 d = p - uBallPos.xz;
     float r = length(d);
     float env = exp(-r * 0.18) * smoothstep(0.0, 1.2, r);
-    float rp = r * 3.0 - uTime * 3.2;
-    h += 0.14 * sin(rp) * env;
-    g += d / max(r, 1e-3) * 0.14 * 3.0 * cos(rp) * env;
+    float rp = r * 3.0 - uRing;
+    float ra = 0.14 * (1.0 + uWork * 1.2);
+    h += ra * sin(rp) * env;
+    g += d / max(r, 1e-3) * ra * 3.0 * cos(rp) * env;
     vec3 P = vec3(position.x, h, position.z);
     vec4 wp = modelMatrix * vec4(P, 1.0);
     vW = wp.xyz;
@@ -203,6 +207,13 @@ const WATER_FRAG = /* glsl */ `
     vec3 body = vec3(0.16, 0.085, 0.008) * (0.45 + 0.8 * crest) + vec3(0.95, 0.55, 0.05) * pool * 0.6;
     vec3 col = body * (1.0 - F) + refl * F;
     col += lights(N, V);
+    // sonar tecnológico alrededor de la bola mientras trabaja, y onda de choque al terminar
+    vec2 dv = uv - uBallPos.xz;
+    float rr0 = length(dv);
+    float angw = atan(dv.y, dv.x);
+    float sonar = ln(rr0 * 0.8 - uRing * 0.08, 0.04) + 0.6 * ln(angw * (12.0 / 3.14159), 0.03) * smoothstep(14.0, 1.0, rr0);
+    col += vec3(1.0, 0.8, 0.28) * sonar * uWork * exp(-rr0 * 0.16) * 0.6;
+    col += vec3(1.0, 0.88, 0.5) * exp(-sq((rr0 - (1.0 - uBurst) * 16.0) * 1.5)) * uBurst * 1.6;
     float fade = exp(-length(cameraPosition - vW) * 0.022) * smoothstep(70.0, 22.0, length(uv));
     gl_FragColor = vec4(col * fade, 1.0);
   }
@@ -210,7 +221,7 @@ const WATER_FRAG = /* glsl */ `
 
 /** Bola de agua: la superficie se deforma mucho; interior dorado con remolinos. */
 const BALL_VERT = /* glsl */ `
-  uniform float uTime, uAmp, uR;
+  uniform float uTime, uAmp, uR, uWork;
   varying vec3 vN;
   varying vec3 vW;
   varying vec3 vObj;
@@ -226,13 +237,16 @@ const BALL_VERT = /* glsl */ `
   }
   void main(){
     vec3 n = normalize(position);
-    float amp = 0.15 + uAmp * 0.12;
+    float amp = 0.15 + uAmp * 0.12 + uWork * 0.14;
     vec3 t1 = normalize(cross(n, vec3(0.0, 1.0, 0.001)));
     vec3 t2 = cross(n, t1);
     float e = 0.02;
     vec3 n1 = normalize(n + t1 * e);
     vec3 n2 = normalize(n + t2 * e);
-    vec3 p0 = n * (1.0 + disp(n) * amp);
+    // bandas de latitud que "saltan" a golpes mientras trabaja
+    float band = floor((n.y * 0.5 + 0.5) * 14.0);
+    float glt = step(0.85, fract(sin(band * 91.7 + floor(uTime * 6.0)) * 437.5)) * uWork * 0.06;
+    vec3 p0 = n * (1.0 + disp(n) * amp + glt);
     vec3 p1 = n1 * (1.0 + disp(n1) * amp);
     vec3 p2 = n2 * (1.0 + disp(n2) * amp);
     vec3 nn = normalize(cross(p1 - p0, p2 - p0));
@@ -266,7 +280,21 @@ const BALL_FRAG = /* glsl */ `
     vec3 col = body * 0.8 + envCol(Rt) * 0.22 + caus * vec3(1.0, 0.78, 0.18) * 0.6;
     col = mix(col, envCol(R), F);
     col += lights(N, V);
-    col += vec3(1.0, 0.7, 0.1) * pow(1.0 - ndv, 3.0) * 0.4;
+    float rim = pow(1.0 - ndv, 3.0);
+    col += vec3(1.0, 0.7, 0.1) * rim * 0.4;
+    // capa tecnológica: rejilla esférica, barridos de luz y flujos de datos
+    float lat = asin(clamp(vObj.y, -1.0, 1.0));
+    float lon = atan(vObj.z, vObj.x);
+    float g1 = ln(lat * (12.0 / 3.14159), 0.035);
+    float g2 = ln(lon * (8.0 / 3.14159), 0.03) * smoothstep(1.45, 1.2, abs(lat));
+    float sy = fract(uTime * 0.45) * 2.0 - 1.0;
+    float scan = exp(-sq((vObj.y - sy) * 9.0));
+    float scan2 = exp(-sq((vObj.y + sy) * 14.0)) * 0.6;
+    float streak = pow(max(0.0, sin(lon * 30.0 + uTime * 3.0 + lat * 6.0)), 24.0) * 0.6;
+    float tech = (g1 + g2) * 0.55 + scan * 1.3 + scan2 + streak;
+    col += vec3(1.0, 0.82, 0.3) * tech * uWork * (0.5 + 0.5 * thick);
+    col *= 1.0 + uWork * 0.25;
+    col += vec3(1.0, 0.9, 0.5) * uBurst * (0.6 + 1.2 * rim);
     float alpha = clamp(0.62 + 0.38 * thick, 0.0, 0.95);
     if (uBack > 0.5) {
       col = body * 0.5 + caus * vec3(1.0, 0.85, 0.3) * 0.4;
@@ -341,6 +369,56 @@ const MOTE_FRAG = /* glsl */ `
   }
 `;
 
+/** Anillos tecnológicos (marcas y pulsos) y arco de progreso alrededor de la bola. */
+const RING_VERT = /* glsl */ `
+  varying vec3 vP;
+  void main(){
+    vP = position;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`;
+const RING_FRAG = /* glsl */ `
+  precision highp float;
+  uniform float uTime, uWork, uBurst, uProg, uMode, uSpeed, uDash;
+  varying vec3 vP;
+  float sq(float x){ return x * x; }
+  void main(){
+    float turn = atan(vP.y, vP.x) / 6.28318 + 0.5;
+    vec3 col = vec3(1.0, 0.8, 0.28);
+    float a;
+    if (uMode < 0.5) {
+      float dash = step(0.35, fract(turn * uDash - uTime * uSpeed));
+      float pulse = exp(-sq((fract(turn - uTime * uSpeed * 0.12) - 0.5) * 8.0));
+      a = 0.25 + 0.55 * dash + 1.2 * pulse;
+    } else {
+      float on = step(turn, uProg);
+      float head = exp(-sq((turn - uProg) * 40.0));
+      a = 0.12 + 0.7 * on + 1.6 * head;
+      col = mix(vec3(1.0, 0.75, 0.2), vec3(1.0, 0.95, 0.7), head);
+    }
+    gl_FragColor = vec4(col * a * uWork * (1.0 + uBurst), 1.0);
+  }
+`;
+
+/** Enjambre de datos que cae en espiral hacia el núcleo mientras trabaja. */
+const FLOW_VERT = /* glsl */ `
+  attribute vec4 aRnd;
+  uniform vec3 uBallPos;
+  uniform float uTime, uDpr, uWork;
+  varying float vA;
+  void main(){
+    float life = fract(aRnd.x + uTime * (0.10 + aRnd.y * 0.22) * (0.6 + uWork));
+    float r = mix(10.0, 1.4, life * life);
+    float ang = aRnd.z * 6.2831 + life * (2.5 + aRnd.w * 5.0);
+    float y = (aRnd.w - 0.5) * 7.0 * (1.0 - life * life);
+    vec3 p = uBallPos + vec3(cos(ang) * r, y, sin(ang) * r);
+    vec4 mv = viewMatrix * vec4(p, 1.0);
+    gl_Position = projectionMatrix * mv;
+    gl_PointSize = (1.2 + 2.4 * aRnd.y + 2.0 * life) * uDpr * (10.0 / max(0.1, -mv.z));
+    vA = uWork * smoothstep(0.0, 0.1, life) * (1.0 - smoothstep(0.88, 1.0, life));
+  }
+`;
+
 export class MediaScene {
   private renderer: THREE.WebGLRenderer;
   private scene = new THREE.Scene();
@@ -354,7 +432,19 @@ export class MediaScene {
   private sh: {
     uTime: THREE.IUniform<number>;
     uDpr: THREE.IUniform<number>;
+    uWork: THREE.IUniform<number>;
+    uBurst: THREE.IUniform<number>;
+    uProg: THREE.IUniform<number>;
+    uRing: THREE.IUniform<number>;
   };
+  private rings: { m: THREE.Mesh; axis: THREE.Vector3; speed: number }[] = [];
+  private flow!: THREE.Points;
+  private workTarget = 0;
+  private work = 0;
+  private burstV = 0;
+  private prog = 0;
+  private progS = 0;
+  private ringPhase = 0;
   private clock = new THREE.Clock();
   private raf = 0;
   private disposed = false;
@@ -377,13 +467,21 @@ export class MediaScene {
     this.renderer.toneMappingExposure = 0.9;
     container.appendChild(this.renderer.domElement);
 
-    this.sh = { uTime: { value: 0 }, uDpr: { value: dpr } };
+    this.sh = {
+      uTime: { value: 0 },
+      uDpr: { value: dpr },
+      uWork: { value: 0 },
+      uBurst: { value: 0 },
+      uProg: { value: 0 },
+      uRing: { value: 0 },
+    };
     this.camera = new THREE.PerspectiveCamera(48, w / h, 0.05, 300);
     this.normTex = waterNormalMap();
 
     this.buildWater();
     this.buildBall();
     this.buildMotes();
+    this.buildTech();
 
     this.camera.position.set(0, 2.5, 9.5);
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
@@ -523,6 +621,79 @@ export class MediaScene {
     this.add(new THREE.Points(g, m), 6);
   }
 
+  /** Anillos giratorios, arco de progreso y enjambre de datos (solo visibles mientras trabaja). */
+  private buildTech() {
+    const defs: {
+      r: number;
+      w: number;
+      tilt: [number, number];
+      speed: number;
+      dash: number;
+      mode: number;
+    }[] = [
+      { r: 1.75, w: 0.025, tilt: [1.2, 0.3], speed: 0.9, dash: 18, mode: 0 },
+      { r: 2.1, w: 0.02, tilt: [0.5, 1.2], speed: -0.6, dash: 36, mode: 0 },
+      { r: 2.5, w: 0.03, tilt: [1.9, 2.1], speed: 0.4, dash: 24, mode: 0 },
+      { r: 3.0, w: 0.06, tilt: [Math.PI / 2, 0], speed: 0, dash: 1, mode: 1 },
+    ];
+    for (const d of defs) {
+      const m = new THREE.Mesh(
+        new THREE.RingGeometry(d.r - d.w, d.r + d.w, 192, 1),
+        this.mat(
+          RING_VERT,
+          RING_FRAG,
+          { uMode: { value: d.mode }, uSpeed: { value: d.speed }, uDash: { value: d.dash } },
+          {
+            transparent: true,
+            depthWrite: false,
+            blending: THREE.AdditiveBlending,
+            side: THREE.DoubleSide,
+          },
+        ),
+      );
+      m.rotation.set(d.tilt[0], d.tilt[1], 0);
+      m.visible = false;
+      this.add(m, 5);
+      this.rings.push({ m, axis: new THREE.Vector3(0, 0, 1), speed: d.speed });
+    }
+    const count = 700;
+    const rn = new Float32Array(count * 4);
+    for (let i = 0; i < count * 4; i++) rn[i] = Math.random();
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.Float32BufferAttribute(new Float32Array(count * 3), 3));
+    g.setAttribute("aRnd", new THREE.Float32BufferAttribute(rn, 4));
+    this.flow = new THREE.Points(
+      g,
+      this.mat(
+        FLOW_VERT,
+        MOTE_FRAG,
+        {
+          uBallPos: { value: this.ballPos },
+          uColor: { value: new THREE.Vector3(1.0, 0.85, 0.4) },
+          uOpacity: { value: 1.0 },
+        },
+        { transparent: true, depthWrite: false, blending: THREE.AdditiveBlending },
+      ),
+    );
+    this.flow.visible = false;
+    this.add(this.flow, 6);
+  }
+
+  /** El núcleo entra (o sale) del modo "trabajando". */
+  setWork(on: boolean) {
+    this.workTarget = on ? 1 : 0;
+  }
+
+  /** Progreso estimado 0..1 del arco que rodea al núcleo. */
+  setProgress(p: number) {
+    this.prog = Math.min(1, Math.max(0, p));
+  }
+
+  /** Destello y onda de choque al terminar una creación. */
+  burst() {
+    this.burstV = 1;
+  }
+
   /** Intensidad extra de las ondulaciones de la bola (0..1). */
   setLevel(v: number) {
     this.ballAmp.value = v;
@@ -544,6 +715,21 @@ export class MediaScene {
     const dt = Math.min(0.05, this.clock.getDelta());
     const t = this.clock.elapsedTime;
     this.sh.uTime.value = t;
+    this.work += (this.workTarget - this.work) * (1 - Math.pow(0.002, dt));
+    this.burstV = Math.max(0, this.burstV - dt * 0.7);
+    this.progS += (this.prog - this.progS) * Math.min(1, dt * 3);
+    this.ringPhase += dt * (3.2 + this.work * 2.5);
+    this.sh.uWork.value = this.work;
+    this.sh.uBurst.value = this.burstV;
+    this.sh.uProg.value = this.progS;
+    this.sh.uRing.value = this.ringPhase;
+    const on = this.work > 0.01 || this.burstV > 0.01;
+    this.flow.visible = on;
+    for (const r of this.rings) {
+      r.m.visible = on;
+      r.m.position.copy(this.ballPos);
+      if (r.speed !== 0) r.m.rotateOnAxis(r.axis, r.speed * dt * (0.4 + this.work * 1.6));
+    }
 
     // la bola flota y respira sobre el agua
     this.ballPos.set(0, 2.2 + 0.18 * Math.sin(t * 0.9), 0);

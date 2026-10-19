@@ -10,11 +10,17 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ApiAgnesRouteImport } from './routes/api/agnes'
 import { Route as ApiSpeechRouteImport } from './routes/api/speech'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiAgnesRoute = ApiAgnesRouteImport.update({
+  id: '/api/agnes',
+  path: '/api/agnes',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiSpeechRoute = ApiSpeechRouteImport.update({
@@ -25,27 +31,31 @@ const ApiSpeechRoute = ApiSpeechRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/api/agnes': typeof ApiAgnesRoute
   '/api/speech': typeof ApiSpeechRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/api/agnes': typeof ApiAgnesRoute
   '/api/speech': typeof ApiSpeechRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/api/agnes': typeof ApiAgnesRoute
   '/api/speech': typeof ApiSpeechRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/api/speech'
+  fullPaths: '/' | '/api/agnes' | '/api/speech'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/api/speech'
-  id: '__root__' | '/' | '/api/speech'
+  to: '/' | '/api/agnes' | '/api/speech'
+  id: '__root__' | '/' | '/api/agnes' | '/api/speech'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ApiAgnesRoute: typeof ApiAgnesRoute
   ApiSpeechRoute: typeof ApiSpeechRoute
 }
 
@@ -56,6 +66,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/agnes': {
+      id: '/api/agnes'
+      path: '/api/agnes'
+      fullPath: '/api/agnes'
+      preLoaderRoute: typeof ApiAgnesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/speech': {
@@ -70,6 +87,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ApiAgnesRoute: ApiAgnesRoute,
   ApiSpeechRoute: ApiSpeechRoute,
 }
 export const routeTree = rootRouteImport
