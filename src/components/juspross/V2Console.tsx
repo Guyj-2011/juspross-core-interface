@@ -587,59 +587,44 @@ export function V2Console() {
       return;
     }
 
-    // Lively runs this page in an embedded WebView. In that mode, skip remote
-    // browser speech recognition and request the microphone immediately from the
-    // button click, preserving the browser's user-activation context. Enable with
-    // ?lively=1 (or ?voice=local) on the wallpaper URL.
-    const voiceParams = new URLSearchParams(window.location.search);
-    const directLocalVoice = voiceParams.get("lively") === "1" || voiceParams.get("voice") === "local";
-    if (directLocalVoice) {
-      setVoiceNotice("Modo Lively: abriendo el micrófono local directamente…");
-      await startLocalMicrophone();
-      return;
-    }
-
+    // Usa el reconocimiento rápido integrado en Chromium/Edge también en Lively.
+    // No se usa el servicio local Whisper porque tarda demasiado en CPU.
     const w = window as unknown as {
       SpeechRecognition?: BrowserSpeechConstructor;
       webkitSpeechRecognition?: BrowserSpeechConstructor;
     };
     const SpeechCtor = w.SpeechRecognition ?? w.webkitSpeechRecognition;
 
-    // The browser engine is the proven path in Lovable preview. If it is absent,
-    // fails, or returns no transcript, fall back to local audio capture + Whisper.
+    // Solo reconocimiento rápido del navegador: nunca se deriva a Whisper local.
     if (!SpeechCtor) {
-      void startLocalMicrophone();
+      setListening(false);
+      setVoiceNotice("Este navegador no ofrece reconocimiento rápido de voz. El transcriptor local está desactivado; prueba con Microsoft Edge o Chrome actualizado.");
       return;
     }
 
-    const fallbackToLocal = (reason: string) => {
+    const stopBrowserWithError = (reason: string) => {
       if (!voiceSessionRef.current || voiceEngineRef.current !== "browser") return;
-      if (browserHadResultRef.current) return;
+      voiceSessionRef.current = false;
+      voiceEngineRef.current = null;
       if (browserFallbackTimerRef.current !== undefined) window.clearTimeout(browserFallbackTimerRef.current);
       if (browserRestartTimerRef.current !== undefined) window.clearTimeout(browserRestartTimerRef.current);
       browserFallbackTimerRef.current = undefined;
       browserRestartTimerRef.current = undefined;
-      voiceEngineRef.current = "switching";
-      setVoiceNotice(`${reason} Cambiando al transcriptor local…`);
       const current = browserSpeechRef.current;
       browserSpeechRef.current = null;
       try { current?.stop(); } catch { /* el reconocimiento ya terminó */ }
-
-      window.setTimeout(() => {
-        if (!voiceSessionRef.current || voiceEngineRef.current !== "switching") return;
-        voiceSessionRef.current = false;
-        voiceEngineRef.current = null;
-        void startLocalMicrophone();
-      }, 400);
+      setListening(false);
+      setValue("");
+      setVoiceNotice(`${reason} El transcriptor local está desactivado para evitar esperas largas. Revisa los permisos y la conexión de voz de Edge/Chromium.`);
     };
 
-    const armBrowserFallback = () => {
+    const armBrowserTimeout = () => {
       if (browserFallbackTimerRef.current !== undefined) window.clearTimeout(browserFallbackTimerRef.current);
       browserFallbackTimerRef.current = window.setTimeout(() => {
         if (voiceEngineRef.current === "browser" && voiceSessionRef.current && !browserHadResultRef.current) {
-          fallbackToLocal("El navegador no ha completado una transcripción.");
+          stopBrowserWithError("No recibí una frase de voz tras 15 segundos.");
         }
-      }, 8000);
+      }, 15_000);
     };
 
     const startBrowserRecognition = () => {
@@ -648,7 +633,7 @@ export function V2Console() {
       try {
         recognition = new SpeechCtor();
       } catch {
-        fallbackToLocal("No se pudo iniciar el reconocimiento del navegador.");
+        stopBrowserWithError("No se pudo iniciar el reconocimiento rápido del navegador.");
         return;
       }
       recognition.lang = "es-MX";
@@ -659,7 +644,7 @@ export function V2Console() {
       recognition.onstart = () => {
         if (voiceSessionRef.current && voiceEngineRef.current === "browser") {
           setListening(true);
-          setVoiceNotice("Escuchando con el navegador… habla normalmente. Pulsa el micrófono para terminar.");
+          setVoiceNotice("Escuchando… habla normalmente. Enviaré tu frase a Qwen automáticamente.");
         }
       };
 
@@ -682,22 +667,34 @@ export function V2Console() {
         if (finalText) {
           browserHadResultRef.current = true;
           if (browserFallbackTimerRef.current !== undefined) window.clearTimeout(browserFallbackTimerRef.current);
+          if (browserRestartTimerRef.current !== undefined) window.clearTimeout(browserRestartTimerRef.current);
           browserFallbackTimerRef.current = undefined;
+          browserRestartTimerRef.current = undefined;
+
+          // Cierra el micrófono antes de reproducir la respuesta para evitar
+          // que Juspross se escuche a sí mismo y envíe la respuesta como otra pregunta.
+          voiceSessionRef.current = false;
+          voiceEngineRef.current = null;
+          const current = browserSpeechRef.current;
+          browserSpeechRef.current = null;
+          try { current?.stop(); } catch { /* el reconocimiento ya terminó */ }
+
+          setListening(false);
           setValue("");
-          setVoiceNotice(`Te escuché: «${finalText}»`);
+          setVoiceNotice(`Te escuché: «${finalText}». Enviando a Qwen…`);
           void send(finalText, true);
         } else if (interimText) {
           browserStartedAtRef.current = Date.now();
           setValue(interimText);
           setVoiceNotice(`Reconociendo: «${interimText}»`);
-          armBrowserFallback();
+          armBrowserTimeout();
         }
       };
 
       recognition.onerror = (event) => {
         const reason = event?.error ?? "unknown";
         if (["not-allowed", "service-not-allowed", "audio-capture", "network", "language-not-supported"].includes(reason)) {
-          fallbackToLocal(`El reconocimiento del navegador falló (${reason}).`);
+          stopBrowserWithError(`El reconocimiento rápido del navegador falló (${reason}).`);
           return;
         }
         setVoiceNotice(`El navegador sigue intentando reconocer la voz (${reason}).`);
@@ -707,8 +704,8 @@ export function V2Console() {
         if (browserSpeechRef.current === recognition) browserSpeechRef.current = null;
         if (!voiceSessionRef.current || voiceEngineRef.current !== "browser") return;
 
-        if (!browserHadResultRef.current && Date.now() - browserStartedAtRef.current >= 8000) {
-          fallbackToLocal("El navegador no devolvió ninguna transcripción.");
+        if (!browserHadResultRef.current && Date.now() - browserStartedAtRef.current >= 15_000) {
+          stopBrowserWithError("El navegador no devolvió ninguna frase reconocida.");
           return;
         }
 
@@ -722,8 +719,8 @@ export function V2Console() {
       try {
         recognition.start();
       } catch (error) {
-        fallbackToLocal(
-          error instanceof Error ? `No se pudo iniciar el reconocimiento (${error.name}).` : "No se pudo iniciar el reconocimiento del navegador.",
+        stopBrowserWithError(
+          error instanceof Error ? `No se pudo iniciar el reconocimiento (${error.name}).` : "No se pudo iniciar el reconocimiento rápido del navegador.",
         );
       }
     };
@@ -733,9 +730,9 @@ export function V2Console() {
     browserHadResultRef.current = false;
     browserStartedAtRef.current = Date.now();
     setListening(true);
-    setVoiceNotice("Activando el reconocimiento de voz…");
+    setVoiceNotice("Activando el reconocimiento rápido de voz…");
 
-    armBrowserFallback();
+    armBrowserTimeout();
     startBrowserRecognition();
   };
 
