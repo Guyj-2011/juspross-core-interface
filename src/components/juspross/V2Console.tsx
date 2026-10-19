@@ -245,7 +245,7 @@ export function V2Console() {
       `getUserMedia: ${Boolean(navigator.mediaDevices?.getUserMedia)}`,
       `MediaRecorder: ${typeof MediaRecorder !== "undefined"}`,
       `SpeechRecognition: ${Boolean(w.SpeechRecognition || w.webkitSpeechRecognition)}`,
-      "Servidor Whisper esperado: http://127.0.0.1:8001/transcribe",
+      "Reconocimiento de voz: navegador Chromium/Edge; Whisper local desactivado",
       `Navegador integrado: ${navigator.userAgent}`,
     ].join("\n");
 
