@@ -107,7 +107,7 @@ export function V2Console() {
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationFrameRef = useRef<number | undefined>(undefined);
   const chunksRef = useRef<Blob[]>([]);
-  const preRollChunksRef = useRef<Blob[]>([]);
+  const recorderStartedAtRef = useRef(0);
   const speechDetectedRef = useRef(false);
   const lastVoiceAtRef = useRef(0);
   const transcribingRef = useRef(false);
@@ -405,7 +405,7 @@ export function V2Console() {
         const activeStream = streamRef.current;
         if (!voiceSessionRef.current || transcribingRef.current || !activeStream) return;
         chunksRef.current = [];
-        preRollChunksRef.current = [];
+        recorderStartedAtRef.current = 0;
         speechDetectedRef.current = false;
         lastVoiceAtRef.current = 0;
 
@@ -425,31 +425,25 @@ export function V2Console() {
         recorderRef.current = recorder;
         recorder.ondataavailable = (event) => {
           if (!event.data || event.data.size === 0) return;
-          if (speechDetectedRef.current) {
-            // Preserve about 750ms before speech begins so the first syllable is not clipped.
-            if (preRollChunksRef.current.length) {
-              chunksRef.current = [...preRollChunksRef.current, ...chunksRef.current];
-              preRollChunksRef.current = [];
-            }
-            chunksRef.current.push(event.data);
-          } else {
-            preRollChunksRef.current.push(event.data);
-            if (preRollChunksRef.current.length > 3) preRollChunksRef.current.shift();
-          }
+          // Keep every chunk from the start of this MediaRecorder session.
+          // The first WebM chunk contains container metadata; dropping it makes
+          // a later slice invalid for FFmpeg/faster-whisper.
+          chunksRef.current.push(event.data);
         };
         recorder.onerror = () => {
           setVoiceNotice("El navegador interrumpió la grabación del micrófono. Vuelve a pulsar el botón para intentarlo.");
         };
         recorder.onstart = () => {
+          recorderStartedAtRef.current = performance.now();
           setListening(true);
-          setVoiceNotice("Micrófono activo. Habla con naturalidad; enviaré tu frase después de una pausa.");
+          setVoiceNotice("Micrófono activo. Habla con naturalidad; el texto aparecerá en el cuadro después de una pausa.");
         };
         recorder.onstop = () => {
           if (recorderRef.current === recorder) recorderRef.current = null;
           const blob = new Blob(chunksRef.current, { type: recorder.mimeType || "audio/webm" });
           const hadSpeech = speechDetectedRef.current;
           chunksRef.current = [];
-          preRollChunksRef.current = [];
+          recorderStartedAtRef.current = 0;
           speechDetectedRef.current = false;
 
           void (async () => {
@@ -526,6 +520,21 @@ export function V2Console() {
             recorderRef.current?.state === "recording" &&
             !transcribingRef.current
           ) {
+            try {
+              recorderRef.current.stop();
+            } catch {
+              /* el grabador ya se está deteniendo */
+            }
+          } else if (
+            !speechDetectedRef.current &&
+            recorderStartedAtRef.current > 0 &&
+            now - recorderStartedAtRef.current > 10_000 &&
+            recorderRef.current?.state === "recording" &&
+            !transcribingRef.current
+          ) {
+            // Rotate an idle recorder periodically so waiting silently does not
+            // accumulate an unbounded audio file. Keep all chunks within each
+            // recording so every submitted WebM remains structurally complete.
             try {
               recorderRef.current.stop();
             } catch {
