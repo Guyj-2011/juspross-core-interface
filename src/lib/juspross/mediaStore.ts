@@ -46,7 +46,7 @@ export interface MediaWin {
   x: number;
   y: number;
 }
-type Link = "none" | "checking" | "ok" | "error";
+type Link = "none" | "checking" | "ok" | "invalid" | "error";
 
 const K_SET = "juspross.media";
 const K_ITEMS = "juspross.media.items";
@@ -170,11 +170,27 @@ export const useMedia = create<MediaStore>((set, get) => ({
     }
     set({ link: "checking", linkDetail: "Probando la clave…" });
     try {
-      await pingAgnes(key);
-      set({ key, link: "ok", linkDetail: "Conectado con Agnes." });
+      const r = await pingAgnes(key);
+      let detail = "Conectado con Agnes.";
+      if (r.limited) {
+        detail =
+          "Clave guardada. Agnes está limitando el ritmo ahora mismo, así que no pude verificarla del todo; espera un minuto y prueba a crear algo.";
+      } else if (r.models.length) {
+        const missing = (["image", "video", "text"] as const).filter(
+          (k) => !r.models.includes(FREE_MODELS[k]),
+        );
+        if (missing.length) {
+          detail = `Conectado, pero tu cuenta no lista: ${missing.map((k) => FREE_MODELS[k]).join(", ")}.`;
+        }
+      }
+      set({ key, link: "ok", linkDetail: detail });
       persistSettings(get());
     } catch (e) {
-      set({ link: "error", linkDetail: e instanceof Error ? e.message : "No se pudo conectar." });
+      const status = e instanceof AgnesError ? e.status : 0;
+      set({
+        link: status === 401 ? "invalid" : "error",
+        linkDetail: e instanceof Error ? e.message : "No se pudo conectar.",
+      });
     }
   },
   disconnect: () => {

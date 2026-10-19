@@ -30,13 +30,13 @@ async function forward(url: string, init: RequestInit, signal: AbortSignal): Pro
   try {
     const up = await fetch(url, { ...init, signal });
     const text = await up.text();
-    return new Response(text, {
-      status: up.status,
-      headers: {
-        "Content-Type": up.headers.get("content-type") ?? "application/json",
-        "Cache-Control": "no-store",
-      },
-    });
+    const headers: Record<string, string> = {
+      "Content-Type": up.headers.get("content-type") ?? "application/json",
+      "Cache-Control": "no-store",
+    };
+    const retryAfter = up.headers.get("retry-after");
+    if (retryAfter) headers["Retry-After"] = retryAfter;
+    return new Response(text, { status: up.status, headers });
   } catch {
     if (signal.aborted) return new Response(null, { status: 499 });
     return bad("No se pudo conectar con Agnes. Inténtalo de nuevo en un momento.", 502);
@@ -91,6 +91,10 @@ export const Route = createFileRoute("/api/agnes")({
             },
             request.signal,
           );
+
+        // lista de modelos de la cuenta: comprueba la clave sin gastar peticiones de generación
+        if (op === "models")
+          return forward(`${BASE}/v1/models`, { method: "GET", headers: auth }, request.signal);
 
         if (op === "ping" || op === "chat") {
           const raw = Array.isArray(input["messages"]) ? (input["messages"] as unknown[]) : [];

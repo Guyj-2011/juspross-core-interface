@@ -34,6 +34,8 @@ export class AgnesError extends Error {
   constructor(
     message: string,
     public status: number,
+    /** Mensaje original de Agnes (útil para saber el motivo real). */
+    public detail = "",
   ) {
     super(message);
   }
@@ -58,8 +60,10 @@ export function sleep(ms: number, signal?: AbortSignal): Promise<void> {
 
 function friendly(status: number, msg: string): string {
   if (status === 401) return "Agnes no aceptó la clave. Revisa que esté bien copiada.";
-  if (status === 429)
-    return "Agnes limitó el ritmo del plan gratis. Espera un momento e inténtalo otra vez.";
+  if (status === 429) {
+    const why = msg && msg.length < 200 ? ` Agnes dice: «${msg}»` : "";
+    return `Agnes está limitando el ritmo ahora mismo (plan gratis). Espera un minuto e inténtalo otra vez.${why}`;
+  }
   if (status === 403) return msg || "Acceso no permitido.";
   if (status === 404) return "Agnes no encontró el recurso pedido.";
   if (status >= 500) return "Agnes está ocupado ahora mismo. Inténtalo de nuevo en un momento.";
@@ -69,7 +73,13 @@ function friendly(status: number, msg: string): string {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Any = any;
 
-async function call(op: string, key: string, body: object, signal?: AbortSignal): Promise<Any> {
+async function call(
+  op: string,
+  key: string,
+  body: object,
+  signal?: AbortSignal,
+  retries = 3,
+): Promise<Any> {
   for (let attempt = 0; ; attempt++) {
     let res: Response;
     try {
@@ -92,17 +102,52 @@ async function call(op: string, key: string, body: object, signal?: AbortSignal)
     } catch {
       /* texto plano */
     }
-    if (RETRY.has(res.status) && attempt < 3) {
-      await sleep(1500 * 2 ** attempt, signal);
+    if (RETRY.has(res.status) && attempt < retries) {
+      // en 429 se espera más (y se respeta Retry-After) para no empeorar el límite
+      const ra = Number(res.headers.get("retry-after")) * 1000;
+      const base = res.status === 429 ? 8000 : 1500;
+      await sleep(
+        Math.min(60_000, Math.max(Number.isFinite(ra) ? ra : 0, base * 2 ** attempt)),
+        signal,
+      );
       continue;
     }
-    throw new AgnesError(friendly(res.status, String(msg).slice(0, 240)), res.status);
+    throw new AgnesError(
+      friendly(res.status, String(msg).slice(0, 240)),
+      res.status,
+      String(msg).slice(0, 240),
+    );
   }
 }
 
-/** Comprueba que la clave funciona (una petición de texto mínima, gratuita). */
-export async function pingAgnes(key: string): Promise<void> {
-  await call("ping", key, {});
+export interface PingResult {
+  /** Agnes respondió que está limitando el ritmo: la clave parece válida pero no se pudo verificar del todo. */
+  limited: boolean;
+  /** Modelos que lista la cuenta (si Agnes los devolvió). */
+  models: string[];
+}
+
+/** Comprueba la clave sin reintentos agresivos: primero la lista de modelos y, si no existe, un mensaje mínimo. */
+export async function pingAgnes(key: string): Promise<PingResult> {
+  try {
+    const r = await call("models", key, {}, undefined, 0);
+    const models = ((r?.data ?? r?.models ?? []) as Any[])
+      .map((m) => String(m?.id ?? m?.name ?? ""))
+      .filter(Boolean);
+    return { limited: false, models };
+  } catch (e) {
+    if (!(e instanceof AgnesError)) throw e;
+    if (e.status === 401) throw e;
+    if (e.status === 429) return { limited: true, models: [] };
+    if (![400, 404, 405].includes(e.status)) throw e;
+  }
+  try {
+    await call("ping", key, {}, undefined, 0);
+    return { limited: false, models: [] };
+  } catch (e) {
+    if (e instanceof AgnesError && e.status === 429) return { limited: true, models: [] };
+    throw e;
+  }
 }
 
 const stripThink = (t: string) =>
@@ -139,6 +184,7 @@ export async function polishPrompt(
       max_tokens: 220,
     },
     signal,
+    1,
   );
   const out = stripThink(String(res?.choices?.[0]?.message?.content ?? "")).replace(
     /^["'`]+|["'`]+$/g,

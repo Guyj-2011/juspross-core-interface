@@ -56,9 +56,11 @@ export function MediaConsole() {
       ? { t: "AGNES · CONECTADO", c: "#34d399" }
       : link === "checking"
         ? { t: "PROBANDO…", c: GOLD }
-        : link === "error"
+        : link === "invalid"
           ? { t: "CLAVE NO VÁLIDA", c: "#f87171" }
-          : { t: "SIN CLAVE DE AGNES", c: "#9ca3af" };
+          : link === "error"
+            ? { t: "SIN CONEXIÓN CON AGNES", c: "#f87171" }
+            : { t: "SIN CLAVE DE AGNES", c: "#9ca3af" };
 
   return (
     <div className="pointer-events-none absolute inset-0 z-30">
@@ -422,7 +424,7 @@ function Settings() {
             "text-[11px] leading-snug",
             link === "ok"
               ? "text-emerald-300"
-              : link === "error"
+              : link === "invalid" || link === "error"
                 ? "text-red-300"
                 : "text-white/55",
           )}
