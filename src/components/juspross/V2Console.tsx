@@ -309,7 +309,7 @@ export function V2Console() {
         response = await fetch(endpoint, {
           method: "POST",
           body: form,
-          signal: AbortSignal.timeout(60_000),
+          signal: AbortSignal.timeout(180_000),
           targetAddressSpace: "loopback",
         } as RequestInit & { targetAddressSpace: "loopback" });
       } catch (error) {
