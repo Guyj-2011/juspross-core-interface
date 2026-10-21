@@ -40,6 +40,10 @@ function connectionHint(endpoint: string, error: unknown): string {
   );
 }
 
+/** Servidor local de Gemma 4 (llama.cpp, API compatible con OpenAI). */
+export const GEMMA_ENDPOINT = "http://127.0.0.1:8080";
+export const GEMMA_MODEL = "google/gemma-4-E2B-it-qat-q4_0-gguf:Q4_0";
+
 export const SYSTEM_PROMPT =
   "Eres Juspross 2.0, una inteligencia artificial serena y precisa que vive dentro de un núcleo holográfico. " +
   "Responde siempre en español, de forma natural y breve (2 a 5 frases) salvo que te pidan más detalle.";
@@ -126,6 +130,88 @@ export async function chat(
       if (c) {
         acc += c;
         o.onToken(clean(acc));
+      }
+    }
+  }
+  return clean(acc);
+}
+
+/** Devuelve el id del modelo que sirve llama.cpp (prefiere el que contenga «gemma»). */
+export async function testGemma(endpoint: string): Promise<string> {
+  let res: Response;
+  try {
+    res = await fetchLocal(`${endpoint}/v1/models`, { signal: AbortSignal.timeout(6000) });
+  } catch (error) {
+    throw new AiUnreachable(
+      `No se pudo leer la API de Gemma en ${endpoint}. ` +
+        `Comprueba que llama-server esté ejecutándose. Detalle: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+  if (!res.ok) throw new AiError(`Gemma respondió ${res.status}`);
+  const j = (await res.json()) as { data?: { id: string }[] };
+  const ids = (j.data ?? []).map((m) => m.id);
+  if (ids.length === 0) throw new AiError("llama.cpp no tiene ningún modelo cargado todavía.");
+  return ids.find((id) => /gemma/i.test(id)) ?? ids[0]!;
+}
+
+/** Chat contra llama.cpp con el formato OpenAI /v1/chat/completions en streaming (SSE). */
+export async function chatGemma(
+  history: AiMsg[],
+  o: { endpoint: string; model: string; signal: AbortSignal; onToken: (full: string) => void },
+): Promise<string> {
+  let res: Response;
+  try {
+    res = await fetchLocal(`${o.endpoint}/v1/chat/completions`, {
+      method: "POST",
+      signal: o.signal,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: o.model,
+        stream: true,
+        messages: [{ role: "system", content: SYSTEM_PROMPT }, ...history],
+      }),
+    });
+  } catch (e) {
+    if ((e as Error).name === "AbortError") throw e;
+    throw new AiUnreachable(
+      `Se perdió la conexión con Gemma en ${o.endpoint}. ` +
+        `Detalle: ${e instanceof Error ? e.message : String(e)}`,
+    );
+  }
+  if (!res.ok || !res.body) {
+    const body = await res.text().catch(() => "");
+    throw new AiError(`Gemma respondió ${res.status}${body ? `: ${body.slice(0, 160)}` : ""}`);
+  }
+
+  const reader = res.body.getReader();
+  const dec = new TextDecoder();
+  let buf = "";
+  let acc = "";
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    let i: number;
+    while ((i = buf.indexOf("\n")) >= 0) {
+      const line = buf.slice(0, i).trim();
+      buf = buf.slice(i + 1);
+      if (!line.startsWith("data:")) continue;
+      const data = line.slice(5).trim();
+      if (data === "[DONE]") return clean(acc);
+      try {
+        const j = JSON.parse(data) as {
+          choices?: { delta?: { content?: string } }[];
+          error?: { message?: string };
+        };
+        if (j.error?.message) throw new AiError(j.error.message);
+        const c = j.choices?.[0]?.delta?.content;
+        if (c) {
+          acc += c;
+          o.onToken(clean(acc));
+        }
+      } catch (e) {
+        if (e instanceof AiError) throw e;
+        /* línea SSE parcial: se ignora */
       }
     }
   }

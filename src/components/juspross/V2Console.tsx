@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowUp, Check, Copy, History, Mic, Settings2, Square, Trash2, Volume2, VolumeX, X } from "lucide-react";
-import { AiUnreachable, testAi } from "@/lib/juspross/ai";
+import { AiUnreachable, testAi, testGemma } from "@/lib/juspross/ai";
 import { useV2Chat } from "@/lib/juspross/useV2Chat";
 import { useV2 } from "@/lib/juspross/v2Store";
 import { cn } from "@/lib/utils";
@@ -87,6 +87,7 @@ export function V2Console() {
   const aiEndpoint = useV2((s) => s.aiEndpoint);
   const aiModel = useV2((s) => s.aiModel);
   const autoConnect = useV2((s) => s.autoConnect);
+  const aiProvider = useV2((s) => s.aiProvider);
   const [value, setValue] = useState("");
   const [open, setOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -142,33 +143,51 @@ export function V2Console() {
         current.setLink(
           "checking",
           attempts === 1
-            ? "Conectando automáticamente con Qwen3 8B…"
-            : `Esperando a Ollama… nuevo intento en curso (${attempts}).`,
+            ? "Conectando con Gemma…"
+            : `Esperando a la IA local… nuevo intento en curso (${attempts}).`,
         );
       }
 
       try {
-        const resolvedModel = await testAi(endpoint, wantedModel);
-        if (cancelled) return;
-        attempts = 0;
-        useV2.getState().setLink(
-          "online",
-          `Conexión automática establecida · ${resolvedModel}. Se comprobará en segundo plano y se reconectará si se interrumpe.`,
-        );
-        // Periodically detect server exits instead of assuming the first success lasts forever.
-        retryTimer = window.setTimeout(() => void connect(), healthCheckMs);
+        // 1) Gemma 4 local (llama.cpp, API compatible con OpenAI).
+        try {
+          const gemmaModel = await testGemma(current.gemmaEndpoint);
+          if (cancelled) return;
+          attempts = 0;
+          const st = useV2.getState();
+          st.setAiProvider("gemma");
+          st.setLink(
+            "online",
+            `Conectado a Gemma · ${gemmaModel}. Se comprobará en segundo plano y se reconectará si se interrumpe.`,
+          );
+          retryTimer = window.setTimeout(() => void connect(), healthCheckMs);
+          return;
+        } catch (e) {
+          if (!(e instanceof AiUnreachable)) throw e;
+          // 2) Respaldo: Qwen vía Ollama, solo si Gemma no está disponible.
+          const resolvedModel = await testAi(endpoint, wantedModel);
+          if (cancelled) return;
+          attempts = 0;
+          const st = useV2.getState();
+          st.setAiProvider("ollama");
+          st.setLink(
+            "online",
+            `Gemma no disponible · conectado a ${resolvedModel} (Ollama). Se seguirá buscando Gemma en segundo plano.`,
+          );
+          retryTimer = window.setTimeout(() => void connect(), healthCheckMs);
+        }
       } catch (error) {
         if (cancelled) return;
-        const message = error instanceof Error ? error.message : "No se pudo conectar con Ollama.";
-        const retrySeconds = Math.min(5 * attempts, 20);
+        const message = error instanceof Error ? error.message : "No se pudo conectar con la IA local.";
+        const retrySeconds = Math.min(5 * attempts, 30);
         const retryMessage = error instanceof AiUnreachable
-          ? "Se volverá a intentar automáticamente"
+          ? "Gemma no disponible. Se volverá a intentar automáticamente"
           : "Se volverá a comprobar automáticamente";
         useV2.getState().setLink(
           "offline",
           `${message} ${retryMessage} en ${retrySeconds} segundos.`,
         );
-        // Retry any failure, including CORS/permissions or a temporarily missing model.
+        // Backoff progresivo con tope de 30 s: reintentos razonables, sin bombardear el servidor.
         retryTimer = window.setTimeout(() => void connect(), retrySeconds * 1000);
       }
     };
@@ -738,11 +757,13 @@ export function V2Console() {
 
   const linkLabel =
     link === "online"
-      ? "QWEN CONECTADO"
+      ? aiProvider === "gemma"
+        ? "CONECTADO A GEMMA"
+        : "QWEN CONECTADO"
       : link === "checking"
-        ? "PROBANDO…"
+        ? "CONECTANDO…"
         : link === "offline"
-          ? "SIN CONEXIÓN · SIMULADO"
+          ? "GEMMA NO DISPONIBLE · SIMULADO"
           : "IA SIMULADA";
   const linkColor = link === "online" ? "#34d399" : link === "offline" ? "#f87171" : BLUE;
 
@@ -1014,7 +1035,11 @@ function AiSettings({ onClose }: { onClose: () => void }) {
   return (
     <div className="absolute top-11 right-0 w-[320px] space-y-3 rounded-xl border border-white/10 bg-black/85 p-4 text-white backdrop-blur-xl">
       <p className="font-mono text-[10px] tracking-[0.25em] text-[#6ea8ff]">
-        IA LOCAL · QWEN VÍA OLLAMA
+        IA LOCAL · GEMMA + QWEN
+      </p>
+      <p className="text-[10px] leading-snug text-white/50">
+        Gemma 4 (llama.cpp en 127.0.0.1:8080) se detecta y conecta automáticamente al abrir la
+        página. Si no está disponible, se usa Qwen vía Ollama como respaldo.
       </p>
       <label className="block space-y-1">
         <span className="font-mono text-[9px] tracking-[0.2em] text-white/50">

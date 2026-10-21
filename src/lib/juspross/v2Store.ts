@@ -24,6 +24,11 @@ interface V2Store {
   aiEndpoint: string;
   /** Modelo fijado por defecto para el lado 2.0. */
   aiModel: string;
+  /** Motor local activo: Gemma (llama.cpp) o Qwen (Ollama). Se detecta automáticamente. */
+  aiProvider: "gemma" | "ollama";
+  /** Servidor local de Gemma (llama.cpp). Fijo: no requiere configuración manual. */
+  gemmaEndpoint: string;
+  gemmaModel: string;
   /** Persist and retry the local Ollama connection automatically on page startup. */
   autoConnect: boolean;
   aiLink: AiLink;
@@ -38,6 +43,7 @@ interface V2Store {
   patchMessage: (id: string, patch: Partial<V2Message>) => void;
   clear: () => void;
   setAi: (p: { endpoint?: string; model?: string }) => void;
+  setAiProvider: (p: "gemma" | "ollama") => void;
   setAutoConnect: (enabled: boolean) => void;
   setLink: (l: AiLink, detail?: string) => void;
   setVoiceReplies: (v: boolean) => void;
@@ -52,6 +58,7 @@ function persist(s: V2Store) {
         mode: s.mode,
         endpoint: s.aiEndpoint,
         model: s.aiModel,
+        provider: s.aiProvider,
         voice: s.voiceReplies,
         autoConnect: s.autoConnect,
       }),
@@ -68,6 +75,9 @@ export const useV2 = create<V2Store>((set, get) => ({
   messages: [],
   aiEndpoint: "http://localhost:11434",
   aiModel: "qwen3:8b",
+  aiProvider: "gemma",
+  gemmaEndpoint: "http://127.0.0.1:8080",
+  gemmaModel: "google/gemma-4-E2B-it-qat-q4_0-gguf:Q4_0",
   autoConnect: true,
   aiLink: "checking",
   aiDetail:
@@ -83,6 +93,7 @@ export const useV2 = create<V2Store>((set, get) => ({
         mode?: Mode;
         endpoint?: string;
         model?: string;
+        provider?: "gemma" | "ollama";
         voice?: boolean;
         autoConnect?: boolean;
       };
@@ -90,6 +101,7 @@ export const useV2 = create<V2Store>((set, get) => ({
         mode: p.mode === "v2" || p.mode === "media" ? p.mode : "calm",
         aiEndpoint: p.endpoint || "http://localhost:11434",
         aiModel: p.model?.trim() || "qwen3:8b",
+        aiProvider: p.provider === "ollama" ? "ollama" : "gemma",
         voiceReplies: !!p.voice,
         // This integration should always reconnect automatically, including for
         // users whose older localStorage entry stored autoConnect=false.
@@ -121,6 +133,10 @@ export const useV2 = create<V2Store>((set, get) => ({
       aiLink: "simulated",
       aiDetail: "Configuración cambiada: pulsa «Probar conexión».",
     }));
+    persist(get());
+  },
+  setAiProvider: (aiProvider) => {
+    set({ aiProvider });
     persist(get());
   },
   setAutoConnect: (autoConnect) => {
