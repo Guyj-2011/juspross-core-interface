@@ -26,6 +26,9 @@ interface V2Store {
   aiModel: string;
   /** Motor local activo: Gemma (llama.cpp) o Qwen (Ollama). Se detecta automáticamente. */
   aiProvider: "gemma" | "ollama";
+  /** Servidor local de Gemma (llama.cpp). Fijo: no requiere configuración manual. */
+  gemmaEndpoint: string;
+  gemmaModel: string;
   /** Persist and retry the local Ollama connection automatically on page startup. */
   autoConnect: boolean;
   aiLink: AiLink;
@@ -73,6 +76,8 @@ export const useV2 = create<V2Store>((set, get) => ({
   aiEndpoint: "http://localhost:11434",
   aiModel: "qwen3:8b",
   aiProvider: "gemma",
+  gemmaEndpoint: "http://127.0.0.1:8080",
+  gemmaModel: "google/gemma-4-E2B-it-qat-q4_0-gguf:Q4_0",
   autoConnect: true,
   aiLink: "checking",
   aiDetail:
