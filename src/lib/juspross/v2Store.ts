@@ -55,6 +55,7 @@ function persist(s: V2Store) {
         mode: s.mode,
         endpoint: s.aiEndpoint,
         model: s.aiModel,
+        provider: s.aiProvider,
         voice: s.voiceReplies,
         autoConnect: s.autoConnect,
       }),
@@ -71,6 +72,7 @@ export const useV2 = create<V2Store>((set, get) => ({
   messages: [],
   aiEndpoint: "http://localhost:11434",
   aiModel: "qwen3:8b",
+  aiProvider: "gemma",
   autoConnect: true,
   aiLink: "checking",
   aiDetail:
