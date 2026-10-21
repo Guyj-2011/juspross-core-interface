@@ -88,6 +88,7 @@ export const useV2 = create<V2Store>((set, get) => ({
         mode?: Mode;
         endpoint?: string;
         model?: string;
+        provider?: "gemma" | "ollama";
         voice?: boolean;
         autoConnect?: boolean;
       };
@@ -95,6 +96,7 @@ export const useV2 = create<V2Store>((set, get) => ({
         mode: p.mode === "v2" || p.mode === "media" ? p.mode : "calm",
         aiEndpoint: p.endpoint || "http://localhost:11434",
         aiModel: p.model?.trim() || "qwen3:8b",
+        aiProvider: p.provider === "ollama" ? "ollama" : "gemma",
         voiceReplies: !!p.voice,
         // This integration should always reconnect automatically, including for
         // users whose older localStorage entry stored autoConnect=false.
@@ -126,6 +128,10 @@ export const useV2 = create<V2Store>((set, get) => ({
       aiLink: "simulated",
       aiDetail: "Configuración cambiada: pulsa «Probar conexión».",
     }));
+    persist(get());
+  },
+  setAiProvider: (aiProvider) => {
+    set({ aiProvider });
     persist(get());
   },
   setAutoConnect: (autoConnect) => {
