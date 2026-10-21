@@ -9,3 +9,9 @@
 # Voice
 - [x] Replace robotic speech with a natural, composed masculine voice in both modes and verify playback.
 - [x] Revert to the original voice (Algieba, composed personal-assistant style) after the butler variant was rejected; verified audio playback.
+## Gemma 4 local integration
+- [x] OpenAI-compatible client for llama.cpp (ai.ts: testGemma/chatGemma)
+- [x] aiProvider + gemmaEndpoint/gemmaModel in v2Store, persisted
+- [x] Auto-detect on load: Gemma first, Qwen/Ollama fallback, backoff retries
+- [x] Status indicator: Conectando / Conectado a Gemma / Gemma no disponible
+- [ ] Typecheck + build + browser verification

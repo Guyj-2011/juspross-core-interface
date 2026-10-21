@@ -1035,7 +1035,11 @@ function AiSettings({ onClose }: { onClose: () => void }) {
   return (
     <div className="absolute top-11 right-0 w-[320px] space-y-3 rounded-xl border border-white/10 bg-black/85 p-4 text-white backdrop-blur-xl">
       <p className="font-mono text-[10px] tracking-[0.25em] text-[#6ea8ff]">
-        IA LOCAL · QWEN VÍA OLLAMA
+        IA LOCAL · GEMMA + QWEN
+      </p>
+      <p className="text-[10px] leading-snug text-white/50">
+        Gemma 4 (llama.cpp en 127.0.0.1:8080) se detecta y conecta automáticamente al abrir la
+        página. Si no está disponible, se usa Qwen vía Ollama como respaldo.
       </p>
       <label className="block space-y-1">
         <span className="font-mono text-[9px] tracking-[0.2em] text-white/50">
