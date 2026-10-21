@@ -40,6 +40,10 @@ function connectionHint(endpoint: string, error: unknown): string {
   );
 }
 
+/** Servidor local de Gemma 4 (llama.cpp, API compatible con OpenAI). */
+export const GEMMA_ENDPOINT = "http://127.0.0.1:8080";
+export const GEMMA_MODEL = "google/gemma-4-E2B-it-qat-q4_0-gguf:Q4_0";
+
 export const SYSTEM_PROMPT =
   "Eres Juspross 2.0, una inteligencia artificial serena y precisa que vive dentro de un núcleo holográfico. " +
   "Responde siempre en español, de forma natural y breve (2 a 5 frases) salvo que te pidan más detalle.";
