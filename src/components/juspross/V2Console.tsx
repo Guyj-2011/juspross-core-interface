@@ -87,6 +87,7 @@ export function V2Console() {
   const aiEndpoint = useV2((s) => s.aiEndpoint);
   const aiModel = useV2((s) => s.aiModel);
   const autoConnect = useV2((s) => s.autoConnect);
+  const aiProvider = useV2((s) => s.aiProvider);
   const [value, setValue] = useState("");
   const [open, setOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -756,11 +757,13 @@ export function V2Console() {
 
   const linkLabel =
     link === "online"
-      ? "QWEN CONECTADO"
+      ? aiProvider === "gemma"
+        ? "CONECTADO A GEMMA"
+        : "QWEN CONECTADO"
       : link === "checking"
-        ? "PROBANDO…"
+        ? "CONECTANDO…"
         : link === "offline"
-          ? "SIN CONEXIÓN · SIMULADO"
+          ? "GEMMA NO DISPONIBLE · SIMULADO"
           : "IA SIMULADA";
   const linkColor = link === "online" ? "#34d399" : link === "offline" ? "#f87171" : BLUE;
 
