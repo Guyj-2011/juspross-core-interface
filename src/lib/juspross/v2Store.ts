@@ -24,6 +24,8 @@ interface V2Store {
   aiEndpoint: string;
   /** Modelo fijado por defecto para el lado 2.0. */
   aiModel: string;
+  /** Motor local activo: Gemma (llama.cpp) o Qwen (Ollama). Se detecta automáticamente. */
+  aiProvider: "gemma" | "ollama";
   /** Persist and retry the local Ollama connection automatically on page startup. */
   autoConnect: boolean;
   aiLink: AiLink;
@@ -38,6 +40,7 @@ interface V2Store {
   patchMessage: (id: string, patch: Partial<V2Message>) => void;
   clear: () => void;
   setAi: (p: { endpoint?: string; model?: string }) => void;
+  setAiProvider: (p: "gemma" | "ollama") => void;
   setAutoConnect: (enabled: boolean) => void;
   setLink: (l: AiLink, detail?: string) => void;
   setVoiceReplies: (v: boolean) => void;
