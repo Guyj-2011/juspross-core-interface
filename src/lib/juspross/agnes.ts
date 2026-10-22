@@ -1,14 +1,48 @@
 /**
- * Cliente de la API de Agnes (vía /api/agnes, que reenvía a apihub.agnes-ai.com).
+ * Cliente de la API de Agnes.
+ *  - Ruta directa: el navegador llama a apihub.agnes-ai.com con TU conexión (como hace n8n).
+ *  - Ruta de respaldo: /api/agnes en el servidor de la app (solo si el navegador no puede, p. ej. por CORS).
  * Solo se usan los modelos que Agnes anunció como gratuitos.
  */
+import { AGNES_BASE, FREE, buildUpstream, type Upstream } from "./agnesRequest";
+
 export type MediaKind = "image" | "video";
 
-export const FREE_MODELS = {
-  text: "agnes-2.0-flash",
-  image: "agnes-image-2.1-flash",
-  video: "agnes-video-v2.0",
-} as const;
+export const FREE_MODELS = FREE;
+
+export type Transport = "auto" | "direct" | "server";
+const LS_BLOCK = "juspross.agnes.directBlocked";
+let transport: Transport = "auto";
+let directBlocked = false;
+let lastRoute: "direct" | "server" | null = null;
+
+export function setTransport(t: Transport) {
+  transport = t;
+  directBlocked = false;
+  try {
+    sessionStorage.removeItem(LS_BLOCK);
+  } catch {
+    /* sin almacenamiento */
+  }
+}
+export const getTransport = () => transport;
+/** Por dónde salió la última petición (para mostrarlo en ajustes). */
+export const getLastRoute = () => lastRoute;
+const isBlocked = () => {
+  try {
+    return directBlocked || sessionStorage.getItem(LS_BLOCK) === "1";
+  } catch {
+    return directBlocked;
+  }
+};
+const markBlocked = () => {
+  directBlocked = true;
+  try {
+    sessionStorage.setItem(LS_BLOCK, "1");
+  } catch {
+    /* sin almacenamiento */
+  }
+};
 
 export const IMAGE_PRESETS = [
   { id: "square", label: "Cuadrada 1:1", size: "1024x1024" },
@@ -70,31 +104,117 @@ function friendly(status: number, msg: string): string {
   return msg || `Error ${status}`;
 }
 
+/** Cloudflare (que protege a Agnes) devuelve una página HTML con "Error 1015" cuando limita una conexión. */
+function cloudflareLimit(): string {
+  return lastRoute === "server"
+    ? "Cloudflare (que protege a Agnes) bloqueó temporalmente la conexión del servidor de la app por demasiadas peticiones (error 1015). En ajustes elige la ruta «Navegador directo»: usa tu propia conexión, como en n8n."
+    : "Cloudflare (que protege a Agnes) bloqueó temporalmente tu conexión por demasiadas peticiones (error 1015). Espera unos minutos y vuelve a intentarlo.";
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Any = any;
+
+/** Combina la cancelación del usuario con un tiempo máximo por intento. */
+function withTimeout(signal: AbortSignal | undefined, ms: number) {
+  const c = new AbortController();
+  let timedOut = false;
+  const t = setTimeout(() => {
+    timedOut = true;
+    c.abort();
+  }, ms);
+  const onAbort = () => c.abort();
+  signal?.addEventListener("abort", onAbort, { once: true });
+  return {
+    signal: c.signal,
+    timedOut: () => timedOut,
+    done: () => {
+      clearTimeout(t);
+      signal?.removeEventListener("abort", onAbort);
+    },
+  };
+}
+
+function directFetch(up: Upstream, key: string, signal: AbortSignal): Promise<Response> {
+  return fetch(`${AGNES_BASE}${up.path}`, {
+    method: up.method,
+    headers: {
+      Authorization: `Bearer ${key}`,
+      ...(up.body ? { "Content-Type": "application/json" } : {}),
+    },
+    ...(up.body ? { body: JSON.stringify(up.body) } : {}),
+    signal,
+  });
+}
+
+/** Un intento: ruta directa (tu conexión) y, si el navegador no puede, el servidor de la app. */
+async function attempt(
+  op: string,
+  key: string,
+  body: object,
+  signal: AbortSignal | undefined,
+  ms: number,
+): Promise<Response> {
+  const built = buildUpstream({ op, ...body });
+  if (!built.ok) throw new AgnesError(built.message, built.status);
+  const t = withTimeout(signal, ms);
+  try {
+    if (transport !== "server" && !isBlocked()) {
+      try {
+        const res = await directFetch(built.up, key, t.signal);
+        lastRoute = "direct";
+        return res;
+      } catch (e) {
+        if (signal?.aborted) throw e;
+        if (t.timedOut()) throw new AgnesError("Agnes tardó demasiado en responder.", 504);
+        if (transport === "direct") {
+          throw new AgnesError(
+            "El navegador no pudo conectar directamente con Agnes (puede ser un bloqueo del navegador). Prueba la ruta «Servidor de la app» en ajustes.",
+            0,
+          );
+        }
+        markBlocked(); // modo automático: a partir de ahora usa el servidor
+      }
+    }
+    try {
+      const res = await fetch("/api/agnes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ op, key, ...body }),
+        signal: t.signal,
+      });
+      lastRoute = "server";
+      return res;
+    } catch (e) {
+      if (signal?.aborted) throw e;
+      if (t.timedOut()) throw new AgnesError("Agnes tardó demasiado en responder.", 504);
+      throw new AgnesError("No hay conexión con el servidor.", 0);
+    }
+  } finally {
+    t.done();
+  }
+}
 
 async function call(
   op: string,
   key: string,
   body: object,
   signal?: AbortSignal,
-  retries = 3,
+  retries = 2,
+  timeoutMs = 100_000,
 ): Promise<Any> {
-  for (let attempt = 0; ; attempt++) {
+  for (let n = 0; ; n++) {
     let res: Response;
     try {
-      res = await fetch("/api/agnes", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ op, key, ...body }),
-        ...(signal ? { signal } : {}),
-      });
+      res = await attempt(op, key, body, signal, timeoutMs);
     } catch (e) {
-      if ((e as Error).name === "AbortError") throw e;
-      throw new AgnesError("No hay conexión con el servidor.", 0);
+      if (e instanceof AgnesError && e.status === 504 && n < 1) continue; // un reintento si se quedó colgado
+      throw e;
     }
     if (res.ok) return res.json();
     const raw = await res.text();
+    if (/error\s*1015|<html/i.test(raw) && /1015|rate limit/i.test(raw)) {
+      throw new AgnesError(cloudflareLimit(), 429, "Cloudflare 1015"); // reintentar enseguida solo empeora el bloqueo
+    }
     let msg = raw;
     try {
       const j = JSON.parse(raw) as Any;
@@ -102,14 +222,11 @@ async function call(
     } catch {
       /* texto plano */
     }
-    if (RETRY.has(res.status) && attempt < retries) {
+    if (RETRY.has(res.status) && n < retries) {
       // en 429 se espera más (y se respeta Retry-After) para no empeorar el límite
       const ra = Number(res.headers.get("retry-after")) * 1000;
       const base = res.status === 429 ? 8000 : 1500;
-      await sleep(
-        Math.min(60_000, Math.max(Number.isFinite(ra) ? ra : 0, base * 2 ** attempt)),
-        signal,
-      );
+      await sleep(Math.min(60_000, Math.max(Number.isFinite(ra) ? ra : 0, base * 2 ** n)), signal);
       continue;
     }
     throw new AgnesError(
@@ -203,12 +320,18 @@ function b64ToBlob(b64: string): Blob {
 }
 
 export async function downloadBlob(url: string, signal?: AbortSignal): Promise<Blob> {
-  const res = await fetch("/api/agnes", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ op: "download", url }),
-    ...(signal ? { signal } : {}),
-  });
+  try {
+    const res = await fetch("/api/agnes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ op: "download", url }),
+      ...(signal ? { signal } : {}),
+    });
+    if (res.ok) return await res.blob();
+  } catch (e) {
+    if ((e as Error).name === "AbortError") throw e;
+  }
+  const res = await fetch(url, { ...(signal ? { signal } : {}) });
   if (!res.ok) throw new AgnesError("No se pudo descargar el resultado.", res.status);
   return res.blob();
 }

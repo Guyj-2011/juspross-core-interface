@@ -1,20 +1,14 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { AGNES_BASE, buildUpstream } from "@/lib/juspross/agnesRequest";
 
 /**
- * Puente hacia la API de Agnes (https://apihub.agnes-ai.com).
+ * Ruta de respaldo hacia la API de Agnes (https://apihub.agnes-ai.com).
  *  - La clave la manda el navegador en cada petición; aquí no se guarda ni se registra.
- *  - Solo se permiten los modelos que Agnes anunció como gratuitos y tamaños moderados,
+ *  - Aplica las mismas barreras que el navegador (solo modelos gratuitos y tamaños moderados),
  *    así que aunque alguien manipule el cliente no se puede llamar a otro modelo.
+ *  - Ojo: las llamadas salen desde direcciones compartidas del servidor, que Cloudflare (que protege a
+ *    Agnes) puede limitar (error 1015). Por eso el navegador intenta primero la ruta directa.
  */
-const BASE = "https://apihub.agnes-ai.com";
-const FREE = {
-  text: "agnes-2.0-flash",
-  image: "agnes-image-2.1-flash",
-  video: "agnes-video-v2.0",
-} as const;
-const IMAGE_SIZES = new Set(["1024x1024", "1280x720", "720x1280", "1024x768", "768x1024"]);
-const VIDEO_SIZES = new Set(["1152x768", "768x1152", "1024x576", "576x1024", "768x768"]);
-const VIDEO_FRAMES = new Set([81, 121]); // ~3 s o ~5 s a 24 fps
 const DOWNLOAD_HOSTS = [
   /^https:\/\/storage\.googleapis\.com\/agnes-aigc\//,
   /^https:\/\/platform-outputs\.agnes-ai\.space\//,
@@ -52,10 +46,9 @@ export const Route = createFileRoute("/api/agnes")({
           return bad("Solicitud no autorizada.", 403);
         const input = (await request.json().catch(() => null)) as Json | null;
         if (!input) return bad("Petición inválida.");
-        const op = input["op"];
 
         // descarga de resultados (imágenes/videos) desde los servidores de Agnes, sin CORS
-        if (op === "download") {
+        if (input["op"] === "download") {
           const url = str(input["url"], 2000);
           if (!url || !DOWNLOAD_HOSTS.some((r) => r.test(url)))
             return bad("Dirección no permitida.", 403);
@@ -80,94 +73,21 @@ export const Route = createFileRoute("/api/agnes")({
         if (typeof key !== "string" || key.length < 8 || key.length > 400 || /\s/.test(key)) {
           return bad("Falta una clave de Agnes válida.", 401);
         }
-        const auth = { Authorization: `Bearer ${key}` };
-        const post = (path: string, body: Json) =>
-          forward(
-            `${BASE}${path}`,
-            {
-              method: "POST",
-              headers: { ...auth, "Content-Type": "application/json" },
-              body: JSON.stringify(body),
+        const built = buildUpstream(input);
+        if (!built.ok) return bad(built.message, built.status);
+        const { method, path, body } = built.up;
+        return forward(
+          `${AGNES_BASE}${path}`,
+          {
+            method,
+            headers: {
+              Authorization: `Bearer ${key}`,
+              ...(body ? { "Content-Type": "application/json" } : {}),
             },
-            request.signal,
-          );
-
-        // lista de modelos de la cuenta: comprueba la clave sin gastar peticiones de generación
-        if (op === "models")
-          return forward(`${BASE}/v1/models`, { method: "GET", headers: auth }, request.signal);
-
-        if (op === "ping" || op === "chat") {
-          const raw = Array.isArray(input["messages"]) ? (input["messages"] as unknown[]) : [];
-          const messages =
-            op === "ping"
-              ? [{ role: "user", content: "ping" }]
-              : raw
-                  .slice(-12)
-                  .map((m) => m as Json)
-                  .filter(
-                    (m) =>
-                      ["system", "user", "assistant"].includes(String(m["role"])) &&
-                      str(m["content"], 4000),
-                  )
-                  .map((m) => ({ role: String(m["role"]), content: String(m["content"]) }));
-          if (!messages.length) return bad("Falta el mensaje.");
-          const maxTokens =
-            op === "ping" ? 5 : Math.min(600, Math.max(16, Number(input["max_tokens"]) || 300));
-          return post("/v1/chat/completions", {
-            model: FREE.text,
-            messages,
-            max_tokens: maxTokens,
-            temperature: 0.7,
-            stream: false,
-          });
-        }
-
-        if (op === "image") {
-          const prompt = str(input["prompt"], 2000);
-          const size = String(input["size"] ?? "1024x1024");
-          if (!prompt) return bad("Falta la descripción de la imagen.");
-          if (!IMAGE_SIZES.has(size)) return bad("Tamaño de imagen no permitido.");
-          const fmt = input["response_format"] === "url" ? "url" : "b64_json";
-          return post("/v1/images/generations", {
-            model: FREE.image,
-            prompt,
-            size,
-            response_format: fmt,
-          });
-        }
-
-        if (op === "video_create") {
-          const prompt = str(input["prompt"], 2000);
-          const width = Number(input["width"]);
-          const height = Number(input["height"]);
-          const frames = Number(input["num_frames"]);
-          if (!prompt) return bad("Falta la descripción del video.");
-          if (!VIDEO_SIZES.has(`${width}x${height}`)) return bad("Tamaño de video no permitido.");
-          if (!VIDEO_FRAMES.has(frames)) return bad("Duración de video no permitida.");
-          const body: Json = {
-            model: FREE.video,
-            prompt,
-            width,
-            height,
-            num_frames: frames,
-            frame_rate: 24,
-          };
-          const neg = str(input["negative_prompt"], 500);
-          if (neg) body["negative_prompt"] = neg;
-          return post("/v1/videos", body);
-        }
-
-        if (op === "video_status") {
-          const id = String(input["video_id"] ?? "");
-          if (!/^[A-Za-z0-9_-]{6,160}$/.test(id)) return bad("Identificador de video inválido.");
-          return forward(
-            `${BASE}/agnesapi?video_id=${encodeURIComponent(id)}&model_name=${FREE.video}`,
-            { method: "GET", headers: auth },
-            request.signal,
-          );
-        }
-
-        return bad("Operación no permitida.");
+            ...(body ? { body: JSON.stringify(body) } : {}),
+          },
+          request.signal,
+        );
       },
     },
   },

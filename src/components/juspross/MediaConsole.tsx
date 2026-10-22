@@ -14,7 +14,14 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { FREE_MODELS, IMAGE_PRESETS, VIDEO_DURATIONS, VIDEO_PRESETS } from "@/lib/juspross/agnes";
+import {
+  FREE_MODELS,
+  IMAGE_PRESETS,
+  VIDEO_DURATIONS,
+  VIDEO_PRESETS,
+  getLastRoute,
+  type Transport,
+} from "@/lib/juspross/agnes";
 import { useMedia, type ChatMsg } from "@/lib/juspross/mediaStore";
 import { cn } from "@/lib/utils";
 import { useItemUrl } from "./useItemUrl";
@@ -359,6 +366,8 @@ function Settings() {
   const connect = useMedia((s) => s.connect);
   const disconnect = useMedia((s) => s.disconnect);
   const clearChat = useMedia((s) => s.clearChat);
+  const transport = useMedia((s) => s.transport);
+  const setOpt = useMedia((s) => s.setOpt);
   const [val, setVal] = useState("");
   const [show, setShow] = useState(false);
   const input =
@@ -432,6 +441,39 @@ function Settings() {
           {detail}
         </p>
       )}
+      <div className="space-y-1.5">
+        <p className="font-mono text-[9px] tracking-[0.2em] text-white/50">RUTA DE CONEXIÓN</p>
+        <div className="flex overflow-hidden rounded-lg border border-white/10">
+          {(
+            [
+              ["auto", "AUTOMÁTICA"],
+              ["direct", "DIRECTA"],
+              ["server", "SERVIDOR"],
+            ] as [Transport, string][]
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              onClick={() => setOpt({ transport: id })}
+              className={cn(
+                "flex-1 py-1.5 font-mono text-[9.5px] tracking-[0.14em] transition-colors",
+                transport === id
+                  ? "bg-[#ffc83a]/20 text-[#ffd36b]"
+                  : "text-white/45 hover:text-white",
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <p className="text-[10px] leading-snug text-white/40">
+          «Directa» llama a Agnes con tu propia conexión (como en n8n) y evita el límite de
+          Cloudflare (error 1015) que afecta a los servidores compartidos. «Automática» prueba la
+          directa y, si el navegador no puede, usa el servidor.
+          {getLastRoute()
+            ? ` Última ruta usada: ${getLastRoute() === "direct" ? "directa" : "servidor"}.`
+            : ""}
+        </p>
+      </div>
       <div className="space-y-1.5 rounded-lg border border-white/10 bg-white/[0.03] p-3 text-[10.5px] leading-relaxed text-white/55">
         <p className="font-mono text-[9px] tracking-[0.2em] text-white/70">
           SOLO MODELOS GRATUITOS

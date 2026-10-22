@@ -11,10 +11,12 @@ import {
   pingAgnes,
   polishPrompt,
   pollVideo,
+  setTransport,
   sleep,
   videoCooldownMs,
   waitImageSlot,
   type MediaKind,
+  type Transport,
 } from "./agnes";
 import { clearBlobs, delBlob, putBlob } from "./mediaDb";
 
@@ -77,6 +79,7 @@ interface MediaStore {
   videoPreset: string;
   duration: string;
   polish: boolean;
+  transport: Transport;
   messages: ChatMsg[];
   items: MediaItem[];
   windows: MediaWin[];
@@ -89,7 +92,9 @@ interface MediaStore {
 
   hydrate: () => void;
   setOpt: (
-    p: Partial<Pick<MediaStore, "kind" | "imagePreset" | "videoPreset" | "duration" | "polish">>,
+    p: Partial<
+      Pick<MediaStore, "kind" | "imagePreset" | "videoPreset" | "duration" | "polish" | "transport">
+    >,
   ) => void;
   setHistoryOpen: (v: boolean) => void;
   setSettingsOpen: (v: boolean) => void;
@@ -116,6 +121,7 @@ function persistSettings(s: MediaStore) {
     videoPreset: s.videoPreset,
     duration: s.duration,
     polish: s.polish,
+    transport: s.transport,
   });
 }
 
@@ -128,6 +134,7 @@ export const useMedia = create<MediaStore>((set, get) => ({
   videoPreset: "wide",
   duration: "5",
   polish: true,
+  transport: "auto",
   messages: [],
   items: [],
   windows: [],
@@ -142,7 +149,11 @@ export const useMedia = create<MediaStore>((set, get) => ({
     const st = load<Partial<MediaStore>>(K_SET);
     const items = load<MediaItem[]>(K_ITEMS) ?? [];
     const msgs = (load<ChatMsg[]>(K_CHAT) ?? []).map((m) => ({ ...m, pending: false }));
+    const tr: Transport =
+      st?.transport === "direct" || st?.transport === "server" ? st.transport : "auto";
+    setTransport(tr);
     set({
+      transport: tr,
       key: st?.key ?? "",
       link: st?.key ? "ok" : "none",
       linkDetail: st?.key ? "Clave guardada en este navegador." : "",
@@ -156,6 +167,7 @@ export const useMedia = create<MediaStore>((set, get) => ({
     });
   },
   setOpt: (p) => {
+    if (p.transport) setTransport(p.transport);
     set(p);
     persistSettings(get());
   },
