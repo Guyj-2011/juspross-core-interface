@@ -117,7 +117,7 @@ export function useSpeechRecognition({ onInterim, onFinal, onWake, onError, wake
   return { start, stop, forceWake };
 }
 
-/** Voz neuronal compartida por ambos modos; nunca sustituye un error por voz robótica. */
+/** Voz local durante desarrollo; la web publicada usa la voz instalada en el navegador. */
 export function speak(
   text: string,
   onLevel: (v: number) => void,
@@ -125,6 +125,36 @@ export function speak(
   onUnavailable?: (reason: string) => void,
 ): () => void {
   if (typeof window === "undefined") return () => {};
+  onLevel(0);
+
+  if (import.meta.env.PROD) {
+    if (!("speechSynthesis" in window)) {
+      onUnavailable?.("Este navegador no dispone de síntesis de voz.");
+      return () => {};
+    }
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = "es-MX";
+    utterance.rate = 0.96;
+    utterance.pitch = 0.92;
+    const voices = window.speechSynthesis.getVoices();
+    const spanishVoice = voices.find((voice) => voice.lang.toLowerCase() === "es-mx")
+      ?? voices.find((voice) => voice.lang.toLowerCase().startsWith("es-"))
+      ?? voices.find((voice) => voice.lang.toLowerCase().startsWith("es"));
+    if (spanishVoice) utterance.voice = spanishVoice;
+    utterance.onend = () => onEnd();
+    utterance.onerror = (event) => {
+      if (event.error !== "canceled" && event.error !== "interrupted") {
+        onUnavailable?.("No se pudo reproducir la voz del navegador.");
+      }
+    };
+    window.speechSynthesis.speak(utterance);
+    return () => {
+      window.speechSynthesis.cancel();
+      onLevel(0);
+    };
+  }
+
   const controller = new AbortController();
   void streamSpeech("/api/speech", text, controller.signal, onLevel)
     .then(() => { if (!controller.signal.aborted) onEnd(); })
