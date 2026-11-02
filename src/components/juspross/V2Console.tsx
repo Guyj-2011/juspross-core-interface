@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowUp, Check, Copy, History, Mic, Settings2, Square, Trash2, Volume2, VolumeX, X } from "lucide-react";
-import { AiUnreachable, testAi, testGemma } from "@/lib/juspross/ai";
+import { AiUnreachable, testAi, testGemma, testNemotron } from "@/lib/juspross/ai";
 import { useV2Chat } from "@/lib/juspross/useV2Chat";
 import { useV2 } from "@/lib/juspross/v2Store";
 import { cn } from "@/lib/utils";
@@ -88,6 +88,7 @@ export function V2Console() {
   const aiModel = useV2((s) => s.aiModel);
   const autoConnect = useV2((s) => s.autoConnect);
   const aiProvider = useV2((s) => s.aiProvider);
+  const aiSource = useV2((s) => s.aiSource);
   const [value, setValue] = useState("");
   const [open, setOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -122,6 +123,10 @@ export function V2Console() {
     let attempts = 0;
     const healthCheckMs = 15_000;
 
+    if (aiSource === "nemotron") {
+      useV2.getState().setLink("online", "Nemotron (NVIDIA) seleccionado. Usa «Probar Nemotron» para un diagnóstico real.");
+      return;
+    }
     if (!autoConnect) {
       useV2.getState().setLink(
         "simulated",
@@ -197,7 +202,7 @@ export function V2Console() {
       cancelled = true;
       if (retryTimer !== undefined) window.clearTimeout(retryTimer);
     };
-  }, [aiEndpoint, aiModel, autoConnect]);
+  }, [aiEndpoint, aiModel, autoConnect, aiSource]);
 
   useEffect(() => {
     const onSecretV3 = (event: Event) => {
@@ -757,7 +762,9 @@ export function V2Console() {
 
   const linkLabel =
     link === "online"
-      ? aiProvider === "gemma"
+      ? aiProvider === "nemotron"
+        ? "NEMOTRON · NVIDIA"
+        : aiProvider === "gemma"
         ? "CONECTADO A GEMMA"
         : "QWEN CONECTADO"
       : link === "checking"
@@ -1002,6 +1009,16 @@ function AiSettings({ onClose }: { onClose: () => void }) {
   const detail = useV2((s) => s.aiDetail);
   const [ep, setEp] = useState(endpoint);
   const [md, setMd] = useState(model);
+  const source = useV2((s) => s.aiSource);
+  const probeNemotron = async () => {
+    useV2.getState().setLink("checking", "Probando Nemotron…");
+    try {
+      const r = await testNemotron();
+      useV2.getState().setLink("online", `Nemotron respondió: «${r}».`);
+    } catch (e) {
+      useV2.getState().setLink("offline", e instanceof Error ? e.message : "Nemotron no respondió.");
+    }
+  };
 
   const test = async () => {
     // A click is intentional: Chrome may require a user gesture for first local-network access.
@@ -1041,6 +1058,28 @@ function AiSettings({ onClose }: { onClose: () => void }) {
         Gemma 4 (llama.cpp en 127.0.0.1:8080) se detecta y conecta automáticamente al abrir la
         página. Si no está disponible, se usa Qwen vía Ollama como respaldo.
       </p>
+      <div className="flex gap-2">
+        {(["local", "nemotron"] as const).map((k) => (
+          <button
+            key={k}
+            onClick={() => useV2.getState().setAiSource(k)}
+            className={cn(
+              "flex-1 rounded-md border py-1.5 font-mono text-[10px] tracking-[0.2em]",
+              source === k ? "border-[#3d7bff]/60 bg-[#3d7bff]/20 text-[#9cc0ff]" : "border-white/10 text-white/50",
+            )}
+          >
+            {k === "local" ? "LOCAL" : "NEMOTRON"}
+          </button>
+        ))}
+      </div>
+      {source === "nemotron" && (
+        <button
+          onClick={() => void probeNemotron()}
+          className="w-full rounded-md border border-[#3d7bff]/50 bg-[#3d7bff]/15 py-1.5 font-mono text-[10px] tracking-[0.2em] text-[#9cc0ff]"
+        >
+          PROBAR NEMOTRON
+        </button>
+      )}
       <label className="block space-y-1">
         <span className="font-mono text-[9px] tracking-[0.2em] text-white/50">
           DIRECCIÓN DE OLLAMA
