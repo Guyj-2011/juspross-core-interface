@@ -385,23 +385,22 @@ const FIRE_FRAG = /* glsl */ `
     return max(dxz * 0.7, dy);
   }
 
-  // densidad: piel de llamas sobre la bola (interior oscuro, borde brillante) + columna que sube con la caída
+  // llamas: lenguas nítidas que suben y flamean; amarillo abajo, naranja al centro y rojo arriba
   float fireDensity(vec3 p, vec3 rd, out vec3 col){
     float sb = sdBall(p);
     float sp = sdPlume(p);
     float hgt = clamp(p.y / uYtop, 0.0, 1.0);
-    float sway = (0.2 + hgt) * (0.4 + uTurb);
+    float sway = (0.15 + hgt) * (0.4 + uTurb);
     vec3 pw = p;
-    pw.x += sin(uTime * 1.7 + p.y * 1.1) * 0.22 * sway;
-    pw.z += cos(uTime * 1.3 + p.y * 0.9 + 1.7) * 0.22 * sway;
-    float ang = pw.y * 0.3 + uTime * 0.35;
+    pw.x += sin(uTime * 2.3 + p.y * 1.3) * 0.2 * sway;
+    pw.z += cos(uTime * 1.9 + p.y * 1.1 + 1.7) * 0.2 * sway;
+    float ang = pw.y * 0.22 + uTime * 0.25;
     float ca = cos(ang);
     float sa = sin(ang);
     pw.xz = vec2(pw.x * ca - pw.z * sa, pw.x * sa + pw.z * ca);
-    // ruido estirado en vertical y subiendo: lenguas largas que flamean
-    vec3 q = (vec3(pw.x, pw.y * 0.2, pw.z) - vec3(0.0, uFlame * 0.2, 0.0)) * 0.38;
-    vec3 w = N3(q * 0.8 + vec3(0.17, 0.53, 0.91)) - 0.5;
-    q += w * (0.7 + 0.22 * uTurb);
+    // ruido muy estirado en vertical y subiendo rápido; poco desplazamiento = bordes definidos (llama, no humo)
+    vec3 q = (vec3(pw.x, pw.y * 0.17, pw.z) - vec3(0.0, uFlame * 0.17, 0.0)) * 0.24;
+    q += (N3(q * 0.9 + vec3(0.17, 0.53, 0.91)) - 0.5) * (0.4 + 0.12 * uTurb);
     float a = 0.5;
     float n = 0.0;
     vec3 qq = q;
@@ -413,25 +412,26 @@ const FIRE_FRAG = /* glsl */ `
     float rdg = 1.0 - abs(2.0 * n - 1.0);
     float rdg2 = rdg * rdg;
     float rdg3 = rdg2 * rdg;
-    // piel sobre la bola: brilla en el borde (más camino visto de canto) y casi vacía de frente
+    // aro de fuego sobre la bola: lenguas de distinto largo, brilla de canto y deja el interior oscuro
     float rimv = 1.0 - abs(dot(normalize(p), rd));
-    float skinT = uHs * (0.7 + 0.8 * n);
-    float baseS = 1.0 - abs(sb - 0.12) / (0.5 * skinT + 0.25);
-    float skinD = smoothstep(0.0, 0.45, baseS + (n - 0.5) * 1.3) * (0.05 + rdg3 * rdg) * (0.3 + 1.6 * rimv * rimv);
-    // columna de llamas con bordes irregulares (lenguas)
+    float skinT = uHs * (0.25 + 2.4 * n);
+    float baseS = 1.0 - abs(sb - 0.1) / (0.5 * skinT + 0.2);
+    float inner = 0.12 + 0.88 * smoothstep(-0.3, 0.08, sb);
+    float skinD = smoothstep(0.0, 0.09, baseS + (n - 0.5) * 1.8) * inner * (0.15 + rdg3) * (0.05 + 1.6 * rimv * rimv);
+    // columna de llamas con bordes en punta
     float ep = clamp(-sp / 0.9, -0.6, 1.0);
-    float outb = smoothstep(-0.05, 0.6, sb);
-    float val = (n - 0.45) * 2.0 + ep * 0.5 + (1.0 - hgt) * 0.4 - 0.35;
-    float plumeD = smoothstep(0.0, 0.3, val) * (1.0 - smoothstep(0.4, 0.7, sp)) * outb * (0.5 + 1.3 * rdg3) * (1.0 - smoothstep(0.7, 1.0, hgt));
+    float outb = smoothstep(-0.05, 0.5, sb);
+    float val = (n - 0.45) * 3.4 + ep * 0.45 + (1.0 - hgt) * 0.4 - 0.5;
+    float plumeD = smoothstep(0.0, 0.1, val) * (1.0 - smoothstep(0.35, 0.6, sp)) * outb * (0.55 + 1.6 * rdg3) * (1.0 - smoothstep(0.75, 1.0, hgt));
     float d = skinD + plumeD;
     col = vec3(0.0);
     if (d > 0.003) {
-      float kSkin = clamp(sb / (uHs * 1.2), 0.0, 1.0);
-      float k = clamp(max(kSkin * 0.8, hgt * 1.1) + (n - 0.5) * 0.3, 0.0, 1.0);
-      vec3 c = mix(vec3(0.02, 0.1, 0.9), vec3(0.1, 0.45, 1.0), smoothstep(0.0, 0.35, k));
-      c = mix(c, vec3(0.8, 0.92, 1.0), pow(rdg, 6.0) * 0.2);
-      c = mix(c, vec3(1.0, 0.1, 0.12), smoothstep(0.78, 1.0, k) * 0.75);
-      col = c * (0.7 + 1.6 * rdg2);
+      float tc = clamp((p.y + uR0) / (2.0 * uR0 + 0.6 * (uYtop - uR0)) + (n - 0.5) * 0.12, 0.0, 1.0);
+      vec3 c = mix(vec3(1.0, 0.8, 0.16), vec3(1.0, 0.42, 0.03), smoothstep(0.04, 0.3, tc));
+      c = mix(c, vec3(0.9, 0.05, 0.01), smoothstep(0.5, 0.92, tc));
+      float hot = clamp(d * 0.7, 0.0, 1.0);
+      c = mix(c, vec3(1.0, 0.8, 0.3), hot * hot * 0.15);
+      col = c * (0.55 + 0.9 * rdg);
     }
     return d;
   }
@@ -467,8 +467,8 @@ const FIRE_FRAG = /* glsl */ `
         float d = fireDensity(p, rd, col);
         if (d > 0.003) {
           vec3 c = mix(col, vec3(1.0, 0.12, 0.05) * dot(col, vec3(0.66)), uErr);
-          L += T * c * d * uBright * 0.09 * 1.7 * 0.5;
-          T *= exp(-d * 1.8 * 0.09);
+          L += T * c * d * uBright * 0.09 * 1.7 * 0.7;
+          T *= exp(-d * 1.0 * 0.09);
         }
         t += 0.09;
         if (T < 0.02) break;
@@ -502,7 +502,7 @@ const EMBER_VERT = /* glsl */ `
     gl_Position = projectionMatrix * mv;
     float life = 1.0 - u;
     vA = pow(life, 1.4) * (0.5 + 0.5 * sin(uTime * (6.0 + aRnd.w * 10.0) + aRnd.w * 50.0));
-    vec3 c = mix(vec3(0.55, 0.8, 1.0), vec3(1.0, 0.15, 0.1), smoothstep(0.25, 0.85, u));
+    vec3 c = mix(mix(vec3(1.0, 0.85, 0.35), vec3(1.0, 0.45, 0.05), smoothstep(0.0, 0.4, u)), vec3(0.8, 0.08, 0.02), smoothstep(0.4, 0.95, u));
     vColor = mix(c, vec3(1.0, 0.15, 0.08), uErr);
     gl_PointSize = (1.0 + 2.2 * aRnd.z * life) * uDpr * (12.0 / max(0.05, -mv.z));
   }
