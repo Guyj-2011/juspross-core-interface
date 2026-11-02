@@ -11,6 +11,8 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiAgnesRouteImport } from './routes/api/agnes'
+import { Route as ApiGeminiLiveTokenRouteImport } from './routes/api/gemini-live-token'
+import { Route as ApiNemotronRouteImport } from './routes/api/nemotron'
 import { Route as ApiSpeechRouteImport } from './routes/api/speech'
 
 const IndexRoute = IndexRouteImport.update({
@@ -23,6 +25,16 @@ const ApiAgnesRoute = ApiAgnesRouteImport.update({
   path: '/api/agnes',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiGeminiLiveTokenRoute = ApiGeminiLiveTokenRouteImport.update({
+  id: '/api/gemini-live-token',
+  path: '/api/gemini-live-token',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiNemotronRoute = ApiNemotronRouteImport.update({
+  id: '/api/nemotron',
+  path: '/api/nemotron',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiSpeechRoute = ApiSpeechRouteImport.update({
   id: '/api/speech',
   path: '/api/speech',
@@ -32,30 +44,54 @@ const ApiSpeechRoute = ApiSpeechRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/api/agnes': typeof ApiAgnesRoute
+  '/api/gemini-live-token': typeof ApiGeminiLiveTokenRoute
+  '/api/nemotron': typeof ApiNemotronRoute
   '/api/speech': typeof ApiSpeechRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/api/agnes': typeof ApiAgnesRoute
+  '/api/gemini-live-token': typeof ApiGeminiLiveTokenRoute
+  '/api/nemotron': typeof ApiNemotronRoute
   '/api/speech': typeof ApiSpeechRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/api/agnes': typeof ApiAgnesRoute
+  '/api/gemini-live-token': typeof ApiGeminiLiveTokenRoute
+  '/api/nemotron': typeof ApiNemotronRoute
   '/api/speech': typeof ApiSpeechRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/api/agnes' | '/api/speech'
+  fullPaths:
+    | '/'
+    | '/api/agnes'
+    | '/api/gemini-live-token'
+    | '/api/nemotron'
+    | '/api/speech'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/api/agnes' | '/api/speech'
-  id: '__root__' | '/' | '/api/agnes' | '/api/speech'
+  to:
+    | '/'
+    | '/api/agnes'
+    | '/api/gemini-live-token'
+    | '/api/nemotron'
+    | '/api/speech'
+  id:
+    | '__root__'
+    | '/'
+    | '/api/agnes'
+    | '/api/gemini-live-token'
+    | '/api/nemotron'
+    | '/api/speech'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ApiAgnesRoute: typeof ApiAgnesRoute
+  ApiGeminiLiveTokenRoute: typeof ApiGeminiLiveTokenRoute
+  ApiNemotronRoute: typeof ApiNemotronRoute
   ApiSpeechRoute: typeof ApiSpeechRoute
 }
 
@@ -75,6 +111,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiAgnesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/gemini-live-token': {
+      id: '/api/gemini-live-token'
+      path: '/api/gemini-live-token'
+      fullPath: '/api/gemini-live-token'
+      preLoaderRoute: typeof ApiGeminiLiveTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/nemotron': {
+      id: '/api/nemotron'
+      path: '/api/nemotron'
+      fullPath: '/api/nemotron'
+      preLoaderRoute: typeof ApiNemotronRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/speech': {
       id: '/api/speech'
       path: '/api/speech'
@@ -88,6 +138,8 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ApiAgnesRoute: ApiAgnesRoute,
+  ApiGeminiLiveTokenRoute: ApiGeminiLiveTokenRoute,
+  ApiNemotronRoute: ApiNemotronRoute,
   ApiSpeechRoute: ApiSpeechRoute,
 }
 export const routeTree = rootRouteImport
