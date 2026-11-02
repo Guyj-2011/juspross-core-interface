@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef } from "react";
-import { AiError, AiUnreachable, chat, chatGemma, simulate, type AiMsg } from "./ai";
+import { AiError, AiUnreachable, chat, chatGemma, chatNemotron, simulate, type AiMsg } from "./ai";
 import { speak } from "./useSpeech";
 import { useV2 } from "./v2Store";
 
@@ -56,7 +56,9 @@ export function useV2Chat() {
       try {
         try {
           final =
-            s.aiProvider === "gemma"
+            s.aiProvider === "nemotron"
+              ? await chatNemotron(history, { signal: ctrl.signal, onToken })
+              : s.aiProvider === "gemma"
               ? await chatGemma(history, {
                   endpoint: s.gemmaEndpoint,
                   model: s.gemmaModel,
@@ -72,7 +74,9 @@ export function useV2Chat() {
           useV2.getState().setAutoConnect(true);
           useV2.getState().setLink(
             "online",
-            s.aiProvider === "gemma"
+            s.aiProvider === "nemotron"
+              ? "Nemotron (NVIDIA) respondió correctamente."
+              : s.aiProvider === "gemma"
               ? "Gemma conectado. La reconexión automática quedó activada."
               : "Qwen conectado. La reconexión automática quedó activada.",
           );
