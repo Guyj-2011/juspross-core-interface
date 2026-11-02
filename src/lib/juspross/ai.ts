@@ -3,6 +3,7 @@
  * Habla con un modelo local (Qwen) a través de Ollama (http://localhost:11434).
  * Si no hay conexión, el llamador usa `simulate` para que la interfaz siga viva.
  */
+import { createSseParser } from "./sse";
 
 export interface AiMsg {
   role: "system" | "user" | "assistant";
@@ -243,4 +244,66 @@ export async function simulate(
     await new Promise((r) => setTimeout(r, 38));
   }
   return out;
+}
+
+/**
+ * Chat con NVIDIA Nemotron a través de la ruta interna /api/nemotron (la clave vive en el servidor).
+ * La misma función sirve para el chat y para el botón de diagnóstico.
+ */
+export async function chatNemotron(
+  history: AiMsg[],
+  o: { signal: AbortSignal; onToken: (full: string) => void; maxTokens?: number },
+): Promise<string> {
+  let res: Response;
+  try {
+    res = await fetch("/api/nemotron", {
+      method: "POST",
+      signal: o.signal,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        messages: [{ role: "system", content: SYSTEM_PROMPT }, ...history],
+        ...(o.maxTokens ? { maxTokens: o.maxTokens } : {}),
+      }),
+    });
+  } catch (e) {
+    if ((e as Error).name === "AbortError") throw e;
+    throw new AiError("No se pudo contactar con el servidor de Juspross para usar Nemotron.");
+  }
+  if (!res.ok || !res.body) {
+    const j = (await res.json().catch(() => null)) as { message?: string } | null;
+    throw new AiError(j?.message ?? `Nemotron respondió ${res.status}.`);
+  }
+  const reader = res.body.getReader();
+  const dec = new TextDecoder();
+  let acc = "";
+  let failure: string | null = null;
+  let done = false;
+  const parser = createSseParser((data) => {
+    if (data === "[DONE]") { done = true; return; }
+    try {
+      const j = JSON.parse(data) as { t?: string; error?: string };
+      if (j.error) failure = j.error;
+      else if (j.t) { acc += j.t; o.onToken(acc); }
+    } catch { /* evento parcial ignorado */ }
+  });
+  for (;;) {
+    const { done: end, value } = await reader.read();
+    if (end) break;
+    parser.push(dec.decode(value, { stream: true }));
+    if (failure) break;
+  }
+  parser.end();
+  if (failure) throw new AiError(`Nemotron: ${failure}`);
+  if (!done && !acc) throw new AiError("Nemotron cerró la conexión sin responder.");
+  return acc;
+}
+
+/** Diagnóstico: usa exactamente el mismo camino que el chat con una petición mínima. */
+export async function testNemotron(signal?: AbortSignal): Promise<string> {
+  const text = await chatNemotron([{ role: "user", content: "Responde solo: OK" }], {
+    signal: signal ?? AbortSignal.timeout(60_000),
+    onToken: () => {},
+    maxTokens: 512,
+  });
+  return text.trim().slice(0, 60);
 }

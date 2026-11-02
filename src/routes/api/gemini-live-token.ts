@@ -1,0 +1,57 @@
+import { createFileRoute } from "@tanstack/react-router";
+import { GEMINI_LIVE_MODEL, GEMINI_LIVE_VOICE, GEMINI_LIVE_SYSTEM } from "@/lib/juspross/geminiLiveConfig";
+
+/**
+ * Emite un token efímero de un solo uso para Gemini Live. GEMINI_API_KEY nunca sale
+ * del servidor; la configuración (modelo, voz, instrucciones) queda bloqueada en el token.
+ */
+export const Route = createFileRoute("/api/gemini-live-token")({
+  server: {
+    handlers: {
+      POST: async ({ request }) => {
+        const origin = request.headers.get("origin");
+        if (origin && origin !== new URL(request.url).origin)
+          return Response.json({ message: "Solicitud no autorizada." }, { status: 403 });
+        const key = process.env["GEMINI_API_KEY"];
+        if (!key) return Response.json({ message: "Falta configurar GEMINI_API_KEY en los secretos del proyecto." }, { status: 500 });
+        const now = Date.now();
+        try {
+          const res = await fetch("https://generativelanguage.googleapis.com/v1alpha/auth_tokens", {
+            method: "POST",
+            signal: AbortSignal.timeout(15_000),
+            headers: { "x-goog-api-key": key, "Content-Type": "application/json" },
+            body: JSON.stringify({
+              uses: 1,
+              expireTime: new Date(now + 30 * 60_000).toISOString(),
+              newSessionExpireTime: new Date(now + 60_000).toISOString(),
+              bidiGenerateContentSetup: {
+                model: GEMINI_LIVE_MODEL,
+                generationConfig: {
+                  responseModalities: ["AUDIO"],
+                  speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: GEMINI_LIVE_VOICE } } },
+                },
+                systemInstruction: { parts: [{ text: GEMINI_LIVE_SYSTEM }] },
+                inputAudioTranscription: {},
+                outputAudioTranscription: {},
+              },
+            }),
+          });
+          const j = (await res.json().catch(() => ({}))) as { name?: string; error?: { message?: string } };
+          if (!res.ok || !j.name) {
+            const status = res.status === 401 || res.status === 403 ? 502 : res.status || 502;
+            return Response.json(
+              { message: `Google no emitió el token de Gemini Live (${res.status}). ${j.error?.message?.slice(0, 200) ?? ""}`.trim() },
+              { status },
+            );
+          }
+          return Response.json(
+            { token: j.name, model: GEMINI_LIVE_MODEL },
+            { headers: { "Cache-Control": "no-store" } },
+          );
+        } catch {
+          return Response.json({ message: "No se pudo contactar con Google para iniciar Gemini Live." }, { status: 504 });
+        }
+      },
+    },
+  },
+});

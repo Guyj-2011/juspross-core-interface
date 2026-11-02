@@ -25,7 +25,9 @@ interface V2Store {
   /** Modelo fijado por defecto para el lado 2.0. */
   aiModel: string;
   /** Motor local activo: Gemma (llama.cpp) o Qwen (Ollama). Se detecta automáticamente. */
-  aiProvider: "gemma" | "ollama";
+  aiProvider: "gemma" | "ollama" | "nemotron";
+  /** Origen elegido: IA local (Gemma/Qwen autodetectados) o NVIDIA Nemotron en la nube. */
+  aiSource: "local" | "nemotron";
   /** Servidor local de Gemma (llama.cpp). Fijo: no requiere configuración manual. */
   gemmaEndpoint: string;
   gemmaModel: string;
@@ -43,7 +45,8 @@ interface V2Store {
   patchMessage: (id: string, patch: Partial<V2Message>) => void;
   clear: () => void;
   setAi: (p: { endpoint?: string; model?: string }) => void;
-  setAiProvider: (p: "gemma" | "ollama") => void;
+  setAiProvider: (p: "gemma" | "ollama" | "nemotron") => void;
+  setAiSource: (s: "local" | "nemotron") => void;
   setAutoConnect: (enabled: boolean) => void;
   setLink: (l: AiLink, detail?: string) => void;
   setVoiceReplies: (v: boolean) => void;
@@ -59,6 +62,7 @@ function persist(s: V2Store) {
         endpoint: s.aiEndpoint,
         model: s.aiModel,
         provider: s.aiProvider,
+        source: s.aiSource,
         voice: s.voiceReplies,
         autoConnect: s.autoConnect,
       }),
@@ -76,6 +80,7 @@ export const useV2 = create<V2Store>((set, get) => ({
   aiEndpoint: "http://localhost:11434",
   aiModel: "qwen3:8b",
   aiProvider: "gemma",
+  aiSource: "local",
   gemmaEndpoint: "http://127.0.0.1:8080",
   gemmaModel: "google/gemma-4-E2B-it-qat-q4_0-gguf:Q4_0",
   autoConnect: true,
@@ -93,7 +98,8 @@ export const useV2 = create<V2Store>((set, get) => ({
         mode?: Mode;
         endpoint?: string;
         model?: string;
-        provider?: "gemma" | "ollama";
+        provider?: "gemma" | "ollama" | "nemotron";
+        source?: "local" | "nemotron";
         voice?: boolean;
         autoConnect?: boolean;
       };
@@ -101,7 +107,8 @@ export const useV2 = create<V2Store>((set, get) => ({
         mode: p.mode === "v2" || p.mode === "media" ? p.mode : "calm",
         aiEndpoint: p.endpoint || "http://localhost:11434",
         aiModel: p.model?.trim() || "qwen3:8b",
-        aiProvider: p.provider === "ollama" ? "ollama" : "gemma",
+        aiProvider: p.source === "nemotron" ? "nemotron" : p.provider === "ollama" ? "ollama" : "gemma",
+        aiSource: p.source === "nemotron" ? "nemotron" : "local",
         voiceReplies: !!p.voice,
         // This integration should always reconnect automatically, including for
         // users whose older localStorage entry stored autoConnect=false.
@@ -137,6 +144,10 @@ export const useV2 = create<V2Store>((set, get) => ({
   },
   setAiProvider: (aiProvider) => {
     set({ aiProvider });
+    persist(get());
+  },
+  setAiSource: (aiSource) => {
+    set({ aiSource, aiProvider: aiSource === "nemotron" ? "nemotron" : "gemma" });
     persist(get());
   },
   setAutoConnect: (autoConnect) => {
