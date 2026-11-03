@@ -206,11 +206,5 @@ export function useGeminiLive() {
     }
   }, []);
 
-  /** Interrumpe la respuesta en curso sin cerrar la sesión. */
-  const interrupt = useCallback(() => {
-    // La interrupción por voz la gestiona el servidor (VAD); aquí solo silenciamos localmente.
-    useV2.getState().setAmplitude(0);
-  }, []);
-
-  return { status, notice, start, stop, interrupt };
+  return { status, notice, start, stop };
 }
