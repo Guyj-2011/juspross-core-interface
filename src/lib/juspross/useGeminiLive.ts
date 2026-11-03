@@ -1,0 +1,216 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  GEMINI_LIVE_MODEL,
+  GEMINI_LIVE_WS,
+  LIVE_OUTPUT_RATE,
+  base64ToPcmFloat,
+  bytesToBase64,
+  floatToPcm16,
+} from "./geminiLiveConfig";
+import { useV2 } from "./v2Store";
+
+export type LiveStatus = "off" | "connecting" | "live" | "error";
+
+type ServerMsg = {
+  setupComplete?: unknown;
+  serverContent?: {
+    modelTurn?: { parts?: { inlineData?: { data?: string } }[] };
+    inputTranscription?: { text?: string };
+    outputTranscription?: { text?: string };
+    interrupted?: boolean;
+    turnComplete?: boolean;
+  };
+  goAway?: unknown;
+  error?: { message?: string };
+};
+
+/** Sesión de voz bidireccional con Gemini Live usando un token efímero del servidor. */
+export function useGeminiLive() {
+  const [status, setStatus] = useState<LiveStatus>("off");
+  const [notice, setNotice] = useState("");
+  const cleanupRef = useRef<(() => void) | null>(null);
+
+  const stop = useCallback((message = "Gemini Live desconectado.") => {
+    cleanupRef.current?.();
+    cleanupRef.current = null;
+    setStatus((s) => (s === "error" ? s : "off"));
+    if (message) setNotice(message);
+  }, []);
+
+  useEffect(() => () => { cleanupRef.current?.(); cleanupRef.current = null; }, []);
+
+  const start = useCallback(async () => {
+    if (cleanupRef.current) return;
+    setStatus("connecting");
+    setNotice("Conectando con Gemini Live…");
+    let ws: WebSocket | null = null;
+    let stream: MediaStream | null = null;
+    let inCtx: AudioContext | null = null;
+    let outCtx: AudioContext | null = null;
+    let processor: ScriptProcessorNode | null = null;
+    let raf = 0;
+    let closed = false;
+    const sources = new Set<AudioBufferSourceNode>();
+    let userId: string | null = null;
+    let botId: string | null = null;
+    let userText = "";
+    let botText = "";
+
+    const flushPlayback = () => {
+      for (const s of sources) { try { s.stop(); } catch { /* ended */ } }
+      sources.clear();
+    };
+    const cleanup = () => {
+      if (closed) return;
+      closed = true;
+      cancelAnimationFrame(raf);
+      flushPlayback();
+      processor?.disconnect();
+      stream?.getTracks().forEach((t) => t.stop());
+      if (ws && ws.readyState <= 1) ws.close(1000);
+      void inCtx?.close().catch(() => {});
+      void outCtx?.close().catch(() => {});
+      const st = useV2.getState();
+      st.setAmplitude(0);
+      if (st.state !== "error") st.setState("idle");
+    };
+    cleanupRef.current = cleanup;
+    const fail = (msg: string) => {
+      cleanup();
+      cleanupRef.current = null;
+      setStatus("error");
+      setNotice(msg);
+    };
+
+    try {
+      // Pedir el micrófono dentro del gesto del usuario.
+      stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 },
+      });
+      if (closed) return;
+      inCtx = new AudioContext();
+      outCtx = new AudioContext({ sampleRate: LIVE_OUTPUT_RATE });
+      await Promise.all([inCtx.resume(), outCtx.resume()]);
+
+      const res = await fetch("/api/gemini-live-token", { method: "POST" });
+      const j = (await res.json().catch(() => ({}))) as { token?: string; message?: string };
+      if (!res.ok || !j.token) return fail(j.message ?? `No se obtuvo el token de Gemini Live (${res.status}).`);
+      if (closed) return;
+
+      const analyser = outCtx.createAnalyser();
+      analyser.fftSize = 512;
+      analyser.connect(outCtx.destination);
+      const wave = new Uint8Array(analyser.fftSize);
+      const meter = () => {
+        analyser.getByteTimeDomainData(wave);
+        let p = 0;
+        for (const v of wave) p += ((v - 128) / 128) ** 2;
+        useV2.getState().setAmplitude(Math.min(1, Math.sqrt(p / wave.length) * 3));
+        raf = requestAnimationFrame(meter);
+      };
+      meter();
+      let playhead = 0;
+
+      const socket = new WebSocket(`${GEMINI_LIVE_WS}?access_token=${encodeURIComponent(j.token)}`);
+      ws = socket;
+      socket.onopen = () => socket.send(JSON.stringify({ setup: { model: GEMINI_LIVE_MODEL } }));
+      socket.onerror = () => { if (!closed) fail("Error de conexión con Gemini Live."); };
+      socket.onclose = (e) => {
+        if (closed) return;
+        fail(e.code === 1000 ? "Gemini Live cerró la sesión." : `Gemini Live cerró la conexión (${e.code}) ${e.reason}`.trim());
+      };
+
+      const startMic = () => {
+        const src = inCtx!.createMediaStreamSource(stream!);
+        processor = inCtx!.createScriptProcessor(4096, 1, 1);
+        const rate = inCtx!.sampleRate;
+        processor.onaudioprocess = (ev) => {
+          if (socket.readyState !== 1) return;
+          const pcm = floatToPcm16(ev.inputBuffer.getChannelData(0), rate);
+          socket.send(JSON.stringify({
+            realtimeInput: { audio: { data: bytesToBase64(new Uint8Array(pcm.buffer)), mimeType: "audio/pcm;rate=16000" } },
+          }));
+        };
+        src.connect(processor);
+        // Salida silenciada: ScriptProcessor necesita estar conectado para procesar.
+        const mute = inCtx!.createGain();
+        mute.gain.value = 0;
+        processor.connect(mute).connect(inCtx!.destination);
+      };
+
+      socket.onmessage = async (ev) => {
+        const raw = typeof ev.data === "string" ? ev.data : await (ev.data as Blob).text();
+        let msg: ServerMsg;
+        try { msg = JSON.parse(raw) as ServerMsg; } catch { return; }
+        const st = useV2.getState();
+        if (msg.error) return fail(msg.error.message ?? "Gemini Live devolvió un error.");
+        if (msg.setupComplete) {
+          startMic();
+          setStatus("live");
+          setNotice("Gemini Live activo. Habla con naturalidad; puedes interrumpir en cualquier momento.");
+          st.setState("listening");
+          return;
+        }
+        const sc = msg.serverContent;
+        if (!sc) return;
+        if (sc.inputTranscription?.text) {
+          userText += sc.inputTranscription.text;
+          if (!userId) userId = st.addMessage({ role: "user", text: userText.trim() });
+          else st.patchMessage(userId, { text: userText.trim() });
+        }
+        if (sc.outputTranscription?.text) {
+          botText += sc.outputTranscription.text;
+          if (!botId) botId = st.addMessage({ role: "assistant", text: botText.trim() });
+          else st.patchMessage(botId, { text: botText.trim() });
+        }
+        for (const part of sc.modelTurn?.parts ?? []) {
+          const data = part.inlineData?.data;
+          if (!data || !outCtx) continue;
+          const samples = base64ToPcmFloat(data);
+          if (!samples.length) continue;
+          const buf = outCtx.createBuffer(1, samples.length, LIVE_OUTPUT_RATE);
+          buf.copyToChannel(samples, 0);
+          const s = outCtx.createBufferSource();
+          s.buffer = buf;
+          s.connect(analyser);
+          s.onended = () => sources.delete(s);
+          sources.add(s);
+          playhead = Math.max(playhead, outCtx.currentTime + 0.05);
+          s.start(playhead);
+          playhead += buf.duration;
+          if (st.state !== "speaking") st.setState("speaking");
+        }
+        if (sc.interrupted) {
+          flushPlayback();
+          playhead = 0;
+          st.setState("listening");
+        }
+        if (sc.turnComplete || sc.interrupted) {
+          userId = botId = null;
+          userText = botText = "";
+          if (!sc.interrupted && outCtx) {
+            const wait = Math.max(0, (playhead - outCtx.currentTime) * 1000);
+            setTimeout(() => { if (!closed && useV2.getState().state === "speaking") useV2.getState().setState("listening"); }, wait);
+          }
+        }
+      };
+    } catch (e) {
+      const name = (e as { name?: string }).name ?? "";
+      fail(
+        name === "NotAllowedError"
+          ? "El acceso al micrófono está bloqueado. Permítelo para usar Gemini Live."
+          : name === "NotFoundError"
+            ? "No se encontró ningún micrófono."
+            : `No se pudo iniciar Gemini Live: ${e instanceof Error ? e.message : String(e)}`,
+      );
+    }
+  }, []);
+
+  /** Interrumpe la respuesta en curso sin cerrar la sesión. */
+  const interrupt = useCallback(() => {
+    // La interrupción por voz la gestiona el servidor (VAD); aquí solo silenciamos localmente.
+    useV2.getState().setAmplitude(0);
+  }, []);
+
+  return { status, notice, start, stop, interrupt };
+}
