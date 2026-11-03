@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowUp, Check, Copy, History, Mic, Settings2, Square, Trash2, Volume2, VolumeX, X } from "lucide-react";
+import { ArrowUp, Check, Copy, History, Mic, Radio, Settings2, Square, Trash2, Volume2, VolumeX, X } from "lucide-react";
 import { AiUnreachable, testAi, testGemma, testNemotron } from "@/lib/juspross/ai";
 import { useV2Chat } from "@/lib/juspross/useV2Chat";
+import { useGeminiLive } from "@/lib/juspross/useGeminiLive";
 import { useV2 } from "@/lib/juspross/v2Store";
 import { cn } from "@/lib/utils";
 
@@ -79,6 +80,7 @@ const BLUE = "#6ea8ff";
 
 export function V2Console() {
   const { send, stop } = useV2Chat();
+  const live = useGeminiLive();
   const messages = useV2((s) => s.messages);
   const state = useV2((s) => s.state);
   const link = useV2((s) => s.aiLink);
@@ -936,6 +938,29 @@ export function V2Console() {
             <Mic className="size-4.5" strokeWidth={1.6} />
           </button>
           <button
+            onClick={() => {
+              if (live.status === "live" || live.status === "connecting") live.stop();
+              else {
+                if (listening) void toggleMic();
+                stop();
+                void live.start();
+              }
+            }}
+            aria-label={live.status === "live" ? "Desconectar Gemini Live" : "Conversar con Gemini Live"}
+            title={live.status === "live" ? "Desconectar Gemini Live" : "Conversación de voz en tiempo real (Gemini Live)"}
+            aria-pressed={live.status === "live"}
+            className={cn(
+              "flex size-9 shrink-0 items-center justify-center rounded-md transition-colors",
+              live.status === "live"
+                ? "bg-[#3d7bff]/25 text-[#9cc0ff]"
+                : live.status === "connecting"
+                  ? "animate-pulse text-[#9cc0ff]"
+                  : "text-white/55 hover:text-white",
+            )}
+          >
+            <Radio className="size-4.5" strokeWidth={1.6} />
+          </button>
+          <button
             onClick={() => useV2.getState().setVoiceReplies(!voice)}
             aria-label={voice ? "Silenciar respuestas habladas" : "Leer respuestas en voz alta"}
             title={voice ? "Respuestas en voz alta: sí" : "Respuestas en voz alta: no"}
@@ -966,6 +991,11 @@ export function V2Console() {
             </button>
           )}
         </div>
+        {live.notice && (
+          <p role="status" aria-live="polite" className={cn("pointer-events-auto mt-2 text-center text-xs", live.status === "error" ? "text-[#ff8c98]" : "text-[#9cc0ff]")}>
+            {live.notice}
+          </p>
+        )}
         {voiceNotice && (
           <div className="pointer-events-auto mt-2 flex items-start justify-center gap-2 text-xs leading-relaxed">
             <p
