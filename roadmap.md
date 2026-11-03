@@ -15,3 +15,8 @@
 - [x] Auto-detect on load: Gemma first, Qwen/Ollama fallback, backoff retries
 - [x] Status indicator: Conectando / Conectado a Gemma / Gemma no disponible
 - [ ] Typecheck + build + browser verification
+## Gemini Live + Nemotron
+- [x] Nemotron server-side chat (verified streaming reply)
+- [x] Gemini Live voice button in V2 console (token, mic 16 kHz PCM, 24 kHz playback, transcripts, interrupt, cleanup)
+- [x] Fix bun:test typecheck error
+- [ ] Real spoken conversation test with a human microphone (headless browser only has a test tone)
