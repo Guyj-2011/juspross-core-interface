@@ -37,7 +37,13 @@ export function useGeminiLive() {
     if (message) setNotice(message);
   }, []);
 
-  useEffect(() => () => { cleanupRef.current?.(); cleanupRef.current = null; }, []);
+  useEffect(
+    () => () => {
+      cleanupRef.current?.();
+      cleanupRef.current = null;
+    },
+    [],
+  );
 
   const start = useCallback(async () => {
     if (cleanupRef.current) return;
@@ -57,7 +63,13 @@ export function useGeminiLive() {
     let botText = "";
 
     const flushPlayback = () => {
-      for (const s of sources) { try { s.stop(); } catch { /* ended */ } }
+      for (const s of sources) {
+        try {
+          s.stop();
+        } catch {
+          /* ended */
+        }
+      }
       sources.clear();
     };
     const cleanup = () => {
@@ -94,7 +106,8 @@ export function useGeminiLive() {
 
       const res = await fetch("/api/gemini-live-token", { method: "POST" });
       const j = (await res.json().catch(() => ({}))) as { token?: string; message?: string };
-      if (!res.ok || !j.token) return fail(j.message ?? `No se obtuvo el token de Gemini Live (${res.status}).`);
+      if (!res.ok || !j.token)
+        return fail(j.message ?? `No se obtuvo el token de Gemini Live (${res.status}).`);
       if (closed) return;
 
       const analyser = outCtx.createAnalyser();
@@ -114,10 +127,16 @@ export function useGeminiLive() {
       const socket = new WebSocket(`${GEMINI_LIVE_WS}?access_token=${encodeURIComponent(j.token)}`);
       ws = socket;
       socket.onopen = () => socket.send(JSON.stringify({ setup: { model: GEMINI_LIVE_MODEL } }));
-      socket.onerror = () => { if (!closed) fail("Error de conexión con Gemini Live."); };
+      socket.onerror = () => {
+        if (!closed) fail("Error de conexión con Gemini Live.");
+      };
       socket.onclose = (e) => {
         if (closed) return;
-        fail(e.code === 1000 ? "Gemini Live cerró la sesión." : `Gemini Live cerró la conexión (${e.code}) ${e.reason}`.trim());
+        fail(
+          e.code === 1000
+            ? "Gemini Live cerró la sesión."
+            : `Gemini Live cerró la conexión (${e.code}) ${e.reason}`.trim(),
+        );
       };
 
       const startMic = () => {
@@ -127,9 +146,16 @@ export function useGeminiLive() {
         processor.onaudioprocess = (ev) => {
           if (socket.readyState !== 1) return;
           const pcm = floatToPcm16(ev.inputBuffer.getChannelData(0), rate);
-          socket.send(JSON.stringify({
-            realtimeInput: { audio: { data: bytesToBase64(new Uint8Array(pcm.buffer)), mimeType: "audio/pcm;rate=16000" } },
-          }));
+          socket.send(
+            JSON.stringify({
+              realtimeInput: {
+                audio: {
+                  data: bytesToBase64(new Uint8Array(pcm.buffer)),
+                  mimeType: "audio/pcm;rate=16000",
+                },
+              },
+            }),
+          );
         };
         src.connect(processor);
         // Salida silenciada: ScriptProcessor necesita estar conectado para procesar.
@@ -141,14 +167,20 @@ export function useGeminiLive() {
       socket.onmessage = async (ev) => {
         const raw = typeof ev.data === "string" ? ev.data : await (ev.data as Blob).text();
         let msg: ServerMsg;
-        try { msg = JSON.parse(raw) as ServerMsg; } catch { return; }
+        try {
+          msg = JSON.parse(raw) as ServerMsg;
+        } catch {
+          return;
+        }
         const st = useV2.getState();
         if (msg.error) return fail(msg.error.message ?? "Gemini Live devolvió un error.");
         if (msg.setupComplete) {
           startMic();
           setStatus("live");
-          setNotice("Gemini Live activo. Habla con naturalidad; puedes interrumpir en cualquier momento.");
-          st.setState("listening");
+          setNotice(
+            "Gemini Live activo. Habla con naturalidad; puedes interrumpir en cualquier momento.",
+          );
+          st.setState("idle");
           return;
         }
         const sc = msg.serverContent;
@@ -169,7 +201,7 @@ export function useGeminiLive() {
           const samples = base64ToPcmFloat(data);
           if (!samples.length) continue;
           const buf = outCtx.createBuffer(1, samples.length, LIVE_OUTPUT_RATE);
-          buf.copyToChannel(samples, 0);
+          buf.copyToChannel(samples as Float32Array<ArrayBuffer>, 0);
           const s = outCtx.createBufferSource();
           s.buffer = buf;
           s.connect(analyser);
@@ -183,14 +215,17 @@ export function useGeminiLive() {
         if (sc.interrupted) {
           flushPlayback();
           playhead = 0;
-          st.setState("listening");
+          st.setState("idle");
         }
         if (sc.turnComplete || sc.interrupted) {
           userId = botId = null;
           userText = botText = "";
           if (!sc.interrupted && outCtx) {
             const wait = Math.max(0, (playhead - outCtx.currentTime) * 1000);
-            setTimeout(() => { if (!closed && useV2.getState().state === "speaking") useV2.getState().setState("listening"); }, wait);
+            setTimeout(() => {
+              if (!closed && useV2.getState().state === "speaking")
+                useV2.getState().setState("idle");
+            }, wait);
           }
         }
       };
