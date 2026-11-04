@@ -21,7 +21,7 @@ type ServerMsg = {
     turnComplete?: boolean;
   };
   goAway?: unknown;
-  toolCall?: { functionCalls?: { id?: string; name?: string; args?: Record<string, unknown> }[] };
+  toolCall?: { functionCalls?: { id: string; name: string; args?: Record<string, unknown> }[] };
   error?: { message?: string };
 };
 
@@ -167,10 +167,10 @@ export function useGeminiLive() {
 
       const handleToolCalls = async (calls: NonNullable<ServerMsg["toolCall"]>["functionCalls"]) => {
         if (!calls?.length) return;
-        const responses: { id?: string; name: string; response: Record<string, unknown> }[] = [];
+        const responses: { id: string; name: string; response: Record<string, unknown> }[] = [];
         for (const call of calls) {
           if (call.name !== "delegate_to_nemotron") {
-            responses.push({ id: call.id, name: call.name ?? "unknown", response: { error: "Herramienta no disponible." } });
+            responses.push({ id: call.id, name: call.name, response: { error: "Herramienta no disponible." } });
             continue;
           }
           const args = call.args ?? {};
