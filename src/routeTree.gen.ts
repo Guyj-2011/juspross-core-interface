@@ -51,7 +51,6 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/api/agnes': typeof ApiAgnesRoute
   '/api/agent-delegate': typeof ApiAgentDelegateRoute
-  '/api/agent-delegate': typeof ApiAgentDelegateRoute
   '/api/gemini-live-token': typeof ApiGeminiLiveTokenRoute
   '/api/nemotron': typeof ApiNemotronRoute
   '/api/speech': typeof ApiSpeechRoute
@@ -59,6 +58,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/api/agnes': typeof ApiAgnesRoute
+  '/api/agent-delegate': typeof ApiAgentDelegateRoute
   '/api/gemini-live-token': typeof ApiGeminiLiveTokenRoute
   '/api/nemotron': typeof ApiNemotronRoute
   '/api/speech': typeof ApiSpeechRoute
@@ -67,6 +67,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/api/agnes': typeof ApiAgnesRoute
+  '/api/agent-delegate': typeof ApiAgentDelegateRoute
   '/api/gemini-live-token': typeof ApiGeminiLiveTokenRoute
   '/api/nemotron': typeof ApiNemotronRoute
   '/api/speech': typeof ApiSpeechRoute
@@ -76,8 +77,6 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/api/agnes'
-    | '/api/agent-delegate'
-    | '/api/agent-delegate'
     | '/api/agent-delegate'
     | '/api/gemini-live-token'
     | '/api/nemotron'
@@ -93,6 +92,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/api/agnes'
+    | '/api/agent-delegate'
     | '/api/gemini-live-token'
     | '/api/nemotron'
     | '/api/speech'
