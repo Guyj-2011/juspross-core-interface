@@ -5,7 +5,7 @@ function randomBase64Url(length: number): string {
   const bytes = crypto.getRandomValues(new Uint8Array(length));
   let binary = "";
   for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary).replace(/\\+/g, "-").replace(/\\//g, "_").replace(/=+$/g, "");
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
 
 export const Route = createFileRoute("/api/spotify/connect")({
@@ -24,7 +24,7 @@ export const Route = createFileRoute("/api/spotify/connect")({
         const challengeBytes = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier));
         let binary = "";
         for (const byte of new Uint8Array(challengeBytes)) binary += String.fromCharCode(byte);
-        const challenge = btoa(binary).replace(/\\+/g, "-").replace(/\\//g, "_").replace(/=+$/g, "");
+        const challenge = btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
         const stateCookie = await spotifyOAuthCookie({ state, verifier }, request);
         const params = new URLSearchParams({
           client_id: clientId,
