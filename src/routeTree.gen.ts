@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ApiAgnesRouteImport } from './routes/api/agnes'
 import { Route as ApiGeminiLiveTokenRouteImport } from './routes/api/gemini-live-token'
+import { Route as ApiAgentDelegateRouteImport } from './routes/api/agent-delegate'
 import { Route as ApiNemotronRouteImport } from './routes/api/nemotron'
 import { Route as ApiSpeechRouteImport } from './routes/api/speech'
 
@@ -30,6 +31,11 @@ const ApiGeminiLiveTokenRoute = ApiGeminiLiveTokenRouteImport.update({
   path: '/api/gemini-live-token',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAgentDelegateRoute = ApiAgentDelegateRouteImport.update({
+  id: '/api/agent-delegate',
+  path: '/api/agent-delegate',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiNemotronRoute = ApiNemotronRouteImport.update({
   id: '/api/nemotron',
   path: '/api/nemotron',
@@ -44,6 +50,8 @@ const ApiSpeechRoute = ApiSpeechRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/api/agnes': typeof ApiAgnesRoute
+  '/api/agent-delegate': typeof ApiAgentDelegateRoute
+  '/api/agent-delegate': typeof ApiAgentDelegateRoute
   '/api/gemini-live-token': typeof ApiGeminiLiveTokenRoute
   '/api/nemotron': typeof ApiNemotronRoute
   '/api/speech': typeof ApiSpeechRoute
@@ -68,6 +76,9 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/api/agnes'
+    | '/api/agent-delegate'
+    | '/api/agent-delegate'
+    | '/api/agent-delegate'
     | '/api/gemini-live-token'
     | '/api/nemotron'
     | '/api/speech'
@@ -90,6 +101,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ApiAgnesRoute: typeof ApiAgnesRoute
+  ApiAgentDelegateRoute: typeof ApiAgentDelegateRoute
   ApiGeminiLiveTokenRoute: typeof ApiGeminiLiveTokenRoute
   ApiNemotronRoute: typeof ApiNemotronRoute
   ApiSpeechRoute: typeof ApiSpeechRoute
@@ -102,6 +114,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/agent-delegate': {
+      id: '/api/agent-delegate'
+      path: '/api/agent-delegate'
+      fullPath: '/api/agent-delegate'
+      preLoaderRoute: typeof ApiAgentDelegateRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/agnes': {
@@ -138,6 +157,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ApiAgnesRoute: ApiAgnesRoute,
+  ApiAgentDelegateRoute: ApiAgentDelegateRoute,
   ApiGeminiLiveTokenRoute: ApiGeminiLiveTokenRoute,
   ApiNemotronRoute: ApiNemotronRoute,
   ApiSpeechRoute: ApiSpeechRoute,
