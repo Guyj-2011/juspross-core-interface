@@ -106,7 +106,11 @@ export const Route = createFileRoute("/api/agent-delegate")({
               tool_calls: calls
             });
 
-            for (const call of calls.slice(0, 3)) {
+            for (const [callIndex, call] of calls.entries()) {
+              if (callIndex >= 3) {
+                if (call.id) messages.push({ role: "tool", tool_call_id: call.id, content: JSON.stringify({ ok: false, message: "Se alcanzó el límite de llamadas de herramientas por turno." }) });
+                continue;
+              }
               const name = call.function?.name ?? "";
               if (!call.id || !name.startsWith("spotify_")) {
                 messages.push({
