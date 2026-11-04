@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useJuspross } from "@/lib/juspross/store";
 import { useRuntime } from "@/lib/juspross/useRuntime";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Cloud, Sparkles, Waves } from "lucide-react";
+import { Cloud, Music2, Sparkles, Waves } from "lucide-react";
 
 export function ConnectionPanel() {
   const webhookUrl = useJuspross((s) => s.webhookUrl);
@@ -58,6 +58,84 @@ export function ConnectionPanel() {
   );
 }
 
+
+export function SpotifyConnectionPanel() {
+  const [status, setStatus] = useState<{ configured: boolean; connected: boolean } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [detail, setDetail] = useState("");
+
+  useEffect(() => {
+    let active = true;
+    void fetch("/api/spotify", { cache: "no-store" })
+      .then(async (response) => {
+        const payload = await response.json().catch(() => ({})) as { configured?: boolean; connected?: boolean };
+        if (active) setStatus({ configured: Boolean(payload.configured), connected: Boolean(payload.connected) });
+      })
+      .catch(() => {
+        if (active) setDetail("No se pudo consultar la conexión con Spotify.");
+      });
+    const result = new URLSearchParams(window.location.search).get("spotify");
+    if (result === "connected") setDetail("Spotify quedó conectado correctamente.");
+    else if (result === "denied") setDetail("No se concedieron los permisos de Spotify.");
+    else if (result === "token-error" || result === "state-error") setDetail("No se pudo completar la conexión. Inténtalo otra vez.");
+    return () => { active = false; };
+  }, []);
+
+  const disconnect = async () => {
+    setBusy(true);
+    setDetail("");
+    try {
+      const response = await fetch("/api/spotify", { method: "POST" });
+      if (!response.ok) throw new Error("No se pudo desconectar Spotify.");
+      setStatus((current) => current ? { ...current, connected: false } : current);
+      setDetail("Spotify se desconectó de Juspross.");
+    } catch (error) {
+      setDetail(error instanceof Error ? error.message : "No se pudo desconectar Spotify.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="space-y-2 border-b border-border/50 py-3">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <Music2 className="size-3.5 text-emerald-400" />
+            <span className="label-xs">SPOTIFY</span>
+          </div>
+          <p className="mt-1 text-[10px] text-muted-foreground">
+            {status?.connected ? "Cuenta conectada" : status?.configured ? "Cuenta sin conectar" : "Integración pendiente de configurar"}
+          </p>
+        </div>
+        {status?.connected ? (
+          <Button variant="outline" size="sm" disabled={busy} onClick={() => void disconnect()}>
+            {busy ? "..." : "Desconectar"}
+          </Button>
+        ) : (
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!status?.configured || busy}
+            onClick={() => window.location.assign("/api/spotify/connect")}
+          >
+            Conectar
+          </Button>
+        )}
+      </div>
+      {detail && <p className="text-[10px] leading-relaxed text-muted-foreground">{detail}</p>}
+      {!status?.configured && (
+        <p className="text-[10px] leading-relaxed text-muted-foreground">
+          Faltan configurar los secretos de Spotify en el backend. No introduzcas claves en el chat ni en esta pantalla.
+        </p>
+      )}
+      <p className="text-[10px] leading-relaxed text-muted-foreground">
+        Nemotron podrá buscar y controlar la reproducción. Para abrir la aplicación de Windows necesitaremos después el agente local.
+      </p>
+    </div>
+  );
+}
+
 export function SettingsPanel() {
   const sound = useJuspross((s) => s.soundEnabled);
   const setSound = useJuspross((s) => s.setSound);
@@ -94,6 +172,7 @@ export function SettingsPanel() {
 
   return (
     <div>
+      <SpotifyConnectionPanel />
       <Row label="ESCUCHA CONTINUA">
         <Toggle on={wake} onClick={() => setMic(!wake)} />
       </Row>
