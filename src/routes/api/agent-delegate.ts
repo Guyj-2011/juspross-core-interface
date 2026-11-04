@@ -38,7 +38,7 @@ export const Route = createFileRoute("/api/agent-delegate")({
             body: JSON.stringify({
               model: NEMOTRON_MODEL,
               stream: false,
-              max_tokens: 1800,
+              max_tokens: 1024,
               messages: [
                 {
                   role: "system",
