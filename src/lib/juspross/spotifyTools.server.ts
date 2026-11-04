@@ -66,7 +66,7 @@ async function spotifyRequest(
   path: string,
   method: string,
   body?: unknown,
-): Promise<{ response: Response; setCookie?: string }> {
+): Promise<{ response: Response; setCookie?: string; accessToken: string }> {
   return spotifyApi(request, path, {
     method,
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
@@ -118,17 +118,17 @@ export async function executeSpotifyTool(
         };
         const uri = kind === "track" ? payload.tracks?.items?.[0]?.uri : payload.playlists?.items?.[0]?.uri;
         if (!uri) return { ok: false, message: "No se encontró un resultado reproducible en Spotify.", setCookie: search.setCookie };
-        const played = await spotifyRequest(
-          request,
-          "/me/player/play",
-          "PUT",
-          uri.startsWith("spotify:track:") ? { uris: [uri] } : { context_uri: uri },
-        );
-        if (played.response.ok || played.response.status === 204)
-          return { ok: true, message: "Spotify inició la reproducción correctamente.", setCookie: played.setCookie ?? search.setCookie };
-        if (played.response.status === 404)
-          return { ok: false, message: "No hay un dispositivo Spotify activo. Abre Spotify y vuelve a intentarlo.", setCookie: played.setCookie ?? search.setCookie };
-        return { ok: false, message: `Spotify encontró contenido, pero no pudo iniciar la reproducción (HTTP ${played.response.status}).`, setCookie: played.setCookie ?? search.setCookie };
+        const playedResponse = await fetch("https://api.spotify.com/v1/me/player/play", {
+          method: "PUT",
+          signal: AbortSignal.timeout(15_000),
+          headers: { Authorization: `Bearer ${search.accessToken}`, "Content-Type": "application/json" },
+          body: JSON.stringify(uri.startsWith("spotify:track:") ? { uris: [uri] } : { context_uri: uri }),
+        });
+        if (playedResponse.ok || playedResponse.status === 204)
+          return { ok: true, message: "Spotify inició la reproducción correctamente.", setCookie: search.setCookie };
+        if (playedResponse.status === 404)
+          return { ok: false, message: "No hay un dispositivo Spotify activo. Abre Spotify y vuelve a intentarlo.", setCookie: search.setCookie };
+        return { ok: false, message: `Spotify encontró contenido, pero no pudo iniciar la reproducción (HTTP ${playedResponse.status}).`, setCookie: search.setCookie };
       }
       case "spotify_resume":
         return playbackAction(request, "/me/player/play", "PUT", undefined, "Spotify reanudó la reproducción.");
