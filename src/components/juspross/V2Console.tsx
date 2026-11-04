@@ -297,7 +297,8 @@ export function V2Console() {
       field.select();
       try {
         copied = document.execCommand("copy");
-      } catch {        copied = false;
+      } catch {
+        copied = false;
       }
       field.remove();
     }
@@ -596,7 +597,8 @@ export function V2Console() {
 
       voiceSessionRef.current = false;
       if (browserFallbackTimerRef.current !== undefined) window.clearTimeout(browserFallbackTimerRef.current);
-      if (browserRestartTimerRef.current !== undefined) window.clearTimeout(browserRestartTimerRef.current);      browserFallbackTimerRef.current = undefined;
+      if (browserRestartTimerRef.current !== undefined) window.clearTimeout(browserRestartTimerRef.current);
+      browserFallbackTimerRef.current = undefined;
       browserRestartTimerRef.current = undefined;
       voiceEngineRef.current = null;
       browserSpeechRef.current?.stop();
@@ -760,7 +762,10 @@ export function V2Console() {
     startBrowserRecognition();
   };
 
-  // El reconocimiento de voz independiente queda deshabilitado: la voz entra por Gemini Live.\n  void toggleMic;\n\n  const linkLabel =
+  // La entrada de voz independiente queda deshabilitada; solo Gemini Live captura audio.
+  void toggleMic;
+
+  const linkLabel =
     link === "online"
       ? aiProvider === "nemotron"
         ? "NEMOTRON · NVIDIA"
@@ -895,7 +900,8 @@ export function V2Console() {
                   </div>
                 </div>
               ))
-            )}          </div>
+            )}
+          </div>
         </aside>
       )}
 
