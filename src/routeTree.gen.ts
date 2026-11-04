@@ -85,6 +85,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/api/agnes'
+    | '/api/agent-delegate'
     | '/api/gemini-live-token'
     | '/api/nemotron'
     | '/api/speech'
