@@ -161,16 +161,16 @@ export async function spotifyApi(
 ): Promise<{ response: Response; setCookie?: string; accessToken: string }> {
   let read = await readSpotifySession(request);
   if (!read.session) throw new Error("Spotify no está conectado. Conecta tu cuenta desde Ajustes.");
-  const send = (accessToken: string) =>
-    fetch(`https://api.spotify.com/v1${path}`, {
+  const send = (accessToken: string) => {
+    const headers = new Headers(init.headers);
+    headers.set("Authorization", `Bearer ${accessToken}`);
+    headers.set("Content-Type", "application/json");
+    return fetch(`https://api.spotify.com/v1${path}`, {
       ...init,
       signal: init.signal ?? AbortSignal.timeout(15_000),
-      headers: {
-        ...(init.headers ?? {}),
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-      },
+      headers,
     });
+  };
   let response = await send(read.session.access_token);
   if (response.status === 401) {
     read = await readSpotifySession(request, true);
