@@ -75,7 +75,6 @@ export const Route = createFileRoute("/api/agent-delegate")({
                 max_tokens: 1200,
                 tools: SPOTIFY_TOOL_DEFINITIONS,
                 tool_choice: "auto",
-                parallel_tool_calls: false,
                 messages
               })
             });
