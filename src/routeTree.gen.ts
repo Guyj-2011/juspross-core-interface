@@ -82,6 +82,9 @@ export interface FileRoutesByTo {
   '/api/agent-delegate': typeof ApiAgentDelegateRoute
   '/api/gemini-live-token': typeof ApiGeminiLiveTokenRoute
   '/api/nemotron': typeof ApiNemotronRoute
+  '/api/spotify': typeof ApiSpotifyRoute
+  '/api/spotify/callback': typeof ApiSpotifyCallbackRoute
+  '/api/spotify/connect': typeof ApiSpotifyConnectRoute
   '/api/speech': typeof ApiSpeechRoute
 }
 export interface FileRoutesById {
@@ -91,6 +94,9 @@ export interface FileRoutesById {
   '/api/agent-delegate': typeof ApiAgentDelegateRoute
   '/api/gemini-live-token': typeof ApiGeminiLiveTokenRoute
   '/api/nemotron': typeof ApiNemotronRoute
+  '/api/spotify': typeof ApiSpotifyRoute
+  '/api/spotify/callback': typeof ApiSpotifyCallbackRoute
+  '/api/spotify/connect': typeof ApiSpotifyConnectRoute
   '/api/speech': typeof ApiSpeechRoute
 }
 export interface FileRouteTypes {
@@ -101,6 +107,9 @@ export interface FileRouteTypes {
     | '/api/agent-delegate'
     | '/api/gemini-live-token'
     | '/api/nemotron'
+    | '/api/spotify'
+    | '/api/spotify/callback'
+    | '/api/spotify/connect'
     | '/api/speech'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -109,6 +118,9 @@ export interface FileRouteTypes {
     | '/api/agent-delegate'
     | '/api/gemini-live-token'
     | '/api/nemotron'
+    | '/api/spotify'
+    | '/api/spotify/callback'
+    | '/api/spotify/connect'
     | '/api/speech'
   id:
     | '__root__'
@@ -117,6 +129,9 @@ export interface FileRouteTypes {
     | '/api/agent-delegate'
     | '/api/gemini-live-token'
     | '/api/nemotron'
+    | '/api/spotify'
+    | '/api/spotify/callback'
+    | '/api/spotify/connect'
     | '/api/speech'
   fileRoutesById: FileRoutesById
 }
