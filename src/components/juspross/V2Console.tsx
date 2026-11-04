@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowUp, Check, Copy, History, Mic, Radio, Settings2, Square, Trash2, Volume2, VolumeX, X } from "lucide-react";
+import { ArrowUp, Check, Copy, History, Radio, Settings2, Square, Trash2, Volume2, VolumeX, X } from "lucide-react";
 import { AiUnreachable, testAi, testGemma, testNemotron } from "@/lib/juspross/ai";
 import { useV2Chat } from "@/lib/juspross/useV2Chat";
 import { useGeminiLive } from "@/lib/juspross/useGeminiLive";
@@ -297,8 +297,7 @@ export function V2Console() {
       field.select();
       try {
         copied = document.execCommand("copy");
-      } catch {
-        copied = false;
+      } catch {        copied = false;
       }
       field.remove();
     }
@@ -597,8 +596,7 @@ export function V2Console() {
 
       voiceSessionRef.current = false;
       if (browserFallbackTimerRef.current !== undefined) window.clearTimeout(browserFallbackTimerRef.current);
-      if (browserRestartTimerRef.current !== undefined) window.clearTimeout(browserRestartTimerRef.current);
-      browserFallbackTimerRef.current = undefined;
+      if (browserRestartTimerRef.current !== undefined) window.clearTimeout(browserRestartTimerRef.current);      browserFallbackTimerRef.current = undefined;
       browserRestartTimerRef.current = undefined;
       voiceEngineRef.current = null;
       browserSpeechRef.current?.stop();
@@ -762,7 +760,7 @@ export function V2Console() {
     startBrowserRecognition();
   };
 
-  const linkLabel =
+  // El reconocimiento de voz independiente queda deshabilitado: la voz entra por Gemini Live.\n  void toggleMic;\n\n  const linkLabel =
     link === "online"
       ? aiProvider === "nemotron"
         ? "NEMOTRON · NVIDIA"
@@ -897,8 +895,7 @@ export function V2Console() {
                   </div>
                 </div>
               ))
-            )}
-          </div>
+            )}          </div>
         </aside>
       )}
 
@@ -926,22 +923,9 @@ export function V2Console() {
             className="max-h-32 min-h-9 flex-1 resize-none bg-transparent py-2 text-sm text-white placeholder:text-white/35 focus:outline-none"
           />
           <button
-            onClick={toggleMic}
-            aria-label={listening ? "Detener micrófono" : "Hablar con Juspross"}
-            title={listening ? "Detener escucha" : "Pulsa para hablar con Juspross"}
-            aria-pressed={listening}
-            className={cn(
-              "flex size-9 shrink-0 items-center justify-center rounded-md transition-colors",
-              listening ? "animate-pulse bg-[#ff3b4e]/20 text-[#ff6b7a]" : "text-white/55 hover:text-white",
-            )}
-          >
-            <Mic className="size-4.5" strokeWidth={1.6} />
-          </button>
-          <button
             onClick={() => {
               if (live.status === "live" || live.status === "connecting") live.stop();
               else {
-                if (listening) void toggleMic();
                 stop();
                 void live.start();
               }
@@ -1025,7 +1009,7 @@ export function V2Console() {
           </p>
         )}
         <p className="pointer-events-none mt-2 text-center font-mono text-[9px] tracking-[0.25em] text-white/30">
-          PULSA EL MICRÓFONO, HABLA Y JUSPROSS ENVIARÁ TU MENSAJE
+          USA EL BOTÓN DE GEMINI LIVE PARA HABLAR CON JUSPROSS
         </p>
       </div>
     </div>
