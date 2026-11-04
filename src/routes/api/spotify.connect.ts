@@ -30,7 +30,7 @@ export const Route = createFileRoute("/api/spotify/connect")({
           client_id: clientId,
           response_type: "code",
           redirect_uri: redirectUri,
-          scope: "user-read-playback-state user-modify-playback-state user-read-currently-playing",
+          scope: "user-read-playback-state user-modify-playback-state",
           state,
           code_challenge_method: "S256",
           code_challenge: challenge,
