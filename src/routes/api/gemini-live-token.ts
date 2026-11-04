@@ -33,6 +33,20 @@ export const Route = createFileRoute("/api/gemini-live-token")({
                 systemInstruction: { parts: [{ text: GEMINI_LIVE_SYSTEM }] },
                 inputAudioTranscription: {},
                 outputAudioTranscription: {},
+                tools: [{
+                  functionDeclarations: [{
+                    name: "delegate_to_nemotron",
+                    description: "Delegar a Nemotron el análisis y la planificación de una tarea. Úsala cuando el usuario pida una tarea compleja o un plan que deba ejecutar otro agente. Nemotron todavía no puede operar aplicaciones externas desde esta herramienta; devuelve un plan y requisitos.",
+                    parameters: {
+                      type: "OBJECT",
+                      properties: {
+                        task: { type: "STRING", description: "La tarea concreta que debe analizar Nemotron." },
+                        context: { type: "STRING", description: "Contexto relevante de la conversación y preferencias del usuario." }
+                      },
+                      required: ["task"]
+                    }
+                  }]
+                }]
               },
             }),
           });

@@ -21,6 +21,7 @@ type ServerMsg = {
     turnComplete?: boolean;
   };
   goAway?: unknown;
+  toolCall?: { functionCalls?: { id: string; name: string; args?: Record<string, unknown> }[] };
   error?: { message?: string };
 };
 
@@ -164,6 +165,48 @@ export function useGeminiLive() {
         processor.connect(mute).connect(inCtx!.destination);
       };
 
+      const handleToolCalls = async (calls: NonNullable<ServerMsg["toolCall"]>["functionCalls"]) => {
+        if (!calls?.length) return;
+        const responses: { id: string; name: string; response: Record<string, unknown> }[] = [];
+        for (const call of calls) {
+          if (call.name !== "delegate_to_nemotron") {
+            responses.push({ id: call.id, name: call.name, response: { error: "Herramienta no disponible." } });
+            continue;
+          }
+          const args = call.args ?? {};
+          const task = typeof args.task === "string" ? args.task.trim() : "";
+          const context = typeof args.context === "string" ? args.context.trim() : "";
+          if (!task) {
+            responses.push({ id: call.id, name: call.name, response: { error: "Nemotron necesita una descripción de la tarea." } });
+            continue;
+          }
+          const progressId = useV2.getState().addMessage({
+            role: "assistant",
+            text: "Delegando tarea a Nemotron…"
+          });
+          try {
+            const response = await fetch("/api/agent-delegate", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ task, context }),
+            });
+            const payload = await response.json().catch(() => ({})) as { result?: string; message?: string };
+            if (!response.ok || !payload.result) throw new Error(payload.message ?? `Nemotron respondió ${response.status}.`);
+            useV2.getState().patchMessage(progressId, {
+              text: `Nemotron completó el análisis de la tarea:\n\n${payload.result}`
+            });
+            responses.push({ id: call.id, name: call.name, response: { result: payload.result, status: "analysis_complete", execution: "not_available" } });
+          } catch (error) {
+            const message = error instanceof Error ? error.message : "No se pudo contactar con Nemotron.";
+            useV2.getState().patchMessage(progressId, { text: `No se pudo completar la delegación: ${message}`, error: true });
+            responses.push({ id: call.id, name: call.name, response: { error: message } });
+          }
+        }
+        if (!closed && socket.readyState === WebSocket.OPEN) {
+          socket.send(JSON.stringify({ toolResponse: { functionResponses: responses } }));
+        }
+      };
+
       socket.onmessage = async (ev) => {
         const raw = typeof ev.data === "string" ? ev.data : await (ev.data as Blob).text();
         let msg: ServerMsg;
@@ -174,6 +217,10 @@ export function useGeminiLive() {
         }
         const st = useV2.getState();
         if (msg.error) return fail(msg.error.message ?? "Gemini Live devolvió un error.");
+        if (msg.toolCall?.functionCalls?.length) {
+          void handleToolCalls(msg.toolCall.functionCalls);
+          return;
+        }
         if (msg.setupComplete) {
           startMic();
           setStatus("live");
