@@ -174,8 +174,8 @@ export function useGeminiLive() {
             continue;
           }
           const args = call.args ?? {};
-          const task = typeof args.task === "string" ? args.task.trim() : "";
-          const context = typeof args.context === "string" ? args.context.trim() : "";
+          const task = typeof args["task"] === "string" ? args["task"].trim() : "";
+          const context = typeof args["context"] === "string" ? args["context"].trim() : "";
           if (!task) {
             responses.push({ id: call.id, name: call.name, response: { error: "Nemotron necesita una descripción de la tarea." } });
             continue;
