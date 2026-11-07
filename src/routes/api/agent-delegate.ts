@@ -33,8 +33,8 @@ export const Route = createFileRoute("/api/agent-delegate")({
         try { input = JSON.parse(raw); } catch { return bad("JSON inválido."); }
         if (!input || typeof input !== "object") return bad("Petición inválida.");
         const body = input as Record<string, unknown>;
-        const task = typeof body.task === "string" ? body.task.trim() : "";
-        const context = typeof body.context === "string" ? body.context.trim() : "";
+        const task = typeof body["task"] === "string" ? body["task"].trim() : "";
+        const context = typeof body["context"] === "string" ? body["context"].trim() : "";
         if (!task || task.length > MAX_TASK) return bad("La tarea debe tener entre 1 y 8000 caracteres.");
         if (context.length > MAX_CONTEXT) return bad("El contexto es demasiado largo.");
 
