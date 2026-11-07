@@ -36,7 +36,7 @@ export const Route = createFileRoute("/api/gemini-live-token")({
                 tools: [{
                   functionDeclarations: [{
                     name: "delegate_to_nemotron",
-                    description: "Delegar a Nemotron el análisis y la planificación de una tarea. Úsala cuando el usuario pida una tarea compleja o un plan que deba ejecutar otro agente. Nemotron todavía no puede operar aplicaciones externas desde esta herramienta; devuelve un plan y requisitos.",
+                    description: "Delegar a Nemotron tareas de razonamiento y acciones de Spotify. Úsala cuando el usuario pida reproducir música, pausar, reanudar o cambiar canciones, así como para tareas complejas. Nemotron puede ejecutar las herramientas de Spotify autorizadas y devolver el resultado real.",
                     parameters: {
                       type: "OBJECT",
                       properties: {
