@@ -24,3 +24,6 @@
 - [x] 127.0.0.1-only Node agent with pairing, Origin/Host checks, rate limit, fixed spotify: launch
 - [x] Browser client + chat intent + Gemini Live tool + Settings "Equipo local"
 - [ ] Real test on the user's Windows 11 PC (needs the user)
+
+## Lado 2.0 local-equipment access
+- [ ] Reuse Equipo local inside the visible AI settings popup and verify pairing, launch results, disconnect, and narrow-screen access.
