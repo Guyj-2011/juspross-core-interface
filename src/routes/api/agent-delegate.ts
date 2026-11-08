@@ -58,7 +58,7 @@ export const Route = createFileRoute("/api/agent-delegate")({
               "Responde siempre en español, de forma clara y breve."
             ].join(" ")
           },
-          { role: "user", content: \`TAREA DELEGADA:\n\${task}\n\nCONTEXTO:\n\${context || "Sin contexto adicional."}\` }
+          { role: "user", content: `TAREA DELEGADA:\n${task}\n\nCONTEXTO:\n${context || "Sin contexto adicional."}` }
         ];
 
         let refreshedCookie: string | undefined;
@@ -67,7 +67,7 @@ export const Route = createFileRoute("/api/agent-delegate")({
             const upstream = await fetch(NEMOTRON_URL, {
               method: "POST",
               signal,
-              headers: { Authorization: \`Bearer \${key}\`, "Content-Type": "application/json" },
+              headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
               body: JSON.stringify({
                 model: NEMOTRON_MODEL,
                 stream: false,
@@ -84,7 +84,7 @@ export const Route = createFileRoute("/api/agent-delegate")({
             };
             if (!upstream.ok) {
               const detail = payload.error?.message?.slice(0, 220);
-              return bad(\`Nemotron respondió HTTP \${upstream.status}.\${detail ? \` \${detail}\` : ""}\`, 502);
+              return bad(`Nemotron respondió HTTP ${upstream.status}.${detail ? ` ${detail}` : ""}`, 502);
             }
 
             const assistant = payload.choices?.[0]?.message;
@@ -145,7 +145,7 @@ export const Route = createFileRoute("/api/agent-delegate")({
         } catch (error) {
           if (request.signal.aborted) return new Response(null, { status: 499 });
           const message = error instanceof Error ? error.message : "Error desconocido";
-          return bad(\`No se pudo completar la delegación a Nemotron: \${message.slice(0, 180)}\`, 504);
+          return bad(`No se pudo completar la delegación a Nemotron: ${message.slice(0, 180)}`, 504);
         }
       }
     }
