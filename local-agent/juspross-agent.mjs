@@ -39,10 +39,31 @@ export function detectSpotifyWindows() {
   return query("HKCU\\Software\\Classes\\spotify").then((ok) => ok || query("HKCR\\spotify"));
 }
 
-/** Acción fija: pedir a Windows que abra el protocolo oficial spotify:. */
+/** Acción fija: iniciar el ejecutable oficial de Spotify; usar el protocolo como respaldo. */
 export function launchSpotifyWindows() {
-  const child = spawn("explorer.exe", ["spotify:"], { shell: false, windowsHide: true, detached: true, stdio: "ignore" });
-  child.on("error", () => {});
+  const candidates = [
+    process.env.APPDATA && path.join(process.env.APPDATA, "Spotify", "Spotify.exe"),
+    process.env.LOCALAPPDATA && path.join(process.env.LOCALAPPDATA, "Microsoft", "WindowsApps", "Spotify.exe"),
+  ].filter(Boolean);
+  const executable = candidates.find((candidate) => fs.existsSync(candidate));
+
+  const launchProtocol = () => {
+    const child = spawn("explorer.exe", ["spotify:"], {
+      shell: false, windowsHide: true, detached: true, stdio: "ignore",
+    });
+    child.on("error", () => {});
+    child.unref();
+  };
+
+  if (!executable) {
+    launchProtocol();
+    return;
+  }
+
+  const child = spawn(executable, [], {
+    shell: false, windowsHide: true, detached: true, stdio: "ignore",
+  });
+  child.once("error", launchProtocol);
   child.unref();
 }
 
