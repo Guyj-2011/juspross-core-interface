@@ -1,6 +1,6 @@
 # Agente local de Juspross (Windows 11)
 
-Pequeño programa que permite a Juspross **iniciar Spotify** en tu PC. Intenta abrir directamente el ejecutable oficial y usa el protocolo `spotify:` como respaldo. No ejecuta comandos arbitrarios ni lee archivos.
+Pequeño programa que permite a Juspross **iniciar Spotify** en tu PC y ajustar su ventana a un tamaño compacto. Intenta abrir directamente el ejecutable oficial y usa el protocolo `spotify:` como respaldo. No acepta ni ejecuta comandos proporcionados por el usuario; la única acción auxiliar fija usa Windows para redimensionar la ventana de Spotify.
 
 - Escucha solo en `127.0.0.1:47821`, así que no es accesible desde la red.
 - Solo acepta peticiones de `https://juspross.lovable.app`.
@@ -32,7 +32,7 @@ Deja la ventana de PowerShell abierta mientras uses la función.
 
 ## Problemas
 - **«Agente no detectado»:** comprueba que PowerShell siga abierto. Revisa también que el navegador no haya bloqueado el «acceso a la red local» (icono del candado → Configuración del sitio).
-- **Spotify ya estaba abierto:** Windows y Spotify pueden reutilizar la ventana existente; Spotify Desktop no garantiza una segunda instancia independiente. El minirreproductor es una función propia de Spotify y su disponibilidad depende de la cuenta y de la versión de la aplicación.\n- **«El puerto 47821 ya está en uso»:** ya hay otro agente abierto.
+- **Spotify ya estaba abierto:** Windows y Spotify pueden reutilizar la ventana existente; Spotify Desktop no garantiza una segunda instancia independiente. El agente intenta restaurar y ajustar la ventana principal a 560 × 760 píxeles. Si Spotify no permite cambiar ese tamaño, la ventana conservará sus límites mínimos.\n- **«El puerto 47821 ya está en uso»:** ya hay otro agente abierto.
 - **Código caducado:** cierra el agente con `Ctrl+C` y vuelve a ejecutarlo para obtener otro.
 - **Usarlo en la vista previa de Lovable:** ejecuta `node juspross-agent.mjs --allow-preview`.
 
