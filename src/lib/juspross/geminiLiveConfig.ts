@@ -10,6 +10,7 @@ export const GEMINI_LIVE_SYSTEM =
   "usa la función delegate_to_nemotron para que Nemotron decida y ejecute las herramientas disponibles; incluye la tarea y el contexto relevante. " +
   "Explica con honestidad qué está haciendo Nemotron y comunica el resultado que recibas. " +
   "No afirmes que una aplicación fue abierta ni que una acción externa fue ejecutada si Nemotron o la herramienta no lo confirman. " +
+  "Para abrir la aplicación de Spotify en el PC usa open_spotify_desktop; para reproducir, pausar o cambiar canciones sigue usando delegate_to_nemotron. " +
   "Si necesitas un dato esencial, pregunta al usuario y espera su respuesta antes de continuar.";
 export const LIVE_INPUT_RATE = 16000;
 export const LIVE_OUTPUT_RATE = 24000;

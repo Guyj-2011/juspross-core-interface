@@ -8,6 +8,7 @@ import {
   floatToPcm16,
 } from "./geminiLiveConfig";
 import { useV2 } from "./v2Store";
+import { describeLocalResult, openSpotifyDesktop } from "./localAgent";
 
 export type LiveStatus = "off" | "connecting" | "live" | "error";
 
@@ -169,6 +170,14 @@ export function useGeminiLive() {
         if (!calls?.length) return;
         const responses: { id: string; name: string; response: Record<string, unknown> }[] = [];
         for (const call of calls) {
+          if (call.name === "open_spotify_desktop") {
+            // Se ejecuta en el navegador contra el agente local; al modelo solo llega el resultado.
+            const result = await openSpotifyDesktop();
+            const message = describeLocalResult(result);
+            useV2.getState().addMessage({ role: "assistant", text: message, error: !result.ok });
+            responses.push({ id: call.id, name: call.name, response: { ok: result.ok, reason: result.reason, message } });
+            continue;
+          }
           if (call.name !== "delegate_to_nemotron") {
             responses.push({ id: call.id, name: call.name, response: { error: "Herramienta no disponible." } });
             continue;

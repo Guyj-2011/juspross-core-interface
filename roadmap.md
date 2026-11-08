@@ -20,3 +20,7 @@
 - [x] Gemini Live voice button in V2 console (token, mic 16 kHz PCM, 24 kHz playback, transcripts, interrupt, cleanup)
 - [x] Fix bun:test typecheck error
 - [ ] Real spoken conversation test with a human microphone (headless browser only has a test tone)
+## Local agent (open Spotify on Windows)
+- [x] 127.0.0.1-only Node agent with pairing, Origin/Host checks, rate limit, fixed spotify: launch
+- [x] Browser client + chat intent + Gemini Live tool + Settings "Equipo local"
+- [ ] Real test on the user's Windows 11 PC (needs the user)
