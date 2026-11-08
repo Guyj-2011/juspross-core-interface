@@ -5,6 +5,7 @@ import { useV2Chat } from "@/lib/juspross/useV2Chat";
 import { useGeminiLive } from "@/lib/juspross/useGeminiLive";
 import { useV2 } from "@/lib/juspross/v2Store";
 import { cn } from "@/lib/utils";
+import { LocalAgentPanel } from "@/components/juspross/LocalAgentPanel";
 
 interface BrowserSpeechResult {
   0: { transcript: string };
@@ -1070,7 +1071,7 @@ function AiSettings({ onClose }: { onClose: () => void }) {
     "w-full rounded-md border border-white/10 bg-black/60 px-2.5 py-1.5 font-mono text-[11px] text-white placeholder:text-white/30 focus:border-[#3d7bff]/60 focus:outline-none";
 
   return (
-    <div className="absolute top-11 right-0 w-[320px] space-y-3 rounded-xl border border-white/10 bg-black/85 p-4 text-white backdrop-blur-xl">
+    <div role="dialog" aria-label="Ajustes de la IA" className="absolute top-11 right-0 max-h-[calc(100dvh-5rem)] w-[320px] max-w-[calc(100vw-2.5rem)] space-y-3 overflow-y-auto rounded-xl border border-white/10 bg-black/85 p-4 text-white backdrop-blur-xl">
       <p className="font-mono text-[10px] tracking-[0.25em] text-[#6ea8ff]">
         IA LOCAL · GEMMA + QWEN
       </p>
@@ -1153,6 +1154,7 @@ function AiSettings({ onClose }: { onClose: () => void }) {
       >
         {detail}
       </p>
+      <LocalAgentPanel />
     </div>
   );
 }
