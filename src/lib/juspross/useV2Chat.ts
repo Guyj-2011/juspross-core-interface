@@ -2,6 +2,8 @@ import { useCallback, useEffect, useRef } from "react";
 import { AiError, AiUnreachable, chat, chatGemma, chatNemotron, simulate, type AiMsg } from "./ai";
 import { speak } from "./useSpeech";
 import { useV2 } from "./v2Store";
+import { isOpenSpotifyIntent } from "./localIntent";
+import { describeLocalResult, openSpotifyDesktop } from "./localAgent";
 
 /** Conversación del lado 2.0: usuario → Qwen (Ollama) → respuesta en streaming. */
 export function useV2Chat() {
@@ -33,6 +35,17 @@ export function useV2Chat() {
       abortRef.current = ctrl;
 
       const s = useV2.getState();
+      if (isOpenSpotifyIntent(text)) {
+        s.addMessage({ role: "user", text });
+        const localId = s.addMessage({ role: "assistant", text: "Contactando con el agente local…" });
+        s.setState("thinking");
+        const result = await openSpotifyDesktop();
+        if (ctrl.signal.aborted) return;
+        const st = useV2.getState();
+        st.patchMessage(localId, { text: describeLocalResult(result), error: !result.ok });
+        st.setState("idle");
+        return;
+      }
       const history: AiMsg[] = s.messages
         .filter((m) => !m.error && m.text)
         .slice(-12)
