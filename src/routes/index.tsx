@@ -13,7 +13,6 @@ import { StatusDeck, Telemetry } from "@/components/juspross/StatusDeck";
 import { CommandBar } from "@/components/juspross/CommandBar";
 import { PanelHost } from "@/components/juspross/PanelHost";
 import { BootSequence } from "@/components/juspross/BootSequence";
-import { DesktopExplorer } from "@/components/juspross/DesktopExplorer";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -68,7 +67,6 @@ function Index() {
           <V2Console />
         </>
       )}
-      <DesktopExplorer />
       <ModeSwitch />
       <BootSequence />
     </main>
