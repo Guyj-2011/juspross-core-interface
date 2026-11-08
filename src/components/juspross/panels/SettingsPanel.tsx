@@ -131,7 +131,7 @@ export function SpotifyConnectionPanel() {
         </p>
       )}
       <p className="text-[10px] leading-relaxed text-muted-foreground">
-        Nemotron podrá buscar y controlar la reproducción. Para abrir la aplicación de Windows necesitaremos después el agente local.
+        Conecta tu cuenta para que Juspross pueda buscar canciones y controlar la reproducción. El agente local se encarga de abrir la aplicación de Windows.
       </p>
     </div>
   );
