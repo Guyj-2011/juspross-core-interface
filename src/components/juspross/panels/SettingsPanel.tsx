@@ -59,34 +59,73 @@ export function ConnectionPanel() {
   );
 }
 
+type SpotifyStatus = { configured: boolean; connected: boolean };
 
 export function SpotifyConnectionPanel() {
-  const [status, setStatus] = useState<{ configured: boolean; connected: boolean } | null>(null);
+  const [status, setStatus] = useState<SpotifyStatus | null>(null);
   const [busy, setBusy] = useState(false);
   const [detail, setDetail] = useState("");
 
   useEffect(() => {
     let active = true;
-    void fetch("/api/spotify", { cache: "no-store" })
-      .then(async (response) => {
-        const payload = await response.json().catch(() => ({})) as { configured?: boolean; connected?: boolean };
-        if (active) setStatus({ configured: Boolean(payload.configured), connected: Boolean(payload.connected) });
-      })
-      .catch(() => {
-        if (active) setDetail("No se pudo consultar la conexión con Spotify.");
-      });
+    let checking = false;
+
+    // GET /api/spotify renueva silenciosamente el access token con el refresh token
+    // guardado en la cookie HttpOnly y devuelve la cookie renovada si hace falta.
+    const refreshStatus = async () => {
+      if (checking) return;
+      checking = true;
+      try {
+        const response = await fetch("/api/spotify", {
+          cache: "no-store",
+          credentials: "same-origin",
+        });
+        if (!response.ok) throw new Error("No se pudo consultar Spotify.");
+        const payload = await response.json() as Partial<SpotifyStatus>;
+        if (active) {
+          setStatus({
+            configured: Boolean(payload.configured),
+            connected: Boolean(payload.connected),
+          });
+        }
+      } catch {
+        if (active && !status) setDetail("No se pudo consultar la conexión con Spotify.");
+      } finally {
+        checking = false;
+      }
+    };
+
+    void refreshStatus();
+    // Al volver a la pestaña, restaura la sesión antes de que el usuario pida música.
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void refreshStatus();
+    };
+    window.addEventListener("focus", onVisible);
+    window.addEventListener("pageshow", onVisible);
+    document.addEventListener("visibilitychange", onVisible);
+    const interval = window.setInterval(() => {
+      if (document.visibilityState === "visible") void refreshStatus();
+    }, 45_000);
+
     const result = new URLSearchParams(window.location.search).get("spotify");
     if (result === "connected") setDetail("Spotify quedó conectado correctamente.");
     else if (result === "denied") setDetail("No se concedieron los permisos de Spotify.");
     else if (result === "token-error" || result === "state-error") setDetail("No se pudo completar la conexión. Inténtalo otra vez.");
-    return () => { active = false; };
+
+    return () => {
+      active = false;
+      window.clearInterval(interval);
+      window.removeEventListener("focus", onVisible);
+      window.removeEventListener("pageshow", onVisible);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, []);
 
   const disconnect = async () => {
     setBusy(true);
     setDetail("");
     try {
-      const response = await fetch("/api/spotify", { method: "POST" });
+      const response = await fetch("/api/spotify", { method: "POST", credentials: "same-origin" });
       if (!response.ok) throw new Error("No se pudo desconectar Spotify.");
       setStatus((current) => current ? { ...current, connected: false } : current);
       setDetail("Spotify se desconectó de Juspross.");
@@ -106,7 +145,7 @@ export function SpotifyConnectionPanel() {
             <span className="label-xs">SPOTIFY</span>
           </div>
           <p className="mt-1 text-[10px] text-muted-foreground">
-            {status?.connected ? "Cuenta conectada" : status?.configured ? "Cuenta sin conectar" : "Integración pendiente de configurar"}
+            {status?.connected ? "Cuenta conectada automáticamente" : status?.configured ? "Cuenta sin conectar" : "Integración pendiente de configurar"}
           </p>
         </div>
         {status?.connected ? (
@@ -131,12 +170,11 @@ export function SpotifyConnectionPanel() {
         </p>
       )}
       <p className="text-[10px] leading-relaxed text-muted-foreground">
-        Conecta tu cuenta para que Juspross pueda buscar canciones y controlar la reproducción. El agente local se encarga de abrir la aplicación de Windows.
+        Después de autorizar la cuenta una vez, Juspross restaura y renueva la sesión automáticamente. La autorización inicial siempre requiere tu aprobación en Spotify.
       </p>
     </div>
   );
 }
-
 
 export function SettingsPanel() {
   const sound = useJuspross((s) => s.soundEnabled);
