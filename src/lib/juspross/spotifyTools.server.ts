@@ -59,14 +59,14 @@ export const SPOTIFY_TOOL_DEFINITIONS = [
   }
 ] as const;
 
-type ToolResult = { ok: boolean; message: string; setCookie?: string };
+type ToolResult = { ok: boolean; message: string; setCookie?: string | undefined };
 
 async function spotifyRequest(
   request: Request,
   path: string,
   method: string,
   body?: unknown,
-): Promise<{ response: Response; setCookie?: string; accessToken: string }> {
+): Promise<{ response: Response; setCookie?: string | undefined; accessToken: string }> {
   return spotifyApi(request, path, {
     method,
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
