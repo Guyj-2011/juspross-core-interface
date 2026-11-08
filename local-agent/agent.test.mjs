@@ -52,7 +52,10 @@ describe("agente local", () => {
     expect((await post("/v1/pair", { code })).status).toBe(423);
   });
   test("ruta desconocida devuelve 404", async () => {
-    expect((await post("/v1/exec", { cmd: "calc" })).status).toBe(404);
+    expect((await post("/v1/exec", { cmd: "calc" })).status).toBe(401);
+    const { token } = await (await post("/v1/pair", { code })).json();
+    expect((await post("/v1/exec", { cmd: "calc" }, { Authorization: `Bearer ${token}` })).status).toBe(404);
+    expect(launches).toBe(0);
   });
   test("límite de solicitudes", async () => {
     let last = 0;
