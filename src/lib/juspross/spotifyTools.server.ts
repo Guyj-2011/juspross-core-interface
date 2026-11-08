@@ -101,8 +101,8 @@ export async function executeSpotifyTool(
   try {
     switch (name) {
       case "spotify_search_and_play": {
-        const query = typeof args.query === "string" ? args.query.trim().slice(0, 160) : "";
-        const kind = args.kind === "playlist" ? "playlist" : args.kind === "track" ? "track" : "";
+        const query = typeof args["query"] === "string" ? args["query"].trim().slice(0, 160) : "";
+        const kind = args["kind"] === "playlist" ? "playlist" : args["kind"] === "track" ? "track" : "";
         if (!query || !kind) return { ok: false, message: "Falta una búsqueda válida y su tipo (canción o playlist)." };
         const search = await spotifyRequest(
           request,

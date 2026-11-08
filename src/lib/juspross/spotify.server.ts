@@ -12,7 +12,7 @@ export interface SpotifyTokens {
 
 export interface SpotifySessionRead {
   session: SpotifyTokens | null;
-  setCookie?: string;
+  setCookie?: string | undefined;
 }
 
 function env(name: string): string {
@@ -38,7 +38,7 @@ function base64Url(bytes: Uint8Array): string {
   return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
 }
 
-function fromBase64Url(value: string): Uint8Array {
+function fromBase64Url(value: string): Uint8Array<ArrayBuffer> {
   const normalized = value.replace(/-/g, "+").replace(/_/g, "/");
   const binary = atob(normalized + "=".repeat((4 - (normalized.length % 4)) % 4));
   return Uint8Array.from(binary, (char) => char.charCodeAt(0));
@@ -158,7 +158,7 @@ export async function spotifyApi(
   request: Request,
   path: string,
   init: RequestInit = {},
-): Promise<{ response: Response; setCookie?: string; accessToken: string }> {
+): Promise<{ response: Response; setCookie?: string | undefined; accessToken: string }> {
   let read = await readSpotifySession(request);
   if (!read.session) throw new Error("Spotify no está conectado. Conecta tu cuenta desde Ajustes.");
   const send = (accessToken: string) => {
