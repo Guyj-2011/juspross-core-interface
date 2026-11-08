@@ -6,6 +6,7 @@ import { useGeminiLive } from "@/lib/juspross/useGeminiLive";
 import { useV2 } from "@/lib/juspross/v2Store";
 import { cn } from "@/lib/utils";
 import { LocalAgentPanel } from "@/components/juspross/LocalAgentPanel";
+import { SpotifyConnectionPanel } from "@/components/juspross/panels/SettingsPanel";
 
 interface BrowserSpeechResult {
   0: { transcript: string };
@@ -1154,6 +1155,7 @@ function AiSettings({ onClose }: { onClose: () => void }) {
       >
         {detail}
       </p>
+      <SpotifyConnectionPanel />
       <LocalAgentPanel />
     </div>
   );
