@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Agente local de Juspross — abre Spotify en Windows y NADA más.
-// Sin dependencias. Escucha solo en 127.0.0.1. No hay shell, ni comandos, ni rutas del navegador.
+// Sin dependencias. Escucha solo en 127.0.0.1. No acepta comandos arbitrarios ni accede a archivos del usuario.
 import http from "node:http";
 import crypto from "node:crypto";
 import fs from "node:fs";
@@ -39,7 +39,35 @@ export function detectSpotifyWindows() {
   return query("HKCU\\Software\\Classes\\spotify").then((ok) => ok || query("HKCR\\spotify"));
 }
 
-/** Acción fija: iniciar el ejecutable oficial de Spotify; usar el protocolo como respaldo. */
+/** Redimensiona únicamente la ventana principal de Spotify con una acción fija de Windows. */
+export function resizeSpotifyWindow() {
+  const script = String.raw`
+Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public static class JusprossWindow {
+  [DllImport("user32.dll")] public static extern bool ShowWindowAsync(IntPtr hWnd, int nCmdShow);
+  [DllImport("user32.dll", SetLastError=true)] public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+}
+'@
+$deadline = (Get-Date).AddSeconds(12)
+do {
+  $window = Get-Process -Name Spotify -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1
+  if ($window) {
+    [JusprossWindow]::ShowWindowAsync($window.MainWindowHandle, 9) | Out-Null
+    [JusprossWindow]::SetWindowPos($window.MainWindowHandle, [IntPtr]::Zero, 48, 48, 560, 760, 0x0040) | Out-Null
+    exit 0
+  }
+  Start-Sleep -Milliseconds 300
+} while ((Get-Date) -lt $deadline)
+exit 2
+`;
+  execFile("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], {
+    shell: false, windowsHide: true, timeout: 15_000,
+  }, () => {});
+}
+
+/** Acción fija: iniciar Spotify y ajustar su ventana a un tamaño compacto. */
 export function launchSpotifyWindows() {
   const candidates = [
     process.env.APPDATA && path.join(process.env.APPDATA, "Spotify", "Spotify.exe"),
@@ -53,6 +81,7 @@ export function launchSpotifyWindows() {
     });
     child.on("error", () => {});
     child.unref();
+    setTimeout(resizeSpotifyWindow, 1500);
   };
 
   if (!executable) {
@@ -65,6 +94,7 @@ export function launchSpotifyWindows() {
   });
   child.once("error", launchProtocol);
   child.unref();
+  setTimeout(resizeSpotifyWindow, 1500);
 }
 
 export function createAgent(opts = {}) {
