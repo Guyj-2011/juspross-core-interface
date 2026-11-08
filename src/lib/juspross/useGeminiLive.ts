@@ -8,6 +8,7 @@ import {
   floatToPcm16,
 } from "./geminiLiveConfig";
 import { useV2 } from "./v2Store";
+import { describeLocalResult, openSpotifyDesktop } from "./localAgent";
 
 export type LiveStatus = "off" | "connecting" | "live" | "error";
 
