@@ -31,6 +31,8 @@ export function useGeminiLive() {
   const [status, setStatus] = useState<LiveStatus>("off");
   const [notice, setNotice] = useState("");
   const cleanupRef = useRef<(() => void) | null>(null);
+  const channelRef = useRef<BroadcastChannel | null>(null);
+  const tabIdRef = useRef("");
 
   const stop = useCallback((message = "Gemini Live desconectado.") => {
     cleanupRef.current?.();
@@ -39,13 +41,29 @@ export function useGeminiLive() {
     if (message) setNotice(message);
   }, []);
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    if (typeof BroadcastChannel === "undefined") return;
+    const channel = new BroadcastChannel("juspross-live-microphone");
+    const tabId = typeof crypto.randomUUID === "function"
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    tabIdRef.current = tabId;
+    channelRef.current = channel;
+    channel.onmessage = (event: MessageEvent<{ type?: string; tabId?: string }>) => {
+      if (event.data?.type !== "claim" || event.data.tabId === tabId) return;
+      if (!cleanupRef.current) return;
+      cleanupRef.current();
+      cleanupRef.current = null;
+      setStatus("off");
+      setNotice("El micrófono se trasladó a la otra ventana de Juspross.");
+    };
+    return () => {
       cleanupRef.current?.();
       cleanupRef.current = null;
-    },
-    [],
-  );
+      channel.close();
+      channelRef.current = null;
+    };
+  }, []);
 
   const start = useCallback(async () => {
     if (cleanupRef.current) return;
@@ -115,6 +133,13 @@ export function useGeminiLive() {
       document.addEventListener("visibilitychange", resumeAudio);
       window.addEventListener("focus", resumeAudio);
       const initialAudioResume = Promise.all([inCtx.resume(), outCtx.resume()]);
+
+      // Solo una ventana de Juspross captura el micrófono a la vez.
+      // La ventana solicitante toma el turno y las demás liberan su sesión activa.
+      if (channelRef.current) {
+        channelRef.current.postMessage({ type: "claim", tabId: tabIdRef.current });
+        await new Promise((resolve) => window.setTimeout(resolve, 220));
+      }
 
       // Pedir el micrófono dentro del mismo gesto de activación.
       stream = await navigator.mediaDevices.getUserMedia({
