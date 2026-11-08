@@ -1,4 +1,5 @@
 import { createParser } from "eventsource-parser";
+import { getSpeechAudioContext } from "./speechAudio";
 
 export function decodePCM(pending: Uint8Array, incoming: Uint8Array) {
   const bytes = new Uint8Array(pending.length + incoming.length);
@@ -13,7 +14,7 @@ export function decodePCM(pending: Uint8Array, incoming: Uint8Array) {
 
 export async function streamSpeech(endpoint: string, text: string, signal?: AbortSignal, onLevel: (level: number) => void = () => {}): Promise<void> {
   signal?.throwIfAborted();
-  const context = new AudioContext({ sampleRate: 24000 });
+  const context = getSpeechAudioContext();
   const analyser = context.createAnalyser();
   analyser.fftSize = 512;
   analyser.connect(context.destination);
@@ -109,6 +110,6 @@ export async function streamSpeech(endpoint: string, text: string, signal?: Abor
     signal?.removeEventListener("abort", abort);
     controller.abort();
     for (const source of sources) source.stop();
-    await context.close();
+    analyser.disconnect();
   }
 }

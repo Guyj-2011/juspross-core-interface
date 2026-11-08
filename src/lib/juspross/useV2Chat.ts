@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from "react";
 import { AiError, AiUnreachable, chat, chatGemma, chatNemotron, simulate, type AiMsg } from "./ai";
 import { speak } from "./useSpeech";
+import { unlockSpeechAudio } from "./speechAudio";
 import { useV2 } from "./v2Store";
 import { isOpenSpotifyIntent } from "./localIntent";
 import { describeLocalResult, openSpotifyDesktop } from "./localAgent";
@@ -30,6 +31,8 @@ export function useV2Chat() {
     async (raw: string, viaVoice = false) => {
       const text = raw.trim();
       if (!text) return;
+      // Desbloquea Web Audio durante el clic de enviar, antes de esperar al modelo.
+      unlockSpeechAudio();
       stop();
       const ctrl = new AbortController();
       abortRef.current = ctrl;
