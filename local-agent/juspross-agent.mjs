@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Agente local de Juspross — abre Spotify en Windows y NADA más.
-// Sin dependencias. Escucha solo en 127.0.0.1. No hay shell, ni comandos, ni rutas del navegador.
+// Sin dependencias. Escucha solo en 127.0.0.1. No acepta comandos arbitrarios ni accede a archivos del usuario.
 import http from "node:http";
 import crypto from "node:crypto";
 import fs from "node:fs";
