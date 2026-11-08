@@ -63,6 +63,7 @@ export function useGeminiLive() {
     let botId: string | null = null;
     let userText = "";
     let botText = "";
+    let resumeAudio: (() => void) | null = null;
 
     const flushPlayback = () => {
       for (const s of sources) {
@@ -80,6 +81,11 @@ export function useGeminiLive() {
       cancelAnimationFrame(raf);
       flushPlayback();
       processor?.disconnect();
+      if (resumeAudio) {
+        document.removeEventListener("visibilitychange", resumeAudio);
+        window.removeEventListener("focus", resumeAudio);
+        resumeAudio = null;
+      }
       stream?.getTracks().forEach((t) => t.stop());
       if (ws && ws.readyState <= 1) ws.close(1000);
       void inCtx?.close().catch(() => {});
@@ -97,14 +103,25 @@ export function useGeminiLive() {
     };
 
     try {
-      // Pedir el micrófono dentro del gesto del usuario.
+      // Crear y desbloquear los contextos de audio inmediatamente desde el clic
+      // del usuario, antes de que el permiso del micrófono o la red consuman la activación.
+      inCtx = new AudioContext();
+      outCtx = new AudioContext({ sampleRate: LIVE_OUTPUT_RATE });
+      resumeAudio = () => {
+        if (closed) return;
+        if (inCtx?.state === "suspended") void inCtx.resume().catch(() => {});
+        if (outCtx?.state === "suspended") void outCtx.resume().catch(() => {});
+      };
+      document.addEventListener("visibilitychange", resumeAudio);
+      window.addEventListener("focus", resumeAudio);
+      const initialAudioResume = Promise.all([inCtx.resume(), outCtx.resume()]);
+
+      // Pedir el micrófono dentro del mismo gesto de activación.
       stream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 },
       });
       if (closed) return;
-      inCtx = new AudioContext();
-      outCtx = new AudioContext({ sampleRate: LIVE_OUTPUT_RATE });
-      await Promise.all([inCtx.resume(), outCtx.resume()]);
+      await initialAudioResume;
 
       const res = await fetch("/api/gemini-live-token", { method: "POST" });
       const j = (await res.json().catch(() => ({}))) as { token?: string; message?: string };
