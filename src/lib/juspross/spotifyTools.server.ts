@@ -59,14 +59,14 @@ export const SPOTIFY_TOOL_DEFINITIONS = [
   }
 ] as const;
 
-type ToolResult = { ok: boolean; message: string; setCookie?: string };
+type ToolResult = { ok: boolean; message: string; setCookie?: string | undefined };
 
 async function spotifyRequest(
   request: Request,
   path: string,
   method: string,
   body?: unknown,
-): Promise<{ response: Response; setCookie?: string; accessToken: string }> {
+): Promise<{ response: Response; setCookie?: string | undefined; accessToken: string }> {
   return spotifyApi(request, path, {
     method,
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
@@ -101,8 +101,8 @@ export async function executeSpotifyTool(
   try {
     switch (name) {
       case "spotify_search_and_play": {
-        const query = typeof args.query === "string" ? args.query.trim().slice(0, 160) : "";
-        const kind = args.kind === "playlist" ? "playlist" : args.kind === "track" ? "track" : "";
+        const query = typeof args["query"] === "string" ? args["query"].trim().slice(0, 160) : "";
+        const kind = args["kind"] === "playlist" ? "playlist" : args["kind"] === "track" ? "track" : "";
         if (!query || !kind) return { ok: false, message: "Falta una búsqueda válida y su tipo (canción o playlist)." };
         const search = await spotifyRequest(
           request,
