@@ -172,6 +172,9 @@ export function SpotifyConnectionPanel() {
       <p className="text-[10px] leading-relaxed text-muted-foreground">
         Después de autorizar la cuenta una vez, Juspross restaura y renueva la sesión automáticamente. La autorización inicial siempre requiere tu aprobación en Spotify.
       </p>
+      <p className="text-[10px] leading-relaxed text-muted-foreground">
+        Si usas Juspross como fondo en Lively, activa «Disk cache» en los ajustes del navegador web de Lively. Con la caché en memoria, Lively elimina las cookies al cerrar y Spotify vuelve a pedir conexión.
+      </p>
     </div>
   );
 }
