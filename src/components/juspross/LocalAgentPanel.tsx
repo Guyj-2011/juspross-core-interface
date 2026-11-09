@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Monitor } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,14 +15,19 @@ export function LocalAgentPanel() {
   const [busy, setBusy] = useState(false);
   const [detail, setDetail] = useState("");
 
-  const refresh = async () => {
+  const refresh = useCallback(async () => {
     const s = await localAgentStatus();
     setState({ running: s.running, paired: s.paired });
     if (!s.running && s.reason)
       setDetail(
         describeLocalResult({ ok: false, reason: s.reason }).replace("No pude abrir Spotify: ", ""),
       );
-  };
+  }, []);
+
+  // Detecta el agente al cargar el fondo; el usuario no tiene que pulsar «Comprobar».
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
 
   const run = async (fn: () => Promise<void>) => {
     setBusy(true);
@@ -87,7 +92,7 @@ export function LocalAgentPanel() {
           </p>
         </div>
         <Button variant="outline" size="sm" disabled={busy} onClick={() => void run(refresh)}>
-          Comprobar
+          Actualizar
         </Button>
       </div>
       {state?.running && !state.paired && (
