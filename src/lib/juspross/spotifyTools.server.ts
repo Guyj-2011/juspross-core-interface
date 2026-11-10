@@ -6,7 +6,7 @@ export const SPOTIFY_TOOL_DEFINITIONS = [
   { type: "function", function: { name: "spotify_pause", description: "Pausa la reproducción actual de Spotify.", parameters: { type: "object", properties: {}, additionalProperties: false } } },
   { type: "function", function: { name: "spotify_next", description: "Avanza a la siguiente canción.", parameters: { type: "object", properties: {}, additionalProperties: false } } },
   { type: "function", function: { name: "spotify_previous", description: "Vuelve a la canción anterior.", parameters: { type: "object", properties: {}, additionalProperties: false } } },
-  { type: "function", function: { name: "spotify_playback_status", description: "Comprueba si Spotify está reproduciendo o pausado.", parameters: { type: "object", properties: {}, additionalProperties: false } } }
+  { type: "function", function: { name: "spotify_playback_status", description: "Comprueba el estado de Spotify e informa del título y artista actuales si hay una canción activa.", parameters: { type: "object", properties: {}, additionalProperties: false } } }
 ] as const;
 
 type ToolResult = { ok: boolean; message: string; setCookie?: string };
@@ -98,8 +98,17 @@ export async function executeSpotifyTool(request: Request, name: string, args: R
         const { response, setCookie } = await spotifyRequest(request, "/me/player", "GET");
         if (response.status === 204) return { ok: true, message: "Spotify no tiene reproducción activa en este momento.", setCookie };
         if (!response.ok) return { ok: false, message: playbackError(response.status), setCookie };
-        const payload = await response.json().catch(() => ({})) as { is_playing?: boolean };
-        return { ok: true, message: payload.is_playing ? "Spotify está reproduciendo." : "Spotify está pausado.", setCookie };
+        const payload = await response.json().catch(() => ({})) as {
+          is_playing?: boolean;
+          item?: { name?: string; artists?: { name?: string }[] } | null;
+        };
+        if (!payload.is_playing) return { ok: true, message: "Spotify está pausado.", setCookie };
+        const title = payload.item?.name?.trim();
+        const artists = (payload.item?.artists ?? []).map((artist) => artist.name?.trim()).filter(Boolean).join(", ");
+        const nowPlaying = title
+          ? `Spotify está reproduciendo «${title}»${artists ? ` de ${artists}` : ""}.`
+          : "Spotify está reproduciendo.";
+        return { ok: true, message: nowPlaying, setCookie };
       }
       default: return { ok: false, message: "Herramienta de Spotify no reconocida." };
     }
