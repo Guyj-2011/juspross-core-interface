@@ -5,7 +5,7 @@ import { executeSpotifyTool, SPOTIFY_TOOL_DEFINITIONS } from "@/lib/juspross/spo
 const MAX_BODY = 32 * 1024;
 const MAX_TASK = 8_000;
 const MAX_CONTEXT = 12_000;
-const ALLOWED_TOOLS = new Set(SPOTIFY_TOOL_DEFINITIONS.map((tool) => tool.function.name));
+const ALLOWED_TOOLS: ReadonlySet<string> = new Set(SPOTIFY_TOOL_DEFINITIONS.map((tool) => tool.function.name));
 const bad = (message: string, status = 400) => Response.json({ message }, { status });
 
 type ToolCall = {
