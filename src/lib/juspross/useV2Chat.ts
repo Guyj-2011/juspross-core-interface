@@ -7,7 +7,9 @@ function isSpotifyRequest(text: string): boolean {
   const value = text.toLocaleLowerCase("es");
   const action = /\b(reproduce|reproducir|pon|ponme|pausa|pausar|reanuda|reanudar|siguiente|anterior|avanza|retrocede|salta|qu[eé] suena|qu[eé] est[aá] sonando)\b/.test(value);
   const target = /\b(spotify|m[uú]sica|canci[oó]n|playlist|artista|reproducci[oó]n|tema)\b/.test(value);
-  return action && target;
+  const shortPlaybackCommand = /^\s*(pausa|pausar|reanuda|reanudar|siguiente|anterior|avanza|retrocede|salta a la siguiente|pasa a la siguiente)\s*[.!?]*$/.test(value);
+  const statusQuestion = /\b(qu[eé] est[aá] sonando|qu[eé] suena)\b/.test(value);
+  return shortPlaybackCommand || statusQuestion || (action && target);
 }
 
 /** Conversación del lado 2.0: usuario → Qwen (Ollama) → respuesta en streaming. */
