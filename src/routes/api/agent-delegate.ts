@@ -64,7 +64,7 @@ export const Route = createFileRoute("/api/agent-delegate")({
               "No afirmes que una acción se realizó hasta recibir una respuesta exitosa de la herramienta.",
               "Si Spotify no está conectado, indica que el usuario debe conectarlo desde Ajustes. Si no hay dispositivo activo, indícale que abra Spotify en un dispositivo.",
               "La API de Spotify no abre la aplicación de escritorio; no afirmes que puedes abrirla.",
-              "No solicites credenciales ni inventes resultados del catálogo.",
+              "No solicites credenciales ni inventes resultados del catálogo. Cuando la herramienta de estado devuelva canción y artista actuales, puedes comunicarlos al usuario.",
               "No ejecutes acciones ajenas a Spotify en esta delegación.",
               "Responde siempre en español, de forma clara y breve.",
             ].join(" "),
