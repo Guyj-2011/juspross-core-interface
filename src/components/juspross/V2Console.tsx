@@ -964,6 +964,52 @@ function AiSettings({ onClose }: { onClose: () => void }) {
   const detail = useV2((s) => s.aiDetail);
   const [ep, setEp] = useState(endpoint);
   const [md, setMd] = useState(model);
+  const [spotifyConfigured, setSpotifyConfigured] = useState(false);
+  const [spotifyConnected, setSpotifyConnected] = useState(false);
+  const [spotifyMessage, setSpotifyMessage] = useState("Comprobando conexión con Spotify…");
+  const [spotifyBusy, setSpotifyBusy] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const checkSpotify = async () => {
+      try {
+        const response = await fetch("/api/spotify", { cache: "no-store", credentials: "same-origin" });
+        const payload = await response.json() as { configured?: boolean; connected?: boolean };
+        if (cancelled) return;
+        setSpotifyConfigured(Boolean(payload.configured));
+        setSpotifyConnected(Boolean(payload.connected));
+        setSpotifyMessage(
+          !payload.configured
+            ? "Faltan las variables de configuración de Spotify en el servidor."
+            : payload.connected
+              ? "Tu cuenta de Spotify está conectada."
+              : "Conecta tu cuenta para controlar la reproducción.",
+        );
+      } catch {
+        if (!cancelled) setSpotifyMessage("No se pudo comprobar el estado de Spotify.");
+      }
+    };
+    void checkSpotify();
+    return () => { cancelled = true; };
+  }, []);
+
+  const disconnectSpotify = async () => {
+    setSpotifyBusy(true);
+    try {
+      const response = await fetch("/api/spotify", {
+        method: "POST",
+        credentials: "same-origin",
+        headers: { "Content-Type": "application/json" },
+      });
+      if (!response.ok) throw new Error("No se pudo desconectar Spotify.");
+      setSpotifyConnected(false);
+      setSpotifyMessage("Spotify se desconectó correctamente.");
+    } catch (error) {
+      setSpotifyMessage(error instanceof Error ? error.message : "No se pudo desconectar Spotify.");
+    } finally {
+      setSpotifyBusy(false);
+    }
+  };
 
   const test = async () => {
     // A click is intentional: Chrome may require a user gesture for first local-network access.
@@ -1052,6 +1098,35 @@ function AiSettings({ onClose }: { onClose: () => void }) {
       >
         {detail}
       </p>
+      <div className="border-t border-white/10 pt-3">
+        <div className="mb-2 flex items-center justify-between">
+          <p className="font-mono text-[10px] tracking-[0.25em] text-[#1DB954]">
+            SPOTIFY · NEMOTRON
+          </p>
+          <span className={cn(
+            "size-2 rounded-full",
+            spotifyConnected ? "bg-[#1DB954]" : spotifyConfigured ? "bg-amber-400" : "bg-white/25",
+          )} />
+        </div>
+        <p className="mb-3 text-[11px] leading-snug text-white/60">{spotifyMessage}</p>
+        {spotifyConnected ? (
+          <button
+            onClick={() => void disconnectSpotify()}
+            disabled={spotifyBusy}
+            className="w-full rounded-md border border-white/15 py-1.5 font-mono text-[10px] tracking-[0.2em] text-white/75 hover:bg-white/5 disabled:opacity-40"
+          >
+            {spotifyBusy ? "DESCONECTANDO…" : "DESCONECTAR SPOTIFY"}
+          </button>
+        ) : (
+          <button
+            onClick={() => window.location.assign("/api/spotify/connect")}
+            disabled={!spotifyConfigured || spotifyBusy}
+            className="w-full rounded-md border border-[#1DB954]/50 bg-[#1DB954]/10 py-1.5 font-mono text-[10px] tracking-[0.2em] text-[#6ee7a0] hover:bg-[#1DB954]/20 disabled:cursor-not-allowed disabled:opacity-35"
+          >
+            CONECTAR SPOTIFY
+          </button>
+        )}
+      </div>
     </div>
   );
 }
