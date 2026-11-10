@@ -134,7 +134,7 @@ export function useV2Chat() {
         const msg = e instanceof AiError ? e.message : e instanceof Error ? e.message : "No se pudo completar la respuesta.";
         const st = useV2.getState();
         st.patchMessage(id, { text: msg, error: true });
-        st.setLink("offline", msg);
+        if (!isSpotifyRequest(text)) st.setLink("offline", msg);
         st.setState("error");
         setTimeout(() => {
           if (useV2.getState().state === "error") useV2.getState().setState("idle");
