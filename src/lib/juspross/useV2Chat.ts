@@ -5,8 +5,8 @@ import { useV2 } from "./v2Store";
 
 function isSpotifyRequest(text: string): boolean {
   const value = text.toLocaleLowerCase("es");
-  const action = /\\b(reproduce|reproducir|pon|ponme|pausa|pausar|reanuda|reanudar|siguiente|anterior|avanza|retrocede|salta|qu[eé] suena|qu[eé] est[aá] sonando)\\b/.test(value);
-  const target = /\\b(spotify|m[uú]sica|canci[oó]n|playlist|artista|reproducci[oó]n|tema)\\b/.test(value);
+  const action = /\b(reproduce|reproducir|pon|ponme|pausa|pausar|reanuda|reanudar|siguiente|anterior|avanza|retrocede|salta|qu[eé] suena|qu[eé] est[aá] sonando)\b/.test(value);
+  const target = /\b(spotify|m[uú]sica|canci[oó]n|playlist|artista|reproducci[oó]n|tema)\b/.test(value);
   return action && target;
 }
 
@@ -66,7 +66,7 @@ export function useV2Chat() {
             .slice(0, -1)
             .slice(-8)
             .map((message) => `${message.role}: ${message.content}`)
-            .join("\\n")
+            .join("\n")
             .slice(-12_000);
           const response = await fetch("/api/agent-delegate", {
             method: "POST",
