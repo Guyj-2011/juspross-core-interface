@@ -3,10 +3,10 @@ import { AiError, AiUnreachable, chat, chatGemma, chatNemotron, simulate, type A
 import { speak } from "./useSpeech";
 import { unlockSpeechAudio } from "./speechAudio";
 import { useV2 } from "./v2Store";
-import { isOpenSpotifyIntent } from "./localIntent";
+import { isSpotifyRequest } from "./localIntent";
 import { describeLocalResult, openSpotifyDesktop } from "./localAgent";
 
-/** Conversación del lado 2.0: usuario → Qwen (Ollama) → respuesta en streaming. */
+/** Conversación del lado 2.0: chat normal según el proveedor elegido; órdenes Spotify → Nemotron. */
 export function useV2Chat() {
   const abortRef = useRef<AbortController | null>(null);
   const stopSpeakRef = useRef<(() => void) | null>(null);
@@ -38,27 +38,18 @@ export function useV2Chat() {
       abortRef.current = ctrl;
 
       const s = useV2.getState();
-      if (isOpenSpotifyIntent(text)) {
-        s.addMessage({ role: "user", text });
-        const localId = s.addMessage({ role: "assistant", text: "Contactando con el agente local…" });
-        s.setState("thinking");
-        const result = await openSpotifyDesktop();
-        if (ctrl.signal.aborted) return;
-        const st = useV2.getState();
-        st.patchMessage(localId, { text: describeLocalResult(result), error: !result.ok });
-        st.setState("idle");
-        return;
-      }
       const history: AiMsg[] = s.messages
         .filter((m) => !m.error && m.text)
         .slice(-12)
         .map((m) => ({ role: m.role, content: m.text }));
+      const context = history.slice(-8).map((message) => `${message.role}: ${message.content}`).join("\n").slice(-12_000);
       history.push({ role: "user", content: text });
 
       s.addMessage({ role: "user", text });
       const id = s.addMessage({ role: "assistant", text: "" });
       s.setState("thinking");
 
+      const spotifyTask = isSpotifyRequest(text);
       let simulated = false;
       let final = "";
       const onToken = (full: string) => {
@@ -70,42 +61,74 @@ export function useV2Chat() {
       };
 
       try {
-        try {
-          final =
-            s.aiProvider === "nemotron"
-              ? await chatNemotron(history, { signal: ctrl.signal, onToken })
-              : s.aiProvider === "gemma"
-              ? await chatGemma(history, {
-                  endpoint: s.gemmaEndpoint,
-                  model: s.gemmaModel,
-                  signal: ctrl.signal,
-                  onToken,
-                })
-              : await chat(history, {
-                  endpoint: s.aiEndpoint,
-                  model: s.aiModel,
-                  signal: ctrl.signal,
-                  onToken,
-                });
-          useV2.getState().setAutoConnect(true);
-          useV2.getState().setLink(
-            "online",
-            s.aiProvider === "nemotron"
-              ? "Nemotron (NVIDIA) respondió correctamente."
-              : s.aiProvider === "gemma"
-              ? "Gemma conectado. La reconexión automática quedó activada."
-              : "Qwen conectado. La reconexión automática quedó activada.",
-          );
-        } catch (e) {
-          if ((e as Error).name === "AbortError") throw e;
-          if (e instanceof AiUnreachable) {
-            simulated = true;
-            useV2.getState().setLink("offline", e.message);
-            final = await simulate(text, ctrl.signal, onToken);
+        if (spotifyTask) {
+          const response = await fetch("/api/agent-delegate", {
+            method: "POST",
+            credentials: "same-origin",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ task: text, context }),
+            signal: ctrl.signal,
+          });
+          const payload = await response.json().catch(() => ({})) as {
+            ok?: boolean;
+            result?: string;
+            action?: string;
+            message?: string;
+          };
+          if (!response.ok || !payload.ok) {
+            throw new Error(payload.message || `No se pudo completar la orden de Spotify (HTTP ${response.status}).`);
+          }
+
+          if (payload.action === "open_spotify_desktop") {
+            // Nemotron elige la herramienta; el navegador la ejecuta en el PC
+            // mediante el agente local emparejado (el servidor cloud no puede abrir apps locales).
+            const localResult = await openSpotifyDesktop();
+            if (ctrl.signal.aborted) return;
+            final = describeLocalResult(localResult);
+          } else if (payload.result) {
+            final = payload.result;
           } else {
-            throw e;
+            throw new Error("Nemotron no devolvió un resultado para la orden de Spotify.");
+          }
+        } else {
+          try {
+            final =
+              s.aiProvider === "nemotron"
+                ? await chatNemotron(history, { signal: ctrl.signal, onToken })
+                : s.aiProvider === "gemma"
+                  ? await chatGemma(history, {
+                      endpoint: s.gemmaEndpoint,
+                      model: s.gemmaModel,
+                      signal: ctrl.signal,
+                      onToken,
+                    })
+                  : await chat(history, {
+                      endpoint: s.aiEndpoint,
+                      model: s.aiModel,
+                      signal: ctrl.signal,
+                      onToken,
+                    });
+            useV2.getState().setAutoConnect(true);
+            useV2.getState().setLink(
+              "online",
+              s.aiProvider === "nemotron"
+                ? "Nemotron (NVIDIA) respondió correctamente."
+                : s.aiProvider === "gemma"
+                  ? "Gemma conectado. La reconexión automática quedó activada."
+                  : "Qwen conectado. La reconexión automática quedó activada.",
+            );
+          } catch (e) {
+            if ((e as Error).name === "AbortError") throw e;
+            if (e instanceof AiUnreachable) {
+              simulated = true;
+              useV2.getState().setLink("offline", e.message);
+              final = await simulate(text, ctrl.signal, onToken);
+            } else {
+              throw e;
+            }
           }
         }
+
         const st = useV2.getState();
         st.patchMessage(id, { text: final, simulated });
         if (viaVoice || st.voiceReplies) {
@@ -129,10 +152,10 @@ export function useV2Chat() {
         }
       } catch (e) {
         if ((e as Error).name === "AbortError") return;
-        const msg = e instanceof AiError ? e.message : "No se pudo completar la respuesta.";
+        const msg = e instanceof AiError ? e.message : e instanceof Error ? e.message : "No se pudo completar la respuesta.";
         const st = useV2.getState();
         st.patchMessage(id, { text: msg, error: true });
-        st.setLink("offline", msg);
+        if (!spotifyTask) st.setLink("offline", msg);
         st.setState("error");
         setTimeout(() => {
           if (useV2.getState().state === "error") useV2.getState().setState("idle");
