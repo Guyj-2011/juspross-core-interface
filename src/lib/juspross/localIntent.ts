@@ -1,7 +1,6 @@
 /** Detecta las órdenes de Spotify que deben pasar por Nemotron. */
 const OPEN = /\b(abre|abrir|abreme|abrime|inicia|iniciar|lanza|lanzar|arranca|arrancar|ejecuta|open|launch|start)\b/;
-const PLAYBACK = /\b(reproduc\w*|pon|ponme|poner|play|pausa\w*|para|det[eé]n|siguiente|anterior|salta\w*|reanuda\w*|canci[oó]n|tema|playlist|lista|m[uú]sica|artista|[aá]lbum|volumen|next|pause|resume|spotify)\b/;
-const TARGET = /\b(spotify|m[uú]sica|canci[oó]n|playlist|artista|[aá]lbum|reproducci[oó]n|tema)\b/;
+const TARGET = /\b(spotify|musica|cancion|playlist|artista|album|reproduccion|tema)\b/;
 const SHORT_PLAYBACK = /^\s*(pausa|pausar|reanuda|reanudar|siguiente|anterior|avanza|retrocede|salta a la siguiente|pasa a la siguiente)\s*[.!?]*$/;
 
 function normalize(text: string): string {
@@ -12,7 +11,7 @@ function normalize(text: string): string {
 export function isOpenSpotifyIntent(text: string): boolean {
   const value = normalize(text);
   if (!/\bspotify\b/.test(value) || !OPEN.test(value)) return false;
-  const playback = /\b(reproduc\w*|pon|ponme|play|pausa\w*|siguiente|anterior|reanuda\w*|canci[oó]n|tema|playlist|m[uú]sica|artista)\b/.test(value);
+  const playback = /\b(reproduc\w*|pon|ponme|play|pausa\w*|siguiente|anterior|reanuda\w*|cancion|tema|playlist|musica|artista)\b/.test(value);
   return !playback;
 }
 
