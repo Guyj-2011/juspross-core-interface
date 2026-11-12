@@ -40,7 +40,26 @@ function playbackError(status: number): string {
   return `Spotify no pudo completar la acción (HTTP ${status}).`;
 }
 
-async function playbackAction(request: Request, path: string, method: string, body?: unknown, success = "Acción completada en Spotify."): Promise<ToolResult> {
+/** Spotify puede responder 204 al aceptar una orden sin que eso confirme el estado real del reproductor. */
+async function waitForPlaybackState(accessToken: string, expectedPlaying: boolean): Promise<boolean> {
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const response = await fetch("https://api.spotify.com/v1/me/player", {
+      method: "GET",
+      signal: AbortSignal.timeout(5_000),
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (response.status === 204) {
+      if (!expectedPlaying) return true;
+    } else if (response.ok) {
+      const payload = await response.json().catch(() => ({})) as { is_playing?: boolean };
+      if (payload.is_playing === expectedPlaying) return true;
+    }
+    if (attempt < 5) await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  return false;
+}
+
+async function playbackAction(request: Request, path: string, method: string, body?: unknown, success = "Acción completada en Spotify.", expectedPlaying?: boolean): Promise<ToolResult> {
   const devices = await spotifyRequest(request, "/me/player/devices", "GET");
   if (!devices.response.ok) return { ok: false, message: playbackError(devices.response.status), setCookie: devices.setCookie };
   const { deviceId } = await choosePlaybackDevice(devices.accessToken);
@@ -51,7 +70,21 @@ async function playbackAction(request: Request, path: string, method: string, bo
     headers: { Authorization: `Bearer ${devices.accessToken}`, "Content-Type": "application/json" },
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
-  if (response.ok || response.status === 204) return { ok: true, message: success, setCookie: devices.setCookie };
+  if (response.ok || response.status === 204) {
+    if (expectedPlaying !== undefined) {
+      const confirmed = await waitForPlaybackState(devices.accessToken, expectedPlaying);
+      if (!confirmed) {
+        return {
+          ok: false,
+          message: expectedPlaying
+            ? "Spotify aceptó la orden, pero no pude confirmar que la música haya empezado. Comprueba que la aplicación esté abierta y que haya un dispositivo activo."
+            : "Spotify aceptó la orden, pero no pude confirmar que la reproducción se haya detenido.",
+          setCookie: devices.setCookie,
+        };
+      }
+    }
+    return { ok: true, message: success, setCookie: devices.setCookie };
+  }
   return { ok: false, message: playbackError(response.status), setCookie: devices.setCookie };
 }
 
@@ -75,11 +108,16 @@ export async function executeSpotifyTool(request: Request, name: string, args: R
           headers: { Authorization: `Bearer ${search.accessToken}`, "Content-Type": "application/json" },
           body: JSON.stringify(uri.startsWith("spotify:track:") ? { uris: [uri] } : { context_uri: uri }),
         });
-        if (playedResponse.ok || playedResponse.status === 204) return { ok: true, message: "Spotify inició la reproducción en el dispositivo seleccionado.", setCookie: search.setCookie };
+        if (playedResponse.ok || playedResponse.status === 204) {
+          const confirmed = await waitForPlaybackState(search.accessToken, true);
+          return confirmed
+            ? { ok: true, message: "Spotify está reproduciendo el contenido solicitado.", setCookie: search.setCookie }
+            : { ok: false, message: "Spotify aceptó la orden, pero no pude confirmar que la música haya empezado. Comprueba que la aplicación esté abierta y que haya un dispositivo activo.", setCookie: search.setCookie };
+        }
         return { ok: false, message: playbackError(playedResponse.status), setCookie: search.setCookie };
       }
-      case "spotify_resume": return playbackAction(request, "/me/player/play", "PUT", undefined, "Spotify reanudó la reproducción.");
-      case "spotify_pause": return playbackAction(request, "/me/player/pause", "PUT", undefined, "Spotify pausó la reproducción.");
+      case "spotify_resume": return playbackAction(request, "/me/player/play", "PUT", undefined, "Spotify confirmó que la reproducción está activa.", true);
+      case "spotify_pause": return playbackAction(request, "/me/player/pause", "PUT", undefined, "Spotify confirmó que la reproducción está pausada.", false);
       case "spotify_next": return playbackAction(request, "/me/player/next", "POST", undefined, "Spotify pasó a la siguiente canción.");
       case "spotify_previous": return playbackAction(request, "/me/player/previous", "POST", undefined, "Spotify volvió a la canción anterior.");
       case "spotify_playback_status": {
