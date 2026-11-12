@@ -1,0 +1,18 @@
+appId: com.juspross.desktop
+productName: Juspross
+directories:
+  output: release
+files:
+  - electron/**
+  - package.json
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
