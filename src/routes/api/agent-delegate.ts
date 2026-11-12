@@ -45,6 +45,7 @@ export const Route = createFileRoute("/api/agent-delegate")({
         const body = input as Record<string, unknown>;
         const task = typeof body["task"] === "string" ? body["task"].trim() : "";
         const context = typeof body["context"] === "string" ? body["context"].trim() : "";
+        const openOnly = body["intent"] === "open_spotify_desktop";
         if (!task || task.length > MAX_TASK) return bad("La tarea debe tener entre 1 y 8000 caracteres.");
         if (context.length > MAX_CONTEXT) return bad("El contexto es demasiado largo.");
 
@@ -84,7 +85,9 @@ export const Route = createFileRoute("/api/agent-delegate")({
                 temperature: 0.2,
                 max_tokens: 1200,
                 tools: TOOLS,
-                tool_choice: "auto",
+                tool_choice: openOnly
+                  ? { type: "function", function: { name: "open_spotify_desktop" } }
+                  : "auto",
                 messages
               })
             });
