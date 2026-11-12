@@ -60,6 +60,12 @@ export function ConnectionPanel() {
 }
 
 type SpotifyStatus = { configured: boolean; connected: boolean };
+type JusprossDesktopBridge = { connectSpotify?: () => Promise<unknown> };
+declare global {
+  interface Window {
+    jusprossDesktop?: JusprossDesktopBridge & { isDesktop?: boolean; platform?: string };
+  }
+}
 
 export function SpotifyConnectionPanel() {
   const [status, setStatus] = useState<SpotifyStatus | null>(null);
@@ -121,6 +127,23 @@ export function SpotifyConnectionPanel() {
     };
   }, []);
 
+  const connect = async () => {
+    setBusy(true);
+    setDetail("");
+    try {
+      if (window.jusprossDesktop?.connectSpotify) {
+        await window.jusprossDesktop.connectSpotify();
+        setDetail("Completa el inicio de sesión en la ventana de Spotify. Juspross se actualizará al terminar.");
+      } else {
+        window.location.assign("/api/spotify/connect");
+      }
+    } catch (error) {
+      setDetail(error instanceof Error ? error.message : "No se pudo abrir la conexión de Spotify.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const disconnect = async () => {
     setBusy(true);
     setDetail("");
@@ -157,9 +180,9 @@ export function SpotifyConnectionPanel() {
             variant="outline"
             size="sm"
             disabled={!status?.configured || busy}
-            onClick={() => window.location.assign("/api/spotify/connect")}
+            onClick={() => void connect()}
           >
-            Conectar
+            {busy ? "Abriendo..." : "Conectar"}
           </Button>
         )}
       </div>
