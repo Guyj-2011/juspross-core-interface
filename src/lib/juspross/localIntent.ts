@@ -1,9 +1,26 @@
-/** Detecta SOLO la intención de abrir la app de Spotify. Reproducir/pausar/etc. siguen por la API de Spotify. */
+/** Detecta las órdenes de Spotify que deben pasar por Nemotron. */
 const OPEN = /\b(abre|abrir|abreme|abrime|inicia|iniciar|lanza|lanzar|arranca|arrancar|ejecuta|open|launch|start)\b/;
-const PLAYBACK = /\b(reproduc\w*|pon|ponme|poner|play|pausa\w*|para|detén|deten|siguiente|anterior|salta\w*|reanuda\w*|cancion\w*|tema|playlist|lista|musica|artista|album|volumen|next|pause|resume)\b/;
+const PLAYBACK = /\b(reproduc\w*|pon|ponme|poner|play|pausa\w*|para|det[eé]n|siguiente|anterior|salta\w*|reanuda\w*|canci[oó]n|tema|playlist|lista|m[uú]sica|artista|[aá]lbum|volumen|next|pause|resume|spotify)\b/;
+const TARGET = /\b(spotify|m[uú]sica|canci[oó]n|playlist|artista|[aá]lbum|reproducci[oó]n|tema)\b/;
+const SHORT_PLAYBACK = /^\s*(pausa|pausar|reanuda|reanudar|siguiente|anterior|avanza|retrocede|salta a la siguiente|pasa a la siguiente)\s*[.!?]*$/;
 
+function normalize(text: string): string {
+  return text.toLocaleLowerCase("es").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+}
+
+/** Solo detecta abrir la aplicación; no confunde «abre Spotify y reproduce…» con abrir solamente. */
 export function isOpenSpotifyIntent(text: string): boolean {
-  const t = text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  if (!/\bspotify\b/.test(t) || !OPEN.test(t)) return false;
-  return !PLAYBACK.test(t);
+  const value = normalize(text);
+  if (!/\bspotify\b/.test(value) || !OPEN.test(value)) return false;
+  const playback = /\b(reproduc\w*|pon|ponme|play|pausa\w*|siguiente|anterior|reanuda\w*|canci[oó]n|tema|playlist|m[uú]sica|artista)\b/.test(value);
+  return !playback;
+}
+
+/** Envía a Nemotron tanto la apertura de Spotify como sus órdenes de reproducción. */
+export function isSpotifyRequest(text: string): boolean {
+  const value = normalize(text);
+  if (isOpenSpotifyIntent(text)) return true;
+  if (SHORT_PLAYBACK.test(value)) return true;
+  const action = /\b(reproduc\w*|pon|ponme|poner|play|pausa\w*|para|deten|siguiente|anterior|avanza|retrocede|salta|reanuda\w*|abre|abrir|inicia|iniciar|lanza|lanzar|arranca|arrancar|ejecuta|open|launch|start|que suena|que esta sonando)\b/.test(value);
+  return action && TARGET.test(value);
 }
