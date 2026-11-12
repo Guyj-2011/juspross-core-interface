@@ -3,7 +3,7 @@ import { AiError, AiUnreachable, chat, chatGemma, chatNemotron, simulate, type A
 import { speak } from "./useSpeech";
 import { unlockSpeechAudio } from "./speechAudio";
 import { useV2 } from "./v2Store";
-import { isSpotifyRequest } from "./localIntent";
+import { isOpenSpotifyIntent, isSpotifyRequest } from "./localIntent";
 import { describeLocalResult, openSpotifyDesktop } from "./localAgent";
 
 /** Conversación del lado 2.0: chat normal según el proveedor elegido; órdenes Spotify → Nemotron. */
@@ -66,7 +66,7 @@ export function useV2Chat() {
             method: "POST",
             credentials: "same-origin",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ task: text, context }),
+            body: JSON.stringify({ task: text, context, intent: isOpenSpotifyIntent(text) ? "open_spotify_desktop" : undefined }),
             signal: ctrl.signal,
           });
           const payload = await response.json().catch(() => ({})) as {
