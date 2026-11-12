@@ -47,9 +47,9 @@ function createSpotifyAuthWindow() {
     }
   };
 
-  spotifyAuthWindow.webContents.setWindowOpenHandler(({ url }) => {
-    // Keep the OAuth flow inside this window so its cookies remain shared with Juspross.
-    return isAllowedAuthUrl(url) ? { action: "allow" } : { action: "deny" };
+  spotifyAuthWindow.webContents.setWindowOpenHandler(() => {
+    // OAuth uses top-level redirects; block unexpected popups.
+    return { action: "deny" };
   });
 
   spotifyAuthWindow.webContents.on("will-navigate", (event, url) => {
