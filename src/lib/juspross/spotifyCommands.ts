@@ -42,7 +42,7 @@ export function parseSpotifyCommands(task: string, intent = "auto"): SpotifyComm
     let command: SpotifyCommand | null = null;
     const transport: [RegExp, string][] = [
       [
-        /^(?:ponle play|dale play|play|reanuda|reanudar|continua|continuar)(?: la reproduccion)?$/,
+        /^(?:ponle play(?: a la cancion(?: que ya esta)?)?|dale play(?: a la cancion)?|play(?: a la cancion)?|reanuda|reanudar|continua|continuar)(?: la reproduccion)?$/,
         "spotify_resume",
       ],
       [
@@ -50,10 +50,10 @@ export function parseSpotifyCommands(task: string, intent = "auto"): SpotifyComm
         "spotify_pause",
       ],
       [
-        /^(?:siguiente|cambia a la siguiente|pasa a la siguiente|salta a la siguiente|avanza)(?: cancion| pista)?$/,
+        /^(?:siguiente|cambia a la siguiente|cambia la cancion a la siguiente|cambia la pista a la siguiente|pasa a la siguiente|salta a la siguiente|avanza)(?: cancion| pista)?$/,
         "spotify_next",
       ],
-      [/^(?:anterior|vuelve a la anterior|retrocede)(?: cancion| pista)?$/, "spotify_previous"],
+      [/^(?:anterior|vuelve a la anterior|cambia a la anterior|cambia la cancion a la anterior|pon la cancion anterior|retrocede)(?: cancion| pista)?$/, "spotify_previous"],
     ];
     for (const [pattern, name] of transport) if (pattern.test(v)) command = { name, args: {} };
     if (
@@ -63,7 +63,7 @@ export function parseSpotifyCommands(task: string, intent = "auto"): SpotifyComm
     )
       command = { name: "spotify_previous", args: { count: 2 } };
     const volume = v.match(
-      /^(?:sube|baja|ajusta|pon|ponlo|dejalo|aumenta|disminuye)\s+(?:(?:el )?volumen\s+)?(?:al|a|en|hasta)\s+(\d{1,3})(?: por ciento)?$/,
+      /^(?:sube|subelo|subele|baja|bajalo|bajale|ajusta|pon|ponlo|dejalo|aumenta|disminuye)\s+(?:(?:el )?volumen\s+)?(?:al|a|en|hasta)\s+(\d{1,3})(?: por ciento)?$/,
     );
     if (volume) {
       const target = Number(volume[1]);
