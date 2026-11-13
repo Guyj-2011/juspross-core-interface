@@ -8,7 +8,8 @@ export const SPOTIFY_TOOL_DEFINITIONS = [
   { type: "function", function: { name: "spotify_pause", description: "Pausa la reproducción actual de Spotify.", parameters: { type: "object", properties: {}, additionalProperties: false } } },
   { type: "function", function: { name: "spotify_next", description: "Avanza a la siguiente canción.", parameters: { type: "object", properties: {}, additionalProperties: false } } },
   { type: "function", function: { name: "spotify_previous", description: "Vuelve a la canción anterior.", parameters: { type: "object", properties: {}, additionalProperties: false } } },
-  { type: "function", function: { name: "spotify_playback_status", description: "Comprueba si Spotify está reproduciendo o pausado, sin devolver datos del catálogo.", parameters: { type: "object", properties: {}, additionalProperties: false } } }
+  { type: "function", function: { name: "spotify_playback_status", description: "Comprueba si Spotify está reproduciendo o pausado, sin devolver datos del catálogo.", parameters: { type: "object", properties: {}, additionalProperties: false } } },
+  { type: "function", function: { name: "spotify_current_artist", description: "Devuelve el artista principal de la canción que está sonando.", parameters: { type: "object", properties: {}, additionalProperties: false } } }
 ] as const;
 
 type ToolResult = { ok: boolean; message: string; setCookie?: string | undefined };
@@ -230,6 +231,14 @@ export async function executeSpotifyTool(request: Request, name: string, args: R
       case "spotify_pause": return playbackAction(request, "/me/player/pause", "PUT", undefined, "Spotify confirmó que la reproducción está pausada.", false);
       case "spotify_next": return playbackAction(request, "/me/player/next", "POST", undefined, "Spotify pasó a la siguiente canción.");
       case "spotify_previous": return playbackAction(request, "/me/player/previous", "POST", undefined, "Spotify volvió a la canción anterior.");
+      case "spotify_current_artist": {
+        const { response, setCookie } = await spotifyRequest(request, "/me/player", "GET");
+        if (response.status === 204) return { ok: false, message: "No hay ninguna canción sonando en Spotify ahora mismo.", setCookie };
+        if (!response.ok) return { ok: false, message: playbackError(response.status), setCookie };
+        const payload = await response.json().catch(() => ({})) as { item?: { artists?: { name?: string }[] } };
+        const artist = payload.item?.artists?.[0]?.name;
+        return artist ? { ok: true, message: `ARTIST: ${artist}`, setCookie } : { ok: false, message: "No pude identificar al artista de la canción actual.", setCookie };
+      }
       case "spotify_playback_status": {
         const { response, setCookie } = await spotifyRequest(request, "/me/player", "GET");
         if (response.status === 204) return { ok: true, message: "Spotify no tiene reproducción activa en este momento.", setCookie };
