@@ -44,7 +44,7 @@ export function useV2Chat() {
         .map((m) => ({ role: m.role, content: m.text }));
       const context = history.slice(-8).map((message) => `${message.role}: ${message.content}`).join("\n").slice(-12_000);
       history.push({ role: "user", content: visualContext.trim()
-        ? `${text}\\n\\nCONTEXTO VISUAL RECIENTE DE LA PANTALLA COMPARTIDA (puede haber cambiado):\\n${visualContext.trim().slice(0, 1800)}`
+        ? `${text}\n\nCONTEXTO VISUAL RECIENTE DE LA PANTALLA COMPARTIDA (puede haber cambiado):\n${visualContext.trim().slice(0, 1800)}`
         : text });
 
       s.addMessage({ role: "user", text });
