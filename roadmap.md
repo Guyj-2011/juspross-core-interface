@@ -1,4 +1,10 @@
 # Visual changes
+## Current integration audit
+- [ ] Correct Spotify search, transport parsing, compound commands, retry protection and personalized fallback.
+- [ ] Correct Gemini Live tool routing, audio activity configuration, cleanup and grounded internet search.
+- [ ] Audit OAuth/session errors and run available tests, lint and preview verification.
+- [ ] User-PC verification of Spotify playback and speech over external music (requires the user's device/account).
+
 - [x] Increase mantle and core particle brightness without changing their extent.
 - [x] Add slowly moving blue aurora curtains with red accents in the sky.
 - [x] Verify the scene and apply required package update.
