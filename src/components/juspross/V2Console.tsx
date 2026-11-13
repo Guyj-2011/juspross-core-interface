@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowUp, Check, Copy, History, Radio, Settings2, Square, Trash2, Volume2, VolumeX, X } from "lucide-react";
+import { ArrowUp, Check, Copy, History, Monitor, Radio, Settings2, Square, Trash2, Volume2, VolumeX, X } from "lucide-react";
 import { AiUnreachable, testAi, testGemma, testNemotron } from "@/lib/juspross/ai";
 import { useV2Chat } from "@/lib/juspross/useV2Chat";
 import { useGeminiLive } from "@/lib/juspross/useGeminiLive";
@@ -99,6 +99,9 @@ export function V2Console() {
   const [listening, setListening] = useState(false);
   const [voiceNotice, setVoiceNotice] = useState("");
   const [copyStatus, setCopyStatus] = useState("");
+  const [screenSharing, setScreenSharing] = useState(false);
+  const [screenNotice, setScreenNotice] = useState("");
+  const [screenContext, setScreenContext] = useState("");
   const [secretV3, setSecretV3] = useState(false);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const browserSpeechRef = useRef<BrowserSpeechLike | null>(null);
@@ -118,6 +121,9 @@ export function V2Console() {
   const lastVoiceAtRef = useRef(0);
   const transcribingRef = useRef(false);
   const logRef = useRef<HTMLDivElement>(null);
+  const screenTimerRef = useRef<number | undefined>(undefined);
+  const screenAbortRef = useRef<AbortController | null>(null);
+  const screenActiveRef = useRef(false);
 
   // After one successful, user-initiated connection, reconnect on every page open.
   // If Ollama starts later, keep retrying with backoff instead of silently giving up after 20 tries.
@@ -238,6 +244,11 @@ export function V2Console() {
     },
     [],
   );
+  useEffect(() => () => {
+    screenActiveRef.current = false;
+    if (screenTimerRef.current !== undefined) window.clearTimeout(screenTimerRef.current);
+    screenAbortRef.current?.abort();
+  }, []);
   useEffect(() => {
     if (historyOpen) {
       logRef.current?.scrollTo({ top: logRef.current.scrollHeight, behavior: "smooth" });
@@ -246,9 +257,71 @@ export function V2Console() {
 
   const busy = state === "thinking" || state === "speaking";
 
+  const stopScreenVision = () => {
+    screenActiveRef.current = false;
+    if (screenTimerRef.current !== undefined) window.clearTimeout(screenTimerRef.current);
+    screenTimerRef.current = undefined;
+    screenAbortRef.current?.abort();
+    screenAbortRef.current = null;
+    setScreenSharing(false);
+    setScreenContext("");
+    setScreenNotice("Visión de pantalla detenida. No se enviarán más fotogramas.");
+  };
+
+  const startScreenVision = async () => {
+    const desktop = (window as Window & {
+      jusprossDesktop?: { captureScreenFrame?: () => Promise<string> };
+    }).jusprossDesktop;
+    if (!desktop?.captureScreenFrame) {
+      setScreenNotice("La visión de pantalla está disponible en la aplicación de escritorio de Juspross, no en la página web.");
+      return;
+    }
+
+    screenActiveRef.current = true;
+    setScreenSharing(true);
+    setScreenNotice("Compartiendo la pantalla principal con NVIDIA para analizarla. Puedes detenerlo cuando quieras.");
+
+    const analyzeFrame = async () => {
+      if (!screenActiveRef.current) return;
+      const controller = new AbortController();
+      screenAbortRef.current = controller;
+      try {
+        const image = await desktop.captureScreenFrame!();
+        if (!screenActiveRef.current) return;
+        const response = await fetch("/api/vision", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ image }),
+          signal: controller.signal,
+        });
+        const payload = await response.json().catch(() => ({})) as { ok?: boolean; description?: string; message?: string };
+        if (!response.ok || !payload.ok || !payload.description) {
+          throw new Error(payload.message || `El análisis visual falló (HTTP ${response.status}).`);
+        }
+        if (!screenActiveRef.current) return;
+        setScreenContext(payload.description);
+        setScreenNotice("VISIÓN ACTIVA · pantalla actualizada. Pregúntale a Juspross qué está viendo.");
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        screenActiveRef.current = false;
+        setScreenSharing(false);
+        setScreenNotice(error instanceof Error ? error.message : "No se pudo analizar la pantalla.");
+      } finally {
+        if (screenAbortRef.current === controller) screenAbortRef.current = null;
+      }
+      if (screenActiveRef.current) screenTimerRef.current = window.setTimeout(() => void analyzeFrame(), 5000);
+    };
+    void analyzeFrame();
+  };
+
+  const toggleScreenVision = () => {
+    if (screenActiveRef.current) stopScreenVision();
+    else void startScreenVision();
+  };
+
   const submit = () => {
     if (!value.trim()) return;
-    void send(value);
+    void send(value, false, screenSharing ? screenContext : "");
     setValue("");
   };
 
@@ -931,6 +1004,18 @@ export function V2Console() {
             className="max-h-32 min-h-9 flex-1 resize-none bg-transparent py-2 text-sm text-white placeholder:text-white/35 focus:outline-none"
           />
           <button
+            onClick={toggleScreenVision}
+            aria-label={screenSharing ? "Detener visión de pantalla" : "Compartir toda la pantalla con Juspross"}
+            title={screenSharing ? "Detener visión de pantalla" : "Compartir toda la pantalla con Juspross (envía fotogramas a NVIDIA cada 5 segundos)"}
+            aria-pressed={screenSharing}
+            className={cn(
+              "flex size-9 shrink-0 items-center justify-center rounded-md transition-colors",
+              screenSharing ? "bg-[#3d7bff]/25 text-[#9cc0ff]" : "text-white/55 hover:text-white",
+            )}
+          >
+            <Monitor className="size-4.5" strokeWidth={1.6} />
+          </button>
+          <button
             onClick={() => {
               if (live.status === "live" || live.status === "connecting") live.stop();
               else {
@@ -983,6 +1068,11 @@ export function V2Console() {
             </button>
           )}
         </div>
+        {screenNotice && (
+          <p role="status" aria-live="polite" className={cn("pointer-events-auto mt-2 text-center text-xs", screenSharing ? "text-[#9cc0ff]" : "text-white/65")}>
+            {screenNotice}
+          </p>
+        )}
         {live.notice && (
           <p role="status" aria-live="polite" className={cn("pointer-events-auto mt-2 text-center text-xs", live.status === "error" ? "text-[#ff8c98]" : "text-[#9cc0ff]")}>
             {live.notice}
