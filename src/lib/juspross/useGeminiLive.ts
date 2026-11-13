@@ -269,7 +269,7 @@ export function useGeminiLive() {
             responses.push({ id: call.id, name: call.name, response: { error: "Nemotron necesita una descripción de la tarea." } });
             continue;
           }
-          const windowAction = getSpotifyWindowAction(task, context);
+          const windowAction = getSpotifyWindowAction(task, call.name === "spotify_voice_command" ? `Spotify ${context}` : context);
           if (windowAction) {
             const localResult = await controlSpotifyWindow(windowAction);
             const message = describeSpotifyWindowResult(windowAction, localResult);
