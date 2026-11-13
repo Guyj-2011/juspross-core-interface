@@ -81,7 +81,7 @@ export function useV2Chat() {
             method: "POST",
             credentials: "same-origin",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ task: text, context, intent: isOpenSpotifyIntent(text) ? "open_spotify_desktop" : undefined }),
+            body: JSON.stringify({ task: text, context, requestId: crypto.randomUUID(), intent: isOpenSpotifyIntent(text) ? "open_spotify_desktop" : undefined }),
             signal: ctrl.signal,
           });
           const payload = await response.json().catch(() => ({})) as {

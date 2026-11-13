@@ -1,3 +1,4 @@
+import { parseSpotifyCommands } from "./spotifyCommands";
 /** Detecta las órdenes de Spotify que deben pasar por Nemotron. */
 const OPEN = /\b(abre|abrir|abreme|abrime|inicia|iniciar|lanza|lanzar|arranca|arrancar|ejecuta|open|launch|start)\b/;
 const TARGET = /\b(spotify|musica|cancion|playlist|artista|album|reproduccion|tema|volumen)\b/;
@@ -44,7 +45,7 @@ export function isSpotifyRequest(text: string, context = ""): boolean {
   const hasSpotifyContext = /\bspotify\b/.test(normalize(context));
   if (hasSpotifyContext && /\b(sub\w*|baj\w*|ajusta\w*|ponlo|dejalo)\b.*\b(?:al|a|hasta|en)\s+(?:el\s+)?\d{1,3}/.test(value)) return true;
   if (isOpenSpotifyIntent(text)) return true;
-  if (SHORT_PLAYBACK.test(value)) return true;
+  if (SHORT_PLAYBACK.test(value) || parseSpotifyCommands(text)) return true;
   const action = /\b(reproduc\w*|pon|ponme|poner|play|pausa\w*|para|deten|siguiente|anterior|avanza|retrocede|salta|reanuda\w*|sube|baja|aumenta|disminuye|abre|abrir|inicia|iniciar|lanza|lanzar|arranca|arrancar|ejecuta|open|launch|start|que suena|que esta sonando)\b/.test(value);
   return action && TARGET.test(value);
 }

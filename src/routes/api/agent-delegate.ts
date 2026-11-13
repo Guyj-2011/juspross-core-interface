@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { NEMOTRON_MODEL, NEMOTRON_URL } from "@/lib/juspross/nemotronRequest";
-import { executeSpotifyTool, SPOTIFY_TOOL_DEFINITIONS } from "@/lib/juspross/spotifyTools.server";
+import { executeSpotifyTool } from "@/lib/juspross/spotifyTools.server";
 
 import { parseSpotifyCommands, runSpotifyCommands } from "@/lib/juspross/spotifyCommands";
 import { claimSpotifyCommand } from "@/lib/juspross/spotifyReceipt.server";
@@ -8,65 +8,7 @@ import { claimSpotifyCommand } from "@/lib/juspross/spotifyReceipt.server";
 const MAX_BODY = 32 * 1024;
 const MAX_TASK = 8_000;
 const MAX_CONTEXT = 12_000;
-const OPEN_SPOTIFY_TOOL = {
-  type: "function",
-  function: {
-    name: "open_spotify_desktop",
-    description: "Abre la aplicación de escritorio Spotify en el PC del usuario. Úsala cuando el usuario pida abrir o iniciar Spotify. No la uses para reproducir, pausar o cambiar canciones.",
-    parameters: { type: "object", properties: {}, additionalProperties: false },
-  },
-} as const;
-const TOOLS = [OPEN_SPOTIFY_TOOL, ...SPOTIFY_TOOL_DEFINITIONS];
-const ALLOWED_TOOLS: ReadonlySet<string> = new Set(TOOLS.map((tool) => tool.function.name));
 const bad = (message: string, status = 400) => Response.json({ message }, { status });
-
-function extractRequestedTrackQuery(task: string): string | null {
-  const clean = task.trim().replace(/[.!?]+$/, "").replace(/^(?:(?:por mientras|mientras tanto|por favor)\s*,?\s*)?(?:abre\w*|ábre\w*|inicia\w*|lanza\w*)\s+(?:spotify\s+)?(?:y\s+)?/i, "").trim();
-  // No conviertas peticiones genéricas en el título literal "una canción".
-  if (/^(?:(?:oye|por favor)\s+)*(?:pon(?:me|gas)?|reproduce|toca|play)\s+(?:(?:la|una|un)\s+)?(?:m[uú]sica|canci[oó]n|tema|rola)(?:\s+(?:por favor|ahora))?$/i.test(clean)) return null;
-  const artistAlias = (value: string) => {
-    const name = value.trim().replace(/^[\"'“”‘’]+|[\"'“”‘’]+$/g, "").trim();
-    // El reconocimiento de voz suele transcribir VIUS como "Views".
-    return /^views$/i.test(name) ? "VIUS" : name;
-  };
-
-  // Detecta primero peticiones de música por artista para que "música"
-  // nunca se convierta accidentalmente en el título de una canción.
-  const artistPatterns = [
-    /^(?:(?:oye|por favor|puedes|podrías|podrias)\s+)*(?:pon(?:me|gas)?|reproduce|toca|play)\s+(?:(?:una|la)\s+)?(?:canci[oó]n|tema|rola)\s+(?:de|del)\s+(.+?)(?:\s+en spotify)?$/i,
-    /^(?:(?:oye|por favor|puedes|podrías|podrias|quiero que)\s+)*(?:pon(?:me|gas)?|reproduce|reproduzcas|toca|play)\s+(?:(?:la|el)\s+)?(?:m[uú]sica|canciones|temas|rolas)\s+(?:de|del)\s+(?:el\s+)?(?:artista\s+)?(.+?)(?:\s+en spotify)?$/i,
-    /^(?:(?:oye|por favor|puedes|podrías|podrias)\s+)*(?:pon|ponme|pongas|reproduce|toca)\s+(?:algo|canciones|temas)\s+de\s+(.+?)(?:\s+en spotify)?$/i,
-    /^quiero escuchar (?:m[uú]sica|canciones|temas) de (.+?)(?:\s+en spotify)?$/i
-  ];
-  for (const pattern of artistPatterns) {
-    const artistMatch = clean.match(pattern);
-    if (artistMatch?.[1]?.trim()) return `artist:${artistAlias(artistMatch[1])}`;
-  }
-
-  const match = clean.match(/^(?:(?:oye|por favor|puedes|podrías|podrias|quiero que)\s+)*(?:pon(?:me|gas)?|reproduce|reproduzcas|reprodúceme|reproduceme|toca|escucha|play)\s+(?:(?:(?:la|el|una|un)\s+)?(?:canción|cancion|tema|rola)\s+)?(.+)$/i)
-    ?? clean.match(/^quiero escuchar\s+(.+)$/i);
-  if (!match?.[1]) return null;
-
-  const target = match[1]
-    .replace(/\s+(?:en spotify|por favor|ahora|cuando puedas)$/i, "")
-    .replace(/^[\"'“”‘’]+|[\"'“”‘’]+$/g, "")
-    .trim();
-  if (!target || target.length > 140) return null;
-
-  const artistOnly = target.match(/^(?:(?:la )?m[uú]sica|canciones|temas|rolas|discograf[ií]a|algo)\s+(?:de|del)\s+(?:artista\s+)?(.+)$/i)
-    ?? target.match(/^artista\s+(.+)$/i)
-    ?? target.match(/^del\s+artista\s+(.+)$/i);
-  if (artistOnly?.[1]?.trim()) return `artist:${artistAlias(artistOnly[1])}`;
-
-  const separator = target.toLocaleLowerCase("es").lastIndexOf(" de ");
-  if (separator > 0) {
-    const title = target.slice(0, separator).trim();
-    const artist = artistAlias(target.slice(separator + 4));
-    if (title && artist) return `track:${title} artist:${artist}`;
-  }
-  return `track:${target}`;
-}
-
 
 type ToolCall = {
   id?: string;
@@ -149,7 +91,6 @@ export const Route = createFileRoute("/api/agent-delegate")({
         ];
 
         let refreshedCookie: string | undefined;
-        let executedTool = false;
         try {
           for (let round = 0; round < 5; round++) {
             const upstream = await fetch(NEMOTRON_URL, {
@@ -188,77 +129,6 @@ export const Route = createFileRoute("/api/agent-delegate")({
               return Response.json({ ok: true, delegatedTo: NEMOTRON_MODEL, result }, { headers });
             }
 
-            if (round === 4) return bad("Nemotron alcanzó el límite de pasos de herramientas. Inténtalo con una petición más concreta.", 502);
-            messages.push({
-              role: "assistant",
-              content: assistant.content ?? "",
-              tool_calls: calls
-            });
-
-            for (const [callIndex, call] of calls.entries()) {
-              if (!call.id || call.type !== "function") {
-                continue;
-              }
-              const name = call.function?.name ?? "";
-              if (!ALLOWED_TOOLS.has(name)) {
-                messages.push({
-                  role: "tool",
-                  tool_call_id: call.id,
-                  content: JSON.stringify({ ok: false, message: "Herramienta no permitida." })
-                });
-                continue;
-              }
-              if (callIndex >= 3) {
-                messages.push({ role: "tool", tool_call_id: call.id, content: JSON.stringify({ ok: false, message: "Se alcanzó el límite de llamadas de herramientas por turno." }) });
-                continue;
-              }
-              let args: Record<string, unknown> = {};
-              try {
-                const parsed: unknown = JSON.parse(call.function?.arguments ?? "{}");
-                if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) args = parsed as Record<string, unknown>;
-                else throw new Error("invalid");
-              } catch {
-                messages.push({
-                  role: "tool",
-                  tool_call_id: call.id,
-                  content: JSON.stringify({ ok: false, message: "Los argumentos de la herramienta no son JSON válido." })
-                });
-                continue;
-              }
-
-              executedTool = true;
-
-              // El servidor no puede lanzar procesos en el PC del usuario. Devuelve la acción
-              // solicitada por Nemotron para que el navegador la ejecute mediante el agente local.
-              if (name === "open_spotify_desktop") {
-                const headers = new Headers({ "Cache-Control": "no-store" });
-                if (refreshedCookie) headers.append("Set-Cookie", refreshedCookie);
-                return Response.json({
-                  ok: true,
-                  delegatedTo: NEMOTRON_MODEL,
-                  action: "open_spotify_desktop",
-                  result: "Nemotron solicitó abrir Spotify en este equipo."
-                }, { headers });
-              }
-
-              const result = await executeSpotifyTool(request, name, args);
-              if (result.setCookie) refreshedCookie = result.setCookie;
-              const headers = new Headers({ "Cache-Control": "no-store" });
-              if (refreshedCookie) headers.append("Set-Cookie", refreshedCookie);
-              if (!result.ok) {
-                return Response.json({ ok: false, message: result.message }, { status: 502, headers });
-              }
-              // Una orden del usuario corresponde a una sola acción en Spotify.
-              // No volvemos a llamar a Nemotron después de ejecutar la herramienta:
-              // el modelo podía pedir la misma acción en otra ronda y saltar/reiniciar
-              // canciones varias veces antes de redactar su respuesta.
-              return Response.json({
-                ok: true,
-                delegatedTo: NEMOTRON_MODEL,
-                result: result.message,
-                executedTool: name
-              }, { headers });
-            }
           }
           return bad("Nemotron no pudo terminar la tarea.", 502);
         } catch (error) {

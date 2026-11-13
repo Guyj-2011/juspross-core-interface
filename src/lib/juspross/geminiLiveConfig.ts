@@ -14,7 +14,19 @@ export const GEMINI_LIVE_SYSTEM =
   "Para abrir la aplicación de Spotify usa open_spotify_desktop. Interpreta «ponla en toda la pantalla», «hazla pantalla completa» y «agranda la ventana» como maximizar Spotify. " +
   "Cuando el usuario pregunte qué aparece en su pantalla o te pida mirar el escritorio, usa inspect_shared_screen para analizar el fotograma actual; no digas que no tienes capacidades visuales si la herramienta está disponible. " +
   "La herramienta solo analiza la pantalla cuando el usuario lo pide explícitamente. " +
+  "Ignora música de fondo, letras cantadas y conversaciones que no estén dirigidas a Juspross. No conviertas una transcripción en una orden confirmada. Si hay ambigüedad pregunta antes de actuar. " +
+  "Para información actual o cuando digan busca, utiliza Google Search. Da fuentes y fecha de consulta; si no hay resultados verificables dilo, no inventes que buscaste. " +
   "Si necesitas un dato esencial, pregunta al usuario y espera su respuesta antes de continuar.";
+export const LIVE_ACTIVITY_CONFIG = {
+  automaticActivityDetection: {
+    disabled: false,
+    startOfSpeechSensitivity: "START_SENSITIVITY_LOW",
+    endOfSpeechSensitivity: "END_SENSITIVITY_LOW",
+    prefixPaddingMs: 300,
+    silenceDurationMs: 800,
+  },
+  activityHandling: "START_OF_ACTIVITY_INTERRUPTS",
+} as const;
 export const LIVE_INPUT_RATE = 16000;
 export const LIVE_OUTPUT_RATE = 24000;
 
@@ -27,7 +39,7 @@ export function floatToPcm16(input: Float32Array, fromRate: number, toRate = LIV
     const start = Math.floor(i * ratio);
     const end = Math.min(input.length, Math.floor((i + 1) * ratio)) || start + 1;
     let sum = 0;
-    for (let j = start; j < end; j++) sum += input[j]!;
+    for (let j = start; j < end; j++) sum += input[j] ?? 0;
     const s = Math.max(-1, Math.min(1, sum / Math.max(1, end - start)));
     out[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
   }

@@ -121,7 +121,7 @@ export async function readSpotifySession(request: Request, forceRefresh = false)
   if (!forceRefresh && tokens.expires_at > Date.now() + 60_000) return { session: tokens };
 
   const { clientId } = spotifyConfig();
-  if (!clientId) return { session: null, setCookie: clearSpotifySessionCookie(request) };
+  if (!clientId) throw new Error("Falta la configuración de Spotify; tu sesión no se ha eliminado.");
   try {
     const response = await fetch("https://accounts.spotify.com/api/token", {
       method: "POST",
@@ -138,9 +138,11 @@ export async function readSpotifySession(request: Request, forceRefresh = false)
       refresh_token?: string;
       expires_in?: number;
       scope?: string;
+      error?: string;
     };
     if (!response.ok || !payload.access_token || !payload.expires_in) {
-      return { session: null, setCookie: clearSpotifySessionCookie(request) };
+      if (response.status === 400 && payload.error === "invalid_grant") return { session: null, setCookie: clearSpotifySessionCookie(request) };
+      throw new Error(response.status === 429 ? "Spotify limita temporalmente la renovación. Tu sesión no se ha eliminado." : "No pude renovar Spotify ahora; tu sesión no se ha eliminado. Inténtalo más tarde.");
     }
     const refreshed: SpotifyTokens = {
       access_token: payload.access_token,
@@ -149,8 +151,8 @@ export async function readSpotifySession(request: Request, forceRefresh = false)
       scope: payload.scope ?? tokens.scope,
     };
     return { session: refreshed, setCookie: await spotifySessionCookie(refreshed, request) };
-  } catch {
-    return { session: null, setCookie: clearSpotifySessionCookie(request) };
+  } catch (error) {
+    throw new Error(error instanceof Error ? error.message : "No pude contactar con Spotify para renovar la sesión. No se ha eliminado.");
   }
 }
 

@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { GEMINI_LIVE_MODEL, GEMINI_LIVE_VOICE, GEMINI_LIVE_SYSTEM } from "@/lib/juspross/geminiLiveConfig";
+import { GEMINI_LIVE_MODEL, GEMINI_LIVE_VOICE, GEMINI_LIVE_SYSTEM, LIVE_ACTIVITY_CONFIG } from "@/lib/juspross/geminiLiveConfig";
 
 /**
  * Emite un token efímero de un solo uso para Gemini Live. GEMINI_API_KEY nunca sale
@@ -10,7 +10,7 @@ export const Route = createFileRoute("/api/gemini-live-token")({
     handlers: {
       POST: async ({ request }) => {
         const origin = request.headers.get("origin");
-        if (origin && origin !== new URL(request.url).origin)
+        if (!origin || origin !== new URL(request.url).origin)
           return Response.json({ message: "Solicitud no autorizada." }, { status: 403 });
         const key = process.env["GEMINI_API_KEY"];
         if (!key) return Response.json({ message: "Falta configurar GEMINI_API_KEY en los secretos del proyecto." }, { status: 500 });
@@ -30,17 +30,18 @@ export const Route = createFileRoute("/api/gemini-live-token")({
                   responseModalities: ["AUDIO"],
                   speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: GEMINI_LIVE_VOICE } } },
                 },
-                systemInstruction: { parts: [{ text: GEMINI_LIVE_SYSTEM }] },
+                systemInstruction: { parts: [{ text: GEMINI_LIVE_SYSTEM, LIVE_ACTIVITY_CONFIG }] },
                 inputAudioTranscription: {},
                 outputAudioTranscription: {},
-                tools: [{
+                realtimeInputConfig: LIVE_ACTIVITY_CONFIG,
+                tools: [{ googleSearch: {} }, {
                   functionDeclarations: [{
                     name: "spotify_voice_command",
                     description: "Herramienta directa para todas las órdenes habituales de Spotify. Úsala siempre que el usuario pida reproducir, buscar, artista, canción, play/pausa, siguiente/anterior, volumen, canción actual o controlar la ventana. No delegues estas órdenes a Nemotron.",
-                    parameters: { type: "OBJECT", properties: { task: { type: "STRING", description: "Orden exacta del usuario." }, intent: { type: "STRING", enum: ["auto", "artist", "generic", "current_artist"], description: "artist si nombra solo un artista; generic si pide canción sin especificar; current_artist si pide otra del artista actual; auto en los demás casos." }, context: { type: "STRING", description: "Contexto reciente de la conversación." } }, required: ["task", "intent"] }
+                    parameters: { type: "OBJECT", properties: { task: { type: "STRING", description: "Orden exacta del usuario." }, intent: { type: "STRING", enum: ["auto", "artist", "generic", "current_artist", "play", "pause", "next", "previous", "volume", "search"], description: "artist si nombra solo un artista; generic si pide canción sin especificar; current_artist si pide otra del artista actual; play/pause/next/previous/volume/search para controles explícitos; auto para órdenes compuestas. Copia la frase exacta sin inventar acciones." }, context: { type: "STRING", description: "Contexto reciente de la conversación." } }, required: ["task", "intent"] }
                   }, {
                     name: "delegate_to_nemotron",
-                    description: "Delegar a Nemotron tareas de razonamiento y acciones de Spotify. Úsala cuando el usuario pida reproducir música, pausar, reanudar o cambiar canciones, así como para tareas complejas. Nemotron puede ejecutar las herramientas de Spotify autorizadas y devolver el resultado real.",
+                    description: "Solo para razonamiento complejo NO relacionado con Spotify. Nunca uses esta herramienta para música, búsquedas Spotify, reproducción, volumen o controles de ventana: usa spotify_voice_command.",
                     parameters: {
                       type: "OBJECT",
                       properties: {
