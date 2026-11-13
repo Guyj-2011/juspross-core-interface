@@ -21,6 +21,14 @@ export function getSpotifyWindowAction(text: string, context = ""): SpotifyWindo
   return null;
 }
 
+/** Detecta si además de reproducir, el usuario pidió abrir Spotify en Windows. */
+export function requestsSpotifyOpen(text: string, context = ""): boolean {
+  const value = normalize(text);
+  const hasSpotifyContext = /\bspotify\b/.test(normalize(context));
+  const mentionsSpotify = /\bspotify\b/.test(value) || hasSpotifyContext;
+  return mentionsSpotify && /\b(abre\w*|abrir|inicia\w*|iniciar|lanza\w*|lanzar)\b/.test(value);
+}
+
 /** Solo detecta abrir la aplicación; no confunde «abre Spotify y reproduce…» con abrir solamente. */
 export function isOpenSpotifyIntent(text: string): boolean {
   const value = normalize(text);
