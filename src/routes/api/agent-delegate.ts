@@ -101,7 +101,7 @@ export const Route = createFileRoute("/api/agent-delegate")({
             ? "down"
             : null;
         const genericMusic = !openOnly && !extractRequestedTrackQuery(task) &&
-          /\b(pon|ponme|reproduce|toca|play|ponle play)\b/.test(normalizedTask) &&
+          /\b(pon|ponme|reproduce|toca)\b/.test(normalizedTask) &&
           /\b(m[uú]sica|canci[oó]n|tema|rola)\b/.test(normalizedTask);
         const transportTool =
           /\b(pausa|pausar|deten|detener|para)\b/.test(normalizedTask) ? "spotify_pause" :
