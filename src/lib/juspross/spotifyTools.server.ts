@@ -1,5 +1,5 @@
 import { spotifyApi, readSpotifySession } from "./spotify.server";
-import { SPOTIFY_SEARCH_LIMIT, trackMatches, type CommandResult } from "./spotifyCommands";
+import { SPOTIFY_SEARCH_LIMIT, normalizeMusic, trackMatches, type CommandResult } from "./spotifyCommands";
 
 export const SPOTIFY_TOOL_DEFINITIONS = [
   {
@@ -720,12 +720,100 @@ export async function executeSpotifyTool(
       case "spotify_previous":
         return transportAction(request, "previous", args["count"] === 2 ? 2 : 1);
       case "spotify_play_current_artist": {
-        const current = await executeSpotifyTool(request, "spotify_current_artist", {});
-        if (!current.ok) return current;
-        return executeSpotifyTool(request, "spotify_search_and_play", {
-          query: `artist:${current.message.replace(/^ARTIST:\s*/i, "").trim()}`,
-          kind: "track",
-        });
+        const current = await spotifyRequest(request, "/me/player", "GET");
+        if (current.response.status === 204)
+          return {
+            ok: false,
+            message: "No hay ninguna canción sonando para identificar al artista.",
+            setCookie: current.setCookie,
+          };
+        if (!current.response.ok)
+          return {
+            ok: false,
+            message: playbackError(current.response.status),
+            setCookie: current.setCookie,
+          };
+        const playing = (await current.response.json().catch(() => ({}))) as {
+          item?: { uri?: string; artists?: { name?: string }[] };
+        };
+        const artist = playing.item?.artists?.[0]?.name?.trim();
+        const currentUri = playing.item?.uri;
+        if (!artist || !currentUri)
+          return {
+            ok: false,
+            message: "No pude identificar la canción y el artista actuales.",
+            setCookie: current.setCookie,
+          };
+        const searchTerm = artist.replace(/[\\/&]/g, " ").replace(/\s+/g, " ").trim();
+        const search = await spotifyRequest(
+          request,
+          `/search?${new URLSearchParams({ q: searchTerm, type: "track", limit: String(SPOTIFY_SEARCH_LIMIT) }).toString()}`,
+          "GET",
+        );
+        if (!search.response.ok)
+          return {
+            ok: false,
+            message: playbackError(search.response.status),
+            setCookie: search.setCookie ?? current.setCookie,
+          };
+        const results = (await search.response.json().catch(() => ({}))) as {
+          tracks?: { items?: { name?: string; uri?: string; artists?: { name?: string }[] }[] };
+        };
+        const artistKey = normalizeMusic(artist).replace(/\s/g, "");
+        const candidate = (results.tracks?.items ?? []).find(
+          (track) =>
+            Boolean(track.uri) &&
+            track.uri !== currentUri &&
+            (track.artists ?? []).some(
+              (item) => normalizeMusic(item.name ?? "").replace(/\s/g, "") === artistKey,
+            ),
+        );
+        if (!candidate?.uri)
+          return {
+            ok: false,
+            message: `No encontré otra canción disponible de ${artist} en los primeros resultados de Spotify.`,
+            setCookie: search.setCookie ?? current.setCookie,
+          };
+        const device = await choosePlaybackDevice(search.accessToken);
+        if (!device.response.ok)
+          return {
+            ok: false,
+            message: playbackError(device.response.status),
+            setCookie: search.setCookie ?? current.setCookie,
+          };
+        if (!device.deviceId)
+          return {
+            ok: false,
+            message: "No detecté un dispositivo Spotify disponible. Abre Spotify y vuelve a intentarlo.",
+            setCookie: search.setCookie ?? current.setCookie,
+          };
+        const played = await fetch(
+          `https://api.spotify.com/v1/me/player/play?device_id=${encodeURIComponent(device.deviceId)}`,
+          {
+            method: "PUT",
+            signal: AbortSignal.timeout(15_000),
+            headers: {
+              Authorization: `Bearer ${search.accessToken}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ uris: [candidate.uri] }),
+          },
+        );
+        if (!played.ok && played.status !== 204)
+          return {
+            ok: false,
+            message: playbackError(played.status),
+            setCookie: search.setCookie ?? current.setCookie,
+          };
+        const confirmed = await waitForPlaybackState(search.accessToken, true, candidate.uri);
+        return {
+          ok: confirmed,
+          confirmed,
+          message: confirmed
+            ? `Spotify está reproduciendo otra canción de ${artist}: “${candidate.name ?? "una canción"}”.`
+            : "Spotify aceptó la orden, pero no pude confirmar una pista distinta. No repetiré la acción.",
+          setCookie: search.setCookie ?? current.setCookie,
+        };
       }
       case "spotify_current_artist": {
         const { response, setCookie } = await spotifyRequest(request, "/me/player", "GET");
