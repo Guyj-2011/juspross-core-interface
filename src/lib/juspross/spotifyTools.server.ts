@@ -105,10 +105,30 @@ export async function executeSpotifyTool(request: Request, name: string, args: R
         const search = await spotifyRequest(request, `/search?${new URLSearchParams({ q: query, type: kind, limit: "10" }).toString()}`, "GET");
         if (!search.response.ok) return { ok: false, message: `Spotify no pudo realizar la búsqueda (HTTP ${search.response.status}).`, setCookie: search.setCookie };
         const payload = await search.response.json().catch(() => ({})) as {
-          tracks?: { items?: { uri?: string; album?: { uri?: string } }[] };
+          tracks?: { items?: { name?: string; uri?: string; artists?: { name?: string }[]; album?: { uri?: string } }[] };
           playlists?: { items?: { uri?: string }[] };
         };
-        const track = kind === "track" ? payload.tracks?.items?.[0] : undefined;
+        const normalize = (value: string) => value.toLocaleLowerCase("es").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
+        const trackQuery = query.match(/^track:(.*?)\s+artist:(.+)$/i);
+        const requestedTitle = trackQuery?.[1]?.trim() ?? query.replace(/^track:/i, "").trim();
+        const requestedArtist = trackQuery?.[2]?.trim() ?? "";
+        const tracks = payload.tracks?.items ?? [];
+        const wantedTitle = normalize(requestedTitle);
+        const wantedArtist = normalize(requestedArtist);
+        const rankedTracks = tracks.map((item) => {
+          const title = normalize(item.name ?? "");
+          const artists = (item.artists ?? []).map((artist) => normalize(artist.name ?? ""));
+          const titleExact = title === wantedTitle;
+          const artistExact = !wantedArtist || artists.some((artist) => artist === wantedArtist);
+          const titleSimilar = Boolean(wantedTitle && (title.includes(wantedTitle) || wantedTitle.includes(title)));
+          const artistSimilar = !wantedArtist || artists.some((artist) => artist.includes(wantedArtist) || wantedArtist.includes(artist));
+          const score = (titleExact ? 100 : titleSimilar ? 60 : 0) + (artistExact && wantedArtist ? 60 : artistSimilar && wantedArtist ? 20 : 0);
+          return { item, score, titleExact, artistExact };
+        }).sort((a, b) => b.score - a.score);
+        const bestTrack = rankedTracks[0];
+        const track = kind === "track" && bestTrack?.titleExact && bestTrack.artistExact
+          ? bestTrack.item
+          : undefined;
         const uri = kind === "track" ? track?.uri : payload.playlists?.items?.[0]?.uri;
         const albumUri = track?.album?.uri;
         if (!uri) return { ok: false, message: kind === "track" ? `No encontré una coincidencia exacta para “${requestedTitle}”${requestedArtist ? ` de ${requestedArtist}` : ""}. No voy a reproducir otra canción.` : "No se encontró una playlist reproducible en Spotify.", setCookie: search.setCookie };
