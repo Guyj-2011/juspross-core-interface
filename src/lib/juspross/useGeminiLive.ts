@@ -346,6 +346,13 @@ export function useGeminiLive() {
               openedPrefix = describeLocalResult(localResult);
               if (!localResult.ok) throw new Error(openedPrefix);
             }
+            const taskDigest = await crypto.subtle.digest(
+              "SHA-256",
+              new TextEncoder().encode(taskKey),
+            );
+            const taskId = Array.from(new Uint8Array(taskDigest).slice(0, 12), (byte) =>
+              byte.toString(16).padStart(2, "0"),
+            ).join("");
             const controller = new AbortController();
             toolControllers.set(call.id, controller);
             const response = await fetch("/api/agent-delegate", {
@@ -355,7 +362,7 @@ export function useGeminiLive() {
               body: JSON.stringify({
                 task,
                 context,
-                requestId: `${sessionId}_${turn}_${taskKey.length}_${calls.indexOf(call)}`,
+                requestId: `${sessionId}_${turn}_${taskId}`,
                 intent: call.name === "spotify_voice_command" ? args["intent"] : undefined,
               }),
             });
@@ -479,6 +486,8 @@ export function useGeminiLive() {
           // Retain call-id receipts across interruption; a later legitimate turn gets new request IDs.
           if (sc.turnComplete) {
             delegatedTurnResults.clear();
+            completedCalls.clear();
+            cancelledCalls.clear();
             turn++;
           }
           userId = botId = null;
