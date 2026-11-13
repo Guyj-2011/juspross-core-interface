@@ -1,7 +1,7 @@
 import { spotifyApi } from "@/lib/juspross/spotify.server";
 
 export const SPOTIFY_TOOL_DEFINITIONS = [
-  { type: "function", function: { name: "spotify_search_and_play", description: "Busca en Spotify y reproduce el primer resultado relevante. Usa kind=playlist para playlists y kind=track para canciones o artistas. Solo devuelve si la acción funcionó.", parameters: { type: "object", properties: { query: { type: "string", description: "Nombre de canción, artista o playlist." }, kind: { type: "string", enum: ["track", "playlist"] } }, required: ["query", "kind"], additionalProperties: false } } },
+  { type: "function", function: { name: "spotify_search_and_play", description: "Busca la canción o playlist que el usuario pidió explícitamente. Para canciones, respeta exactamente el título y el artista indicados; no sustituyas por una canción parecida, la que ya suena ni un resultado de conversaciones anteriores. Si no hay coincidencia clara, informa que no la encontraste en vez de reproducir otra.", parameters: { type: "object", properties: { query: { type: "string", description: "Nombre de canción, artista o playlist." }, kind: { type: "string", enum: ["track", "playlist"] } }, required: ["query", "kind"], additionalProperties: false } } },
   { type: "function", function: { name: "spotify_resume", description: "Reanuda la reproducción de Spotify en el dispositivo disponible.", parameters: { type: "object", properties: {}, additionalProperties: false } } },
   { type: "function", function: { name: "spotify_pause", description: "Pausa la reproducción actual de Spotify.", parameters: { type: "object", properties: {}, additionalProperties: false } } },
   { type: "function", function: { name: "spotify_next", description: "Avanza a la siguiente canción.", parameters: { type: "object", properties: {}, additionalProperties: false } } },
@@ -102,7 +102,7 @@ export async function executeSpotifyTool(request: Request, name: string, args: R
         const query = typeof args["query"] === "string" ? args["query"].trim().slice(0, 160) : "";
         const kind = args["kind"] === "playlist" ? "playlist" : args["kind"] === "track" ? "track" : "";
         if (!query || !kind) return { ok: false, message: "Falta una búsqueda válida y su tipo (canción o playlist)." };
-        const search = await spotifyRequest(request, `/search?${new URLSearchParams({ q: query, type: kind, limit: "1" }).toString()}`, "GET");
+        const search = await spotifyRequest(request, `/search?${new URLSearchParams({ q: query, type: kind, limit: "10" }).toString()}`, "GET");
         if (!search.response.ok) return { ok: false, message: `Spotify no pudo realizar la búsqueda (HTTP ${search.response.status}).`, setCookie: search.setCookie };
         const payload = await search.response.json().catch(() => ({})) as {
           tracks?: { items?: { uri?: string; album?: { uri?: string } }[] };
@@ -111,7 +111,7 @@ export async function executeSpotifyTool(request: Request, name: string, args: R
         const track = kind === "track" ? payload.tracks?.items?.[0] : undefined;
         const uri = kind === "track" ? track?.uri : payload.playlists?.items?.[0]?.uri;
         const albumUri = track?.album?.uri;
-        if (!uri) return { ok: false, message: "No se encontró un resultado reproducible en Spotify.", setCookie: search.setCookie };
+        if (!uri) return { ok: false, message: kind === "track" ? `No encontré una coincidencia exacta para “${requestedTitle}”${requestedArtist ? ` de ${requestedArtist}` : ""}. No voy a reproducir otra canción.` : "No se encontró una playlist reproducible en Spotify.", setCookie: search.setCookie };
         const { deviceId, response: devicesResponse } = await choosePlaybackDevice(search.accessToken);
         if (!devicesResponse.ok) return { ok: false, message: playbackError(devicesResponse.status), setCookie: search.setCookie };
         if (!deviceId) return { ok: false, message: "Encontré el contenido, pero no detecté un dispositivo Spotify disponible. Abre Spotify en tu PC y vuelve a intentarlo.", setCookie: search.setCookie };
