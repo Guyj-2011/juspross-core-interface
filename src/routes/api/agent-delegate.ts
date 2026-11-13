@@ -19,25 +19,43 @@ const bad = (message: string, status = 400) => Response.json({ message }, { stat
 
 function extractRequestedTrackQuery(task: string): string | null {
   const clean = task.trim().replace(/[.!?]+$/, "");
-  const match = clean.match(/^(?:(?:oye|por favor|puedes|podrías|podrias|quiero que)\s+)*(?:pon(?:me|gas)?|reproduce|reproduzcas|reprodúceme|reproduceme|toca|escucha|play)\s+(?:(?:(?:la|el)\s+)?(?:canción|cancion|tema|rola)\s+)?(.+)$/i)
-    ?? clean.match(/^quiero escuchar\s+(.+)$/i);
+  const artistAlias = (value: string) => {
+    const name = value.trim().replace(/^[\"'“”‘’]+|[\"'“”‘’]+$/g, "").trim();
+    // El reconocimiento de voz suele transcribir VIUS como "Views".
+    return /^views$/i.test(name) ? "VIUS" : name;
+  };
+
+  // Detecta primero peticiones de música por artista para que "música"
+  // nunca se convierta accidentalmente en el título de una canción.
+  const artistPatterns = [
+    /^(?:(?:oye|por favor|puedes|podrías|podrias|quiero que)\\s+)*(?:pon(?:me|gas)?|reproduce|reproduzcas|toca|play)\\s+(?:(?:la|el)\\s+)?(?:m[uú]sica|canciones|temas|rolas)\\s+(?:de|del)\\s+(?:el\\s+)?(?:artista\\s+)?(.+?)(?:\\s+en spotify)?$/i,
+    /^(?:(?:oye|por favor|puedes|podrías|podrias)\\s+)*(?:pon|ponme|pongas|reproduce|toca)\\s+(?:algo|canciones|temas)\\s+de\\s+(.+?)(?:\\s+en spotify)?$/i,
+    /^quiero escuchar (?:m[uú]sica|canciones|temas) de (.+?)(?:\\s+en spotify)?$/i
+  ];
+  for (const pattern of artistPatterns) {
+    const artistMatch = clean.match(pattern);
+    if (artistMatch?.[1]?.trim()) return `artist:${artistAlias(artistMatch[1])}`;
+  }
+
+  const match = clean.match(/^(?:(?:oye|por favor|puedes|podrías|podrias|quiero que)\\s+)*(?:pon(?:me|gas)?|reproduce|reproduzcas|reprodúceme|reproduceme|toca|escucha|play)\\s+(?:(?:(?:la|el)\\s+)?(?:canción|cancion|tema|rola)\\s+)?(.+)$/i)
+    ?? clean.match(/^quiero escuchar\\s+(.+)$/i);
   if (!match?.[1]) return null;
 
   const target = match[1]
-    .replace(/\s+(?:en spotify|por favor|ahora|cuando puedas)$/i, "")
-    .replace(/^["'“”‘’]+|["'“”‘’]+$/g, "")
+    .replace(/\\s+(?:en spotify|por favor|ahora|cuando puedas)$/i, "")
+    .replace(/^[\"'“”‘’]+|[\"'“”‘’]+$/g, "")
     .trim();
   if (!target || target.length > 140) return null;
 
-  const artistOnly = target.match(/^(?:(?:la )?m[uú]sica|canciones|temas|rolas|discograf[ií]a|algo)\s+(?:de|del)\s+(?:artista\s+)?(.+)$/i)
-    ?? target.match(/^artista\s+(.+)$/i)
-    ?? target.match(/^del\s+artista\s+(.+)$/i);
-  if (artistOnly?.[1]?.trim()) return `artist:${artistOnly[1].trim()}`;
+  const artistOnly = target.match(/^(?:(?:la )?m[uú]sica|canciones|temas|rolas|discograf[ií]a|algo)\\s+(?:de|del)\\s+(?:artista\\s+)?(.+)$/i)
+    ?? target.match(/^artista\\s+(.+)$/i)
+    ?? target.match(/^del\\s+artista\\s+(.+)$/i);
+  if (artistOnly?.[1]?.trim()) return `artist:${artistAlias(artistOnly[1])}`;
 
   const separator = target.toLocaleLowerCase("es").lastIndexOf(" de ");
   if (separator > 0) {
     const title = target.slice(0, separator).trim();
-    const artist = target.slice(separator + 4).trim();
+    const artist = artistAlias(target.slice(separator + 4));
     if (title && artist) return `track:${title} artist:${artist}`;
   }
   return `track:${target}`;
@@ -88,7 +106,7 @@ export const Route = createFileRoute("/api/agent-delegate")({
               "Eres Nemotron, el agente ejecutor de Juspross. Gemini Live o el chat principal te delega tareas.",
               "Cuando el usuario pida abrir o iniciar la aplicación de Spotify en su PC, debes llamar a open_spotify_desktop. Esta herramienta solicita al navegador que use el agente local emparejado para abrir la aplicación; no afirmes que se abrió hasta recibir el resultado local.",
               "No uses open_spotify_desktop para órdenes de reproducción.",
-              "Para reproducir una canción, copia literalmente el título y el artista mencionados en la petición actual al argumento query de spotify_search_and_play. No uses el contexto ni la canción que ya suena para completar o sustituir el pedido. Si no identificas claramente el título, pregunta antes de ejecutar. Para canciones usa kind=track; para playlists usa kind=playlist.",
+              "Si el usuario pide música, canciones o temas de un artista sin indicar título, busca una canción de ese artista usando la consulta artist:NOMBRE; no conviertas la palabra música en un título. Para una canción concreta, copia título y artista. No uses el contexto ni la canción que ya suena para sustituir el pedido. Para canciones usa kind=track; para playlists usa kind=playlist.",
               "Para pausar, reanudar, avanzar o retroceder usa la herramienta correspondiente.",
               "No afirmes que una acción de Spotify se realizó hasta recibir una respuesta exitosa de su herramienta.",
               "Si Spotify no está conectado, indica que el usuario debe conectarlo desde Ajustes. Si no hay dispositivo activo, indícale que abra Spotify en un dispositivo.",
