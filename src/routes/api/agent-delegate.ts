@@ -248,16 +248,21 @@ export const Route = createFileRoute("/api/agent-delegate")({
               }
               const result = await executeSpotifyTool(request, name, args);
               if (result.setCookie) refreshedCookie = result.setCookie;
+              const headers = new Headers({ "Cache-Control": "no-store" });
+              if (refreshedCookie) headers.append("Set-Cookie", refreshedCookie);
               if (!result.ok) {
-                const headers = new Headers({ "Cache-Control": "no-store" });
-                if (refreshedCookie) headers.append("Set-Cookie", refreshedCookie);
                 return Response.json({ ok: false, message: result.message }, { status: 502, headers });
               }
-              messages.push({
-                role: "tool",
-                tool_call_id: call.id,
-                content: JSON.stringify({ ok: result.ok, message: result.message })
-              });
+              // Una orden del usuario corresponde a una sola acción en Spotify.
+              // No volvemos a llamar a Nemotron después de ejecutar la herramienta:
+              // el modelo podía pedir la misma acción en otra ronda y saltar/reiniciar
+              // canciones varias veces antes de redactar su respuesta.
+              return Response.json({
+                ok: true,
+                delegatedTo: NEMOTRON_MODEL,
+                result: result.message,
+                executedTool: name
+              }, { headers });
             }
           }
           return bad("Nemotron no pudo terminar la tarea.", 502);
