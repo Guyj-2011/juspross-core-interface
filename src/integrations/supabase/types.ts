@@ -38,6 +38,30 @@ export type Database = {
         }
         Relationships: []
       }
+      spotify_command_receipts: {
+        Row: {
+          command_hash: string
+          created_at: string
+          outcome: Json | null
+          request_id: string
+          session_hash: string
+        }
+        Insert: {
+          command_hash: string
+          created_at?: string
+          outcome?: Json | null
+          request_id: string
+          session_hash: string
+        }
+        Update: {
+          command_hash?: string
+          created_at?: string
+          outcome?: Json | null
+          request_id?: string
+          session_hash?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
