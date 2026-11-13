@@ -16,7 +16,7 @@ export function getSpotifyWindowAction(text: string, context = ""): SpotifyWindo
   if (!/\bspotify\b/.test(value) && !hasSpotifyContext) return null;
   if (/\b(pestana|navegador|chat)\b/.test(value)) return null;
   if (/\b(minimiza\w*|oculta\w*|reduce la ventana)\b/.test(value)) return "minimize";
-  if (/\b(maximiza\w*|pantalla completa|a pantalla completa|agranda la ventana)\b/.test(value)) return "maximize";
+  if (/\b(maximiza\w*|pantalla completa|a pantalla completa|toda la pantalla|hazla pantalla completa|ponla en pantalla completa|agranda la ventana)\b/.test(value)) return "maximize";
   if (/\b(cierra\w*|cerrar|salir de|sal del)\b/.test(value)) return "close";
   return null;
 }
