@@ -18,7 +18,7 @@ const ALLOWED_TOOLS: ReadonlySet<string> = new Set(TOOLS.map((tool) => tool.func
 const bad = (message: string, status = 400) => Response.json({ message }, { status });
 
 function extractRequestedTrackQuery(task: string): string | null {
-  const clean = task.trim().replace(/[.!?]+$/, "");
+  const clean = task.trim().replace(/[.!?]+$/, "").replace(/^(?:(?:por mientras|mientras tanto|por favor)\\s*,?\\s*)?(?:abre\\w*|inicia\\w*|lanza\\w*)\\s+(?:spotify\\s+)?(?:y\\s+)?/i, "").trim();
   // No conviertas peticiones genéricas en el título literal "una canción".
   if (/^(?:(?:oye|por favor)\s+)*(?:pon(?:me|gas)?|reproduce|toca|play)\s+(?:(?:la|una|un)\s+)?(?:m[uú]sica|canci[oó]n|tema|rola)(?:\s+(?:por favor|ahora))?$/i.test(clean)) return null;
   const artistAlias = (value: string) => {
