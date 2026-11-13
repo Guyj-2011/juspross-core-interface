@@ -252,7 +252,7 @@ export function useGeminiLive() {
             }
             continue;
           }
-          if (call.name !== "delegate_to_nemotron") {
+          if (call.name !== "delegate_to_nemotron" && call.name !== "spotify_voice_command") {
             responses.push({ id: call.id, name: call.name, response: { error: "Herramienta no disponible." } });
             continue;
           }
@@ -288,7 +288,7 @@ export function useGeminiLive() {
             const response = await fetch("/api/agent-delegate", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ task, context }),
+              body: JSON.stringify({ task, context, intent: call.name === "spotify_voice_command" ? args["intent"] : undefined }),
             });
             const payload = await response.json().catch(() => ({})) as { ok?: boolean; result?: string; action?: string; message?: string };
             if (!response.ok || payload.ok === false) throw new Error(payload.message ?? `No se pudo completar la orden (${response.status}).`);
