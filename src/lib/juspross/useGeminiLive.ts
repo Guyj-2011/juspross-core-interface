@@ -9,7 +9,7 @@ import {
 } from "./geminiLiveConfig";
 import { useV2 } from "./v2Store";
 import { controlSpotifyWindow, describeLocalResult, describeSpotifyWindowResult, openSpotifyDesktop } from "./localAgent";
-import { getSpotifyWindowAction } from "./localIntent";
+import { getSpotifyWindowAction, isOpenSpotifyIntent, requestsSpotifyOpen } from "./localIntent";
 
 export type LiveStatus = "off" | "connecting" | "live" | "error";
 
@@ -279,6 +279,12 @@ export function useGeminiLive() {
             continue;
           }
           try {
+            let openedPrefix = "";
+            if (requestsSpotifyOpen(task, context) && !isOpenSpotifyIntent(task)) {
+              const localResult = await openSpotifyDesktop();
+              openedPrefix = describeLocalResult(localResult);
+              if (!localResult.ok) throw new Error(openedPrefix);
+            }
             const response = await fetch("/api/agent-delegate", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -292,6 +298,7 @@ export function useGeminiLive() {
               result = describeLocalResult(localResult);
               if (!localResult.ok) throw new Error(result);
             }
+            result = [openedPrefix, result].filter(Boolean).join(" ");
             if (!result) throw new Error(payload.message ?? "Nemotron no devolvió un resultado.");
             const toolResult = { ok: true, result };
             delegatedTurnResults.set(taskKey, toolResult);
