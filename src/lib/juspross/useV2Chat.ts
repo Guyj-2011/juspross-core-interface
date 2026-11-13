@@ -51,8 +51,8 @@ export function useV2Chat() {
       const id = s.addMessage({ role: "assistant", text: "" });
       s.setState("thinking");
 
-      const spotifyTask = isSpotifyRequest(text);
-      const spotifyWindowAction = getSpotifyWindowAction(text);
+      const spotifyTask = isSpotifyRequest(text, context);
+      const spotifyWindowAction = getSpotifyWindowAction(text, context);
       let simulated = false;
       let final = "";
       const onToken = (full: string) => {
