@@ -783,7 +783,7 @@ export function V2Console() {
           setListening(false);
           setValue("");
           setVoiceNotice(`Te escuché: «${finalText}». Enviando a Qwen…`);
-          void send(finalText, true);
+          void send(finalText, true, screenSharing ? screenContext : "");
         } else if (interimText) {
           browserStartedAtRef.current = Date.now();
           setValue(interimText);
