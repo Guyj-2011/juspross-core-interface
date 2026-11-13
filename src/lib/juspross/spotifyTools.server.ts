@@ -1,7 +1,7 @@
 import { spotifyApi } from "@/lib/juspross/spotify.server";
 
 export const SPOTIFY_TOOL_DEFINITIONS = [
-  { type: "function", function: { name: "spotify_play_personalized", description: "Reproduce una canción que encaje con los gustos reales del usuario, usando sus canciones más escuchadas de Spotify. Úsala cuando diga simplemente pon una canción, pon música o elige algo que me guste sin nombrar artista ni título.", parameters: { type: "object", properties: {}, additionalProperties: false } } },
+  { type: "function", function: { name: "spotify_play_personalized", description: "Reproduce una canción de los gustos reales del usuario. Si different_artist=true, elige una canción de un artista distinto al que está sonando.", parameters: { type: "object", properties: { different_artist: { type: "boolean" } }, additionalProperties: false } } },
   { type: "function", function: { name: "spotify_volume", description: "Ajusta el volumen de Spotify. Usa target para fijar un porcentaje exacto de 0 a 100; usa direction=up o direction=down solo para cambiarlo en 10 puntos.", parameters: { type: "object", properties: { target: { type: "integer", minimum: 0, maximum: 100 }, direction: { type: "string", enum: ["up", "down"] } }, additionalProperties: false } } },
   { type: "function", function: { name: "spotify_search_and_play", description: "Busca la canción o playlist que el usuario pidió explícitamente. Para canciones, respeta exactamente el título y el artista indicados; no sustituyas por una canción parecida, la que ya suena ni un resultado de conversaciones anteriores. Si no hay coincidencia clara, informa que no la encontraste en vez de reproducir otra.", parameters: { type: "object", properties: { query: { type: "string", description: "Nombre de canción, artista o playlist." }, kind: { type: "string", enum: ["track", "playlist"] } }, required: ["query", "kind"], additionalProperties: false } } },
   { type: "function", function: { name: "spotify_resume", description: "Reanuda la reproducción de Spotify en el dispositivo disponible.", parameters: { type: "object", properties: {}, additionalProperties: false } } },
@@ -84,10 +84,10 @@ async function playbackAction(request: Request, path: string, method: string, bo
       const confirmed = await waitForPlaybackState(devices.accessToken, expectedPlaying);
       if (!confirmed) {
         return {
-          ok: false,
+          ok: true,
           message: expectedPlaying
-            ? "Spotify aceptó la orden, pero no pude confirmar que la música haya empezado. Comprueba que la aplicación esté abierta y que haya un dispositivo activo."
-            : "Spotify aceptó la orden, pero no pude confirmar que la reproducción se haya detenido.",
+            ? "Spotify aceptó la orden de reanudar, pero el estado todavía no se actualiza. No repetiré la orden para evitar ejecuciones duplicadas."
+            : "Spotify aceptó la orden de pausa, pero el estado todavía no se actualiza. No repetiré la orden.",
           setCookie: devices.setCookie,
         };
       }
@@ -109,7 +109,20 @@ export async function executeSpotifyTool(request: Request, name: string, args: R
         const data = await top.response.json().catch(() => ({})) as { items?: { name?: string; artists?: { name?: string }[] }[] };
         const favorites = (data.items ?? []).filter((item) => item.name && item.artists?.[0]?.name);
         if (!favorites.length) return { ok: false, message: "Todavía no tengo suficientes datos de tus canciones más escuchadas. Pídeme un artista o una canción concreta, o escucha música un tiempo y vuelve a intentarlo.", setCookie: top.setCookie };
-        const chosen = favorites[Math.floor(Math.random() * Math.min(favorites.length, 10))]!;
+        let candidates = favorites;
+        if (args["different_artist"] === true) {
+          const current = await spotifyRequest(request, "/me/player", "GET");
+          if (current.response.ok) {
+            const playing = await current.response.json().catch(() => ({})) as { item?: { artists?: { name?: string }[] } };
+            const currentArtist = (playing.item?.artists?.[0]?.name ?? "").toLocaleLowerCase("es");
+            if (currentArtist) {
+              const alternatives = favorites.filter((item) => (item.artists?.[0]?.name ?? "").toLocaleLowerCase("es") !== currentArtist);
+              if (alternatives.length) candidates = alternatives;
+            }
+          }
+        }
+        const pool = candidates.slice(0, 10);
+        const chosen = pool[Math.floor(Math.random() * pool.length)]!;
         const artist = chosen.artists![0]!.name!;
         const played = await executeSpotifyTool(request, "spotify_search_and_play", { query: `track:${chosen.name} artist:${artist}`, kind: "track" });
         return { ...played, message: played.ok ? `Elegí una canción de tus favoritas: ${chosen.name} de ${artist}. ${played.message}` : played.message, setCookie: played.setCookie ?? top.setCookie };
