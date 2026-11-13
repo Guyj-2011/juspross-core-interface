@@ -3,8 +3,8 @@ import { AiError, AiUnreachable, chat, chatGemma, chatNemotron, simulate, type A
 import { speak } from "./useSpeech";
 import { unlockSpeechAudio } from "./speechAudio";
 import { useV2 } from "./v2Store";
-import { isOpenSpotifyIntent, isSpotifyRequest } from "./localIntent";
-import { describeLocalResult, openSpotifyDesktop } from "./localAgent";
+import { getSpotifyWindowAction, isOpenSpotifyIntent, isSpotifyRequest } from "./localIntent";
+import { controlSpotifyWindow, describeLocalResult, describeSpotifyWindowResult, openSpotifyDesktop } from "./localAgent";
 
 /** Conversación del lado 2.0: chat normal según el proveedor elegido; órdenes Spotify → Nemotron. */
 export function useV2Chat() {
@@ -52,6 +52,7 @@ export function useV2Chat() {
       s.setState("thinking");
 
       const spotifyTask = isSpotifyRequest(text);
+      const spotifyWindowAction = getSpotifyWindowAction(text);
       let simulated = false;
       let final = "";
       const onToken = (full: string) => {
@@ -63,7 +64,11 @@ export function useV2Chat() {
       };
 
       try {
-        if (spotifyTask) {
+        if (spotifyWindowAction) {
+          const localResult = await controlSpotifyWindow(spotifyWindowAction);
+          if (ctrl.signal.aborted) return;
+          final = describeSpotifyWindowResult(spotifyWindowAction, localResult);
+        } else if (spotifyTask) {
           const response = await fetch("/api/agent-delegate", {
             method: "POST",
             credentials: "same-origin",
