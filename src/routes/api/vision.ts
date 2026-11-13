@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-const MAX_BODY = 3_000_000;
+const MAX_BODY = 2_200_000;
 const VISION_MODEL = "nvidia/nemotron-3.5-super-vl-120b-a12b";
 
 function bad(message: string, status = 400) {
@@ -40,8 +40,10 @@ export const Route = createFileRoute("/api/vision")({
             body: JSON.stringify({
               model: VISION_MODEL,
               stream: false,
-              temperature: 0.2,
-              max_tokens: 220,
+              temperature: 0.6,
+              top_p: 0.95,
+              max_tokens: 320,
+              chat_template_kwargs: { enable_thinking: false },
               messages: [{
                 role: "user",
                 content: [
