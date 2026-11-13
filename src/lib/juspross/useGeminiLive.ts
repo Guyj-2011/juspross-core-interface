@@ -8,7 +8,8 @@ import {
   floatToPcm16,
 } from "./geminiLiveConfig";
 import { useV2 } from "./v2Store";
-import { describeLocalResult, openSpotifyDesktop } from "./localAgent";
+import { controlSpotifyWindow, describeLocalResult, describeSpotifyWindowResult, openSpotifyDesktop } from "./localAgent";
+import { getSpotifyWindowAction } from "./localIntent";
 
 export type LiveStatus = "off" | "connecting" | "live" | "error";
 
@@ -259,25 +260,31 @@ export function useGeminiLive() {
             responses.push({ id: call.id, name: call.name, response: { error: "Nemotron necesita una descripción de la tarea." } });
             continue;
           }
-          const progressId = useV2.getState().addMessage({
-            role: "assistant",
-            text: "Delegando tarea a Nemotron…"
-          });
+          const windowAction = getSpotifyWindowAction(task);
+          if (windowAction) {
+            const localResult = await controlSpotifyWindow(windowAction);
+            const message = describeSpotifyWindowResult(windowAction, localResult);
+            responses.push({ id: call.id, name: call.name, response: { ok: localResult.ok, result: message } });
+            continue;
+          }
           try {
             const response = await fetch("/api/agent-delegate", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ task, context }),
             });
-            const payload = await response.json().catch(() => ({})) as { result?: string; message?: string };
-            if (!response.ok || !payload.result) throw new Error(payload.message ?? `Nemotron respondió ${response.status}.`);
-            useV2.getState().patchMessage(progressId, {
-              text: `Nemotron completó el análisis de la tarea:\n\n${payload.result}`
-            });
-            responses.push({ id: call.id, name: call.name, response: { result: payload.result, status: "analysis_complete", execution: "not_available" } });
+            const payload = await response.json().catch(() => ({})) as { ok?: boolean; result?: string; action?: string; message?: string };
+            if (!response.ok || payload.ok === false) throw new Error(payload.message ?? `No se pudo completar la orden (${response.status}).`);
+            let result = payload.result ?? "";
+            if (payload.action === "open_spotify_desktop") {
+              const localResult = await openSpotifyDesktop();
+              result = describeLocalResult(localResult);
+              if (!localResult.ok) throw new Error(result);
+            }
+            if (!result) throw new Error(payload.message ?? "Nemotron no devolvió un resultado.");
+            responses.push({ id: call.id, name: call.name, response: { ok: true, result } });
           } catch (error) {
-            const message = error instanceof Error ? error.message : "No se pudo contactar con Nemotron.";
-            useV2.getState().patchMessage(progressId, { text: `No se pudo completar la delegación: ${message}`, error: true });
+            const message = error instanceof Error ? error.message : "No se pudo completar la orden.";
             responses.push({ id: call.id, name: call.name, response: { error: message } });
           }
         }
