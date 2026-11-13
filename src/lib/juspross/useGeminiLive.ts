@@ -220,6 +220,34 @@ export function useGeminiLive() {
             responses.push({ id: call.id, name: call.name, response: { ok: result.ok, reason: result.reason, message } });
             continue;
           }
+          if (call.name === "inspect_shared_screen") {
+            try {
+              const desktop = (window as Window & {
+                jusprossDesktop?: { captureScreenFrame?: () => Promise<string> };
+              }).jusprossDesktop;
+              if (!desktop?.captureScreenFrame) {
+                throw new Error("La visión de pantalla solo está disponible en Juspross Desktop. Abre la aplicación de escritorio.");
+              }
+              const image = await desktop.captureScreenFrame();
+              const response = await fetch("/api/vision", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ image }),
+              });
+              const payload = await response.json().catch(() => ({})) as { ok?: boolean; description?: string; message?: string };
+              if (!response.ok || !payload.ok || !payload.description) {
+                throw new Error(payload.message || `El análisis visual falló (HTTP ${response.status}).`);
+              }
+              const description = payload.description;
+              useV2.getState().addMessage({ role: "assistant", text: `Esto es lo que veo en tu pantalla ahora:\\n\\n${description}` });
+              responses.push({ id: call.id, name: call.name, response: { ok: true, description } });
+            } catch (error) {
+              const message = error instanceof Error ? error.message : "No pude analizar la pantalla.";
+              useV2.getState().addMessage({ role: "assistant", text: message, error: true });
+              responses.push({ id: call.id, name: call.name, response: { error: message } });
+            }
+            continue;
+          }
           if (call.name !== "delegate_to_nemotron") {
             responses.push({ id: call.id, name: call.name, response: { error: "Herramienta no disponible." } });
             continue;
