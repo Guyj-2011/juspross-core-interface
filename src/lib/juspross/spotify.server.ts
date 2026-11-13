@@ -158,7 +158,7 @@ export async function spotifyApi(
   request: Request,
   path: string,
   init: RequestInit = {},
-): Promise<{ response: Response; setCookie?: string | undefined; accessToken: string }> {
+): Promise<{ response: Response; setCookie?: string | undefined; accessToken: string; scope: string }> {
   let read = await readSpotifySession(request);
   if (!read.session) throw new Error("Spotify no está conectado. Conecta tu cuenta desde Ajustes.");
   const send = (accessToken: string) => {
@@ -177,5 +177,5 @@ export async function spotifyApi(
     if (!read.session) throw new Error("La conexión de Spotify caducó. Vuelve a conectarla desde Ajustes.");
     response = await send(read.session.access_token);
   }
-  return { response, setCookie: read.setCookie, accessToken: read.session.access_token };
+  return { response, setCookie: read.setCookie, accessToken: read.session.access_token, scope: read.session.scope ?? "" };
 }
