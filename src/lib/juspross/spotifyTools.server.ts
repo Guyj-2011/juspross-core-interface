@@ -176,7 +176,7 @@ export async function executeSpotifyTool(request: Request, name: string, args: R
           playlists?: { items?: { uri?: string }[] };
         };
         const normalize = (value: string) => value.toLocaleLowerCase("es").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
-        const normalizeArtist = (value: string) => normalize(value).replace(/\\s/g, "");
+        const normalizeArtist = (value: string) => normalize(value).replace(/\s/g, "");
         const wantedTitle = normalize(requestedTitle);
         const wantedArtist = normalizeArtist(requestedArtist);
         const tracks = payload.tracks?.items ?? [];
