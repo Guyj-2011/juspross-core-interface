@@ -36,7 +36,7 @@ async function choosePlaybackDevice(accessToken: string): Promise<{ deviceId: st
 
 function playbackError(status: number): string {
   if (status === 401) return "La autorización de Spotify caducó. Vuelve a conectar la cuenta desde Ajustes.";
-  if (status === 403) return "Spotify rechazó el control. La reproducción mediante la API requiere Spotify Premium y un dispositivo compatible.";
+  if (status === 403) return "Spotify rechazó el control mediante la API. Puede deberse a restricciones de la cuenta, del dispositivo o del servicio; no significa necesariamente que la cuenta esté desconectada.";
   if (status === 404) return "Spotify no encontró un dispositivo de reproducción disponible. Abre la aplicación y espera unos segundos.";
   if (status === 429) return "Spotify está limitando temporalmente las solicitudes. Inténtalo de nuevo en un momento.";
   return `Spotify no pudo completar la acción (HTTP ${status}).`;
