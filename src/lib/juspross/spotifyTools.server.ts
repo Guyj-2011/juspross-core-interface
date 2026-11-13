@@ -41,7 +41,7 @@ function playbackError(status: number): string {
 }
 
 /** Spotify puede responder 204 al aceptar una orden sin que eso confirme el estado real del reproductor. */
-async function waitForPlaybackState(accessToken: string, expectedPlaying: boolean): Promise<boolean> {
+async function waitForPlaybackState(accessToken: string, expectedPlaying: boolean, expectedTrackUri?: string, expectedContextUri?: string): Promise<boolean> {
   for (let attempt = 0; attempt < 6; attempt++) {
     const response = await fetch("https://api.spotify.com/v1/me/player", {
       method: "GET",
@@ -51,8 +51,15 @@ async function waitForPlaybackState(accessToken: string, expectedPlaying: boolea
     if (response.status === 204) {
       if (!expectedPlaying) return true;
     } else if (response.ok) {
-      const payload = await response.json().catch(() => ({})) as { is_playing?: boolean };
-      if (payload.is_playing === expectedPlaying) return true;
+      const payload = await response.json().catch(() => ({})) as {
+        is_playing?: boolean;
+        item?: { uri?: string | null };
+        context?: { uri?: string | null };
+      };
+      const playingMatches = payload.is_playing === expectedPlaying;
+      const trackMatches = !expectedTrackUri || payload.item?.uri === expectedTrackUri;
+      const contextMatches = !expectedContextUri || payload.context?.uri === expectedContextUri;
+      if (playingMatches && trackMatches && contextMatches) return true;
     }
     if (attempt < 5) await new Promise((resolve) => setTimeout(resolve, 500));
   }
@@ -97,8 +104,13 @@ export async function executeSpotifyTool(request: Request, name: string, args: R
         if (!query || !kind) return { ok: false, message: "Falta una búsqueda válida y su tipo (canción o playlist)." };
         const search = await spotifyRequest(request, `/search?${new URLSearchParams({ q: query, type: kind, limit: "1" }).toString()}`, "GET");
         if (!search.response.ok) return { ok: false, message: `Spotify no pudo realizar la búsqueda (HTTP ${search.response.status}).`, setCookie: search.setCookie };
-        const payload = await search.response.json().catch(() => ({})) as { tracks?: { items?: { uri?: string }[] }; playlists?: { items?: { uri?: string }[] } };
-        const uri = kind === "track" ? payload.tracks?.items?.[0]?.uri : payload.playlists?.items?.[0]?.uri;
+        const payload = await search.response.json().catch(() => ({})) as {
+          tracks?: { items?: { uri?: string; album?: { uri?: string } }[] };
+          playlists?: { items?: { uri?: string }[] };
+        };
+        const track = kind === "track" ? payload.tracks?.items?.[0] : undefined;
+        const uri = kind === "track" ? track?.uri : payload.playlists?.items?.[0]?.uri;
+        const albumUri = track?.album?.uri;
         if (!uri) return { ok: false, message: "No se encontró un resultado reproducible en Spotify.", setCookie: search.setCookie };
         const { deviceId, response: devicesResponse } = await choosePlaybackDevice(search.accessToken);
         if (!devicesResponse.ok) return { ok: false, message: playbackError(devicesResponse.status), setCookie: search.setCookie };
@@ -106,10 +118,22 @@ export async function executeSpotifyTool(request: Request, name: string, args: R
         const playedResponse = await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${encodeURIComponent(deviceId)}`, {
           method: "PUT", signal: AbortSignal.timeout(15_000),
           headers: { Authorization: `Bearer ${search.accessToken}`, "Content-Type": "application/json" },
-          body: JSON.stringify(uri.startsWith("spotify:track:") ? { uris: [uri] } : { context_uri: uri }),
+          // Para canciones usamos el álbum como contexto y el URI como offset.
+          // Esto evita el fallo reciente en algunos clientes donde /play acepta
+          // { uris: [...] } (204) pero no inicia realmente la pista.
+          body: JSON.stringify(kind === "track" && albumUri
+            ? { context_uri: albumUri, offset: { uri } }
+            : kind === "track"
+              ? { uris: [uri] }
+              : { context_uri: uri }),
         });
         if (playedResponse.ok || playedResponse.status === 204) {
-          const confirmed = await waitForPlaybackState(search.accessToken, true);
+          const confirmed = await waitForPlaybackState(
+            search.accessToken,
+            true,
+            kind === "track" ? uri : undefined,
+            kind === "playlist" ? uri : undefined,
+          );
           return confirmed
             ? { ok: true, message: "Spotify está reproduciendo el contenido solicitado.", setCookie: search.setCookie }
             : { ok: false, message: "Spotify aceptó la orden, pero no pude confirmar que la música haya empezado. Comprueba que la aplicación esté abierta y que haya un dispositivo activo.", setCookie: search.setCookie };
