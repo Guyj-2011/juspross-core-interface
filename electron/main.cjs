@@ -1,4 +1,4 @@
-const { app, BrowserWindow, shell, session, ipcMain } = require("electron");
+const { app, BrowserWindow, shell, session, ipcMain, desktopCapturer, screen } = require("electron");
 const path = require("node:path");
 
 const APP_URL = process.env.JUSPROSS_URL || "https://juspross.lovable.app";
@@ -132,6 +132,26 @@ function createWindow() {
 
   mainWindow.loadURL(APP_URL);
 }
+
+
+ipcMain.handle("screen:capture-frame", async (event) => {
+  const senderUrl = event.senderFrame?.url || "";
+  let trusted = false;
+  try { trusted = new URL(senderUrl).origin === APP_ORIGIN; } catch { trusted = false; }
+  if (!trusted) throw new Error("La captura solo está disponible desde Juspross.");
+  if (!mainWindow || mainWindow.isDestroyed()) throw new Error("La ventana de Juspross no está disponible.");
+
+  const displayId = String(screen.getPrimaryDisplay().id);
+  const sources = await desktopCapturer.getSources({
+    types: ["screen"],
+    thumbnailSize: { width: 1280, height: 720 },
+    fetchWindowIcons: false,
+  });
+  const source = sources.find((item) => item.display_id === displayId) || sources[0];
+  if (!source || source.thumbnail.isEmpty()) throw new Error("No se pudo capturar la pantalla principal.");
+  const jpeg = source.thumbnail.resize({ width: 1280, height: 720, quality: "good" }).toJPEG(62);
+  return `data:image/jpeg;base64,${jpeg.toString("base64")}`;
+});
 
 ipcMain.handle("spotify:connect", () => {
   if (!mainWindow || mainWindow.isDestroyed()) {
