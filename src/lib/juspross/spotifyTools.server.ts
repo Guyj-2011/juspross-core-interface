@@ -131,7 +131,23 @@ export async function executeSpotifyTool(request: Request, name: string, args: R
           headers: { Authorization: `Bearer ${current.accessToken}` },
         });
         if (!changed.ok && changed.status !== 204) return { ok: false, message: playbackError(changed.status), setCookie: current.setCookie };
-        return { ok: true, message: `Volumen de Spotify ajustado a ${nextVolume}%.`, setCookie: current.setCookie };
+        let volumeConfirmed = false;
+        for (let attempt = 0; attempt < 3; attempt++) {
+          const verify = await fetch("https://api.spotify.com/v1/me/player", {
+            method: "GET", signal: AbortSignal.timeout(5_000),
+            headers: { Authorization: `Bearer ${current.accessToken}` },
+          });
+          if (verify.ok) {
+            const state = await verify.json().catch(() => ({})) as { device?: { id?: string; volume_percent?: number | null } };
+            if (state.device?.id === deviceId && state.device.volume_percent === nextVolume) {
+              volumeConfirmed = true;
+              break;
+            }
+          }
+          if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 350));
+        }
+        if (!volumeConfirmed) return { ok: false, message: "Spotify aceptó el cambio, pero no pude confirmar el nuevo volumen del dispositivo.", setCookie: current.setCookie };
+        return { ok: true, message: `Volumen de Spotify confirmado en ${nextVolume}%.`, setCookie: current.setCookie };
       }
       case "spotify_search_and_play": {
         const query = typeof args["query"] === "string" ? args["query"].trim().slice(0, 160) : "";
