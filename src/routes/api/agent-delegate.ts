@@ -93,24 +93,72 @@ export const Route = createFileRoute("/api/agent-delegate")({
         const body = input as Record<string, unknown>;
         const task = typeof body["task"] === "string" ? body["task"].trim() : "";
         const context = typeof body["context"] === "string" ? body["context"].trim() : "";
-        const openOnly = body["intent"] === "open_spotify_desktop";
-        const normalizedTask = task.toLocaleLowerCase("es").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-        const volumeDirection = /\b(sub(e|ir)|aumenta|s[uú]bele)\b.*\bvolumen\b/.test(normalizedTask)
-          ? "up"
-          : /\b(baj(a|ar)|disminuye|reduce)\b.*\bvolumen\b/.test(normalizedTask)
-            ? "down"
-            : null;
-        const genericMusic = !openOnly && !extractRequestedTrackQuery(task) &&
-          /\b(pon|ponme|reproduce|toca)\b/.test(normalizedTask) &&
-          /\b(m[uú]sica|canci[oó]n|tema|rola)\b/.test(normalizedTask);
+        const normalizedTask = task.toLocaleLowerCase("es").normalize("NFD").replace(/[\\u0300-\\u036f]/g, "");
+        const openOnly = body["intent"] === "open_spotify_desktop" ||
+          (/\\b(abre|abrir|inicia|iniciar|lanza|lanzar|arranca|arrancar|open|launch|start)\\b/.test(normalizedTask) &&
+            /\\bspotify\\b/.test(normalizedTask) &&
+            !/\\b(reproduc\\w*|pon|play|pausa\\w*|siguiente|anterior|reanuda\\w*|cancion|tema|playlist|musica|artista)\\b/.test(normalizedTask));
+        const volumeTargetMatch = normalizedTask.match(/\\b(?:al|a|hasta|en)\\s+(?:el\\s+)?(\\d{1,3})\\s*(?:%|por ciento)?\\b/);
+        const mentionsVolume = /\\bvolumen\\b/.test(normalizedTask) ||
+          /\\b(sub(e|ir)|baj(a|ar)|ajusta|ajustar|pon|ponlo|dejalo)\\b.*\\b(?:al|a|hasta|en)\\s+(?:el\\s+)?\\d{1,3}/.test(normalizedTask);
+        const volumeTarget = mentionsVolume && volumeTargetMatch ? Math.max(0, Math.min(100, Number(volumeTargetMatch[1]))) : null;
+        const volumeDirection = mentionsVolume && volumeTarget === null
+          ? /\\b(sub(e|ir)|aumenta|s[uú]bele)\\b/.test(normalizedTask)
+            ? "up"
+            : /\\b(baj(a|ar)|disminuye|reduce)\\b/.test(normalizedTask)
+              ? "down"
+              : null
+          : null;
+        const volumeIntent = !openOnly && mentionsVolume && (volumeTarget !== null || volumeDirection !== null);
+        const otherArtistRequest = /\\b(pon|ponme|reproduce|toca)\\b/.test(normalizedTask) &&
+          /\\b(canci[oó]n|m[uú]sica|tema|rola)\\b/.test(normalizedTask) &&
+          /\\b(otro|otra)\\s+artista\\b/.test(normalizedTask);
+        const requestedTrackQuery = openOnly || volumeIntent || otherArtistRequest ? null : extractRequestedTrackQuery(task);
+        const genericMusic = !openOnly && (otherArtistRequest || (!requestedTrackQuery &&
+          /\\b(pon|ponme|reproduce|toca)\\b/.test(normalizedTask) &&
+          /\\b(m[uú]sica|canci[oó]n|tema|rola)\\b/.test(normalizedTask)));
         const transportTool =
-          /\b(pausa|pausar|deten|detener|para)\b/.test(normalizedTask) ? "spotify_pause" :
-          /\b(ponle play|dale play|play|reanuda|reanudar|continua|continuar)\b/.test(normalizedTask) ? "spotify_resume" :
-          /\b(siguiente|avanza|avanzar|salta a la siguiente)\b/.test(normalizedTask) ? "spotify_next" :
-          /\b(anterior|retrocede|retroceder|vuelve a la anterior)\b/.test(normalizedTask) ? "spotify_previous" : null;
-        const requestedTrackQuery = openOnly || volumeDirection || genericMusic || transportTool ? null : extractRequestedTrackQuery(task);
+          /\\b(pausa|pausar|deten|detener|para)\\b/.test(normalizedTask) ? "spotify_pause" :
+          /\\b(ponle play|dale play|play|reanuda|reanudar|continua|continuar)\\b/.test(normalizedTask) ? "spotify_resume" :
+          /\\b(siguiente|avanza|avanzar|salta a la siguiente)\\b/.test(normalizedTask) ? "spotify_next" :
+          /\\b(anterior|retrocede|retroceder|vuelve a la anterior)\\b/.test(normalizedTask) ? "spotify_previous" : null;
         if (!task || task.length > MAX_TASK) return bad("La tarea debe tener entre 1 y 8000 caracteres.");
         if (context.length > MAX_CONTEXT) return bad("El contexto es demasiado largo.");
+
+        // Las órdenes de Spotify conocidas se ejecutan de forma determinista:
+        // Nemotron no vuelve a interpretar porcentajes, artistas ni controles simples.
+        if (openOnly) {
+          return Response.json({
+            ok: true,
+            delegatedTo: NEMOTRON_MODEL,
+            action: "open_spotify_desktop",
+            result: "Solicitud de apertura enviada al agente local."
+          }, { headers: { "Cache-Control": "no-store" } });
+        }
+        const directTool = volumeIntent ? "spotify_volume"
+          : transportTool
+            ? transportTool
+            : requestedTrackQuery
+              ? "spotify_search_and_play"
+              : genericMusic
+                ? "spotify_play_personalized"
+                : null;
+        if (directTool) {
+          const args: Record<string, unknown> = directTool === "spotify_volume"
+            ? volumeTarget !== null ? { target: volumeTarget } : { direction: volumeDirection }
+            : directTool === "spotify_search_and_play"
+              ? { query: requestedTrackQuery, kind: "track" }
+              : {};
+          const result = await executeSpotifyTool(request, directTool, args);
+          const headers = new Headers({ "Cache-Control": "no-store" });
+          if (result.setCookie) headers.append("Set-Cookie", result.setCookie);
+          return Response.json({
+            ok: result.ok,
+            result: result.ok ? result.message : undefined,
+            message: result.ok ? undefined : result.message,
+            executedTool: directTool,
+          }, { status: result.ok ? 200 : 502, headers });
+        }
 
         const key = process.env["NVIDIA_API_KEY"];
         if (!key) return bad("Falta configurar NVIDIA_API_KEY en los secretos del proyecto.", 500);
