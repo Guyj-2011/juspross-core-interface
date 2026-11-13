@@ -19,11 +19,11 @@ const bad = (message: string, status = 400) => Response.json({ message }, { stat
 
 function extractRequestedTrackQuery(task: string): string | null {
   const clean = task.trim().replace(/[.!?]+$/, "");
-  const match = clean.match(/^(?:(?:oye|por favor|puedes|podrías|podrias|quiero que)\\s+)*(?:pon(?:me)?|reproduce|reprodúceme|reproduceme|toca|escucha|play)\\s+(?:(?:la|el)\\s+(?:canción|cancion|tema|rola)\\s+)?(.+)$/i)
-    ?? clean.match(/^quiero escuchar\\s+(.+)$/i);
+  const match = clean.match(/^(?:(?:oye|por favor|puedes|podrías|podrias|quiero que)\s+)*(?:pon(?:me)?|reproduce|reprodúceme|reproduceme|toca|escucha|play)\s+(?:(?:la|el)\s+(?:canción|cancion|tema|rola)\s+)?(.+)$/i)
+    ?? clean.match(/^quiero escuchar\s+(.+)$/i);
   if (!match?.[1]) return null;
 
-  let target = match[1].replace(/\\s+(?:en spotify|por favor|ahora|cuando puedas)$/i, "").trim();
+  let target = match[1].replace(/\s+(?:en spotify|por favor|ahora|cuando puedas)$/i, "").trim();
   if (!target || target.length > 140) return null;
 
   const separator = target.toLocaleLowerCase("es").lastIndexOf(" de ");
