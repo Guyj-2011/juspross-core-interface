@@ -93,6 +93,7 @@ export const Route = createFileRoute("/api/agent-delegate")({
         const body = input as Record<string, unknown>;
         const task = typeof body["task"] === "string" ? body["task"].trim() : "";
         const context = typeof body["context"] === "string" ? body["context"].trim() : "";
+        const voiceIntent = typeof body["intent"] === "string" ? body["intent"] : "auto";
         const normalizedTask = task.toLocaleLowerCase("es").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
         const openOnly = body["intent"] === "open_spotify_desktop" ||
           (/\b(abre|abrir|inicia|iniciar|lanza|lanzar|arranca|arrancar|open|launch|start)\b/.test(normalizedTask) &&
@@ -113,7 +114,17 @@ export const Route = createFileRoute("/api/agent-delegate")({
         const otherArtistRequest = /\b(pon|ponme|reproduce|toca)\b/.test(normalizedTask) &&
           /\b(canci[oó]n|m[uú]sica|tema|rola)\b/.test(normalizedTask) &&
           /\b(otro|otra)\s+artista\b/.test(normalizedTask);
-        const requestedTrackQuery = openOnly || volumeIntent || otherArtistRequest ? null : extractRequestedTrackQuery(task);
+        let requestedTrackQuery = openOnly || volumeIntent || otherArtistRequest ? null : extractRequestedTrackQuery(task);
+        if (!openOnly && !volumeIntent && voiceIntent === "artist") {
+          const artist = task.trim().replace(/[.!?]+$/, "").replace(/^(?:oye\\s+)?(?:pon(?:me|gas)?|reproduce|toca|quiero escuchar)\\s+/i, "").replace(/^(?:al artista|artista)\\s+/i, "").trim();
+          if (artist && artist.length <= 100) requestedTrackQuery = `artist:${artist}`;
+        }
+        if (!openOnly && !volumeIntent && voiceIntent === "current_artist") {
+          const current = await executeSpotifyTool(request, "spotify_current_artist", {});
+          if (!current.ok) return Response.json({ ok: false, message: current.message }, { status: 502 });
+          const artist = current.message.replace(/^ARTIST:\\s*/i, "").trim();
+          if (artist) requestedTrackQuery = `artist:${artist}`;
+        }
         const genericMusic = !openOnly && (otherArtistRequest || (!requestedTrackQuery &&
           /\b(pon|ponme|reproduce|toca)\b/.test(normalizedTask) &&
           /\b(m[uú]sica|canci[oó]n|tema|rola)\b/.test(normalizedTask)));
