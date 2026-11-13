@@ -12,7 +12,10 @@ export type LocalReason =
   | "code_expired"
   | "pairing_locked"
   | "rate_limited"
-  | "error";
+  | "error"
+  | "window_not_found"
+  | "window_action_failed"
+  | "window_action_completed";
 export type LocalResult = { ok: boolean; reason: LocalReason };
 
 const getToken = () => (typeof window === "undefined" ? null : window.localStorage.getItem(TOKEN_KEY));
@@ -84,6 +87,40 @@ export async function pairLocalAgent(code: string): Promise<LocalResult> {
 export async function unpairLocalAgent(): Promise<void> {
   await call("/v1/unpair", { method: "POST", body: "{}" }).catch(() => undefined);
   window.localStorage.removeItem(TOKEN_KEY);
+}
+
+export type SpotifyWindowAction = "minimize" | "maximize" | "close";
+
+export async function controlSpotifyWindow(action: SpotifyWindowAction): Promise<LocalResult> {
+  const r = await call("/v1/tools/spotify_window", { method: "POST", body: JSON.stringify({ action }) });
+  if (isResult(r)) return r;
+  if (r.status === 401) {
+    window.localStorage.removeItem(TOKEN_KEY);
+    return { ok: false, reason: "not_paired" };
+  }
+  if (r.status === 429) return { ok: false, reason: "rate_limited" };
+  if (r.body["ok"] === true) return { ok: true, reason: "window_action_completed" };
+  const reason = r.body["reason"];
+  return {
+    ok: false,
+    reason: reason === "window_not_found" ? "window_not_found"
+      : reason === "window_action_failed" ? "window_action_failed"
+      : "error",
+  };
+}
+
+export function describeSpotifyWindowResult(action: SpotifyWindowAction, result: LocalResult): string {
+  if (result.ok) {
+    if (action === "minimize") return "He minimizado la ventana de Spotify.";
+    if (action === "maximize") return "He maximizado la ventana de Spotify.";
+    return "He enviado a Spotify la orden normal de cierre.";
+  }
+  if (result.reason === "window_not_found") return "No encontré una ventana abierta de Spotify para realizar esa acción.";
+  if (result.reason === "not_running") return "El agente local de Juspross no está en ejecución en tu PC.";
+  if (result.reason === "not_paired") return "Este equipo no está emparejado con el agente local de Juspross.";
+  if (result.reason === "blocked_by_browser") return "El navegador bloqueó el acceso al agente local. Permite el acceso a la red local para Juspross.";
+  if (result.reason === "window_action_failed") return "Windows no pudo completar el control de la ventana de Spotify.";
+  return "No pude controlar la ventana de Spotify desde Windows.";
 }
 
 export async function openSpotifyDesktop(): Promise<LocalResult> {
