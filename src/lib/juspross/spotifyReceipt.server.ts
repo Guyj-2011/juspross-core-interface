@@ -13,19 +13,35 @@ export async function claimSpotifyCommand(request: Request, requestId: string, c
   const commandHash = await hash(JSON.stringify(commands));
   // Privileged storage only after verifying the encrypted, server-issued Spotify session.
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const inserted = await supabaseAdmin.from("spotify_command_receipts").insert({ session_hash: sessionHash, request_id: requestId, command_hash: commandHash });
-  if (inserted.error && inserted.error.code !== "23505") throw new Error("No pude registrar la orden de forma segura; no ejecuté ninguna acción.");
+  const inserted = await supabaseAdmin
+    .from("spotify_command_receipts")
+    .insert({ session_hash: sessionHash, request_id: requestId, command_hash: commandHash });
+  if (inserted.error && inserted.error.code !== "23505")
+    throw new Error("No pude registrar la orden de forma segura; no ejecuté ninguna acción.");
   if (inserted.error) {
-    const previous = await supabaseAdmin.from("spotify_command_receipts").select("command_hash,outcome").eq("session_hash", sessionHash).eq("request_id", requestId).single();
-    if (previous.error || previous.data.command_hash !== commandHash) throw new Error("Identificador de orden reutilizado para una petición distinta.");
+    const previous = await supabaseAdmin
+      .from("spotify_command_receipts")
+      .select("command_hash,outcome")
+      .eq("session_hash", sessionHash)
+      .eq("request_id", requestId)
+      .single();
+    if (previous.error || previous.data.command_hash !== commandHash)
+      throw new Error("Identificador de orden reutilizado para una petición distinta.");
     return { duplicate: true as const, outcome: previous.data.outcome, setCookie: read.setCookie };
   }
   return {
     duplicate: false as const,
     setCookie: read.setCookie,
     complete: async (outcome: Record<string, unknown>) => {
-      const saved = await supabaseAdmin.from("spotify_command_receipts").update({ outcome }).eq("session_hash", sessionHash).eq("request_id", requestId);
-      if (saved.error) throw new Error("La orden pudo ejecutarse, pero no pude guardar su confirmación. No la repetiré.");
+      const saved = await supabaseAdmin
+        .from("spotify_command_receipts")
+        .update({ outcome })
+        .eq("session_hash", sessionHash)
+        .eq("request_id", requestId);
+      if (saved.error)
+        throw new Error(
+          "La orden pudo ejecutarse, pero no pude guardar su confirmación. No la repetiré.",
+        );
     },
   };
 }

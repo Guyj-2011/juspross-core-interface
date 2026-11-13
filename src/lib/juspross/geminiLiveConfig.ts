@@ -31,7 +31,11 @@ export const LIVE_INPUT_RATE = 16000;
 export const LIVE_OUTPUT_RATE = 24000;
 
 /** Convierte Float32 [-1,1] a PCM16 little-endian, remuestreando por promedio. */
-export function floatToPcm16(input: Float32Array, fromRate: number, toRate = LIVE_INPUT_RATE): Int16Array {
+export function floatToPcm16(
+  input: Float32Array,
+  fromRate: number,
+  toRate = LIVE_INPUT_RATE,
+): Int16Array {
   const ratio = fromRate / toRate;
   const len = Math.floor(input.length / ratio);
   const out = new Int16Array(len);
@@ -48,7 +52,8 @@ export function floatToPcm16(input: Float32Array, fromRate: number, toRate = LIV
 
 export function bytesToBase64(bytes: Uint8Array): string {
   let s = "";
-  for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  for (let i = 0; i < bytes.length; i += 0x8000)
+    s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
   return btoa(s);
 }
 

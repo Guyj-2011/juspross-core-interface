@@ -8,7 +8,12 @@ import {
   floatToPcm16,
 } from "./geminiLiveConfig";
 import { useV2 } from "./v2Store";
-import { controlSpotifyWindow, describeLocalResult, describeSpotifyWindowResult, openSpotifyDesktop } from "./localAgent";
+import {
+  controlSpotifyWindow,
+  describeLocalResult,
+  describeSpotifyWindowResult,
+  openSpotifyDesktop,
+} from "./localAgent";
 import { getSpotifyWindowAction, isOpenSpotifyIntent, requestsSpotifyOpen } from "./localIntent";
 
 export type LiveStatus = "off" | "connecting" | "live" | "error";
@@ -21,8 +26,10 @@ type ServerMsg = {
     outputTranscription?: { text?: string };
     interrupted?: boolean;
     turnComplete?: boolean;
+    groundingMetadata?: { groundingChunks?: { web?: { uri?: string; title?: string } }[] };
   };
   goAway?: unknown;
+  toolCallCancellation?: { ids?: string[] };
   toolCall?: { functionCalls?: { id: string; name: string; args?: Record<string, unknown> }[] };
   error?: { message?: string };
 };
@@ -45,9 +52,10 @@ export function useGeminiLive() {
   useEffect(() => {
     if (typeof BroadcastChannel === "undefined") return;
     const channel = new BroadcastChannel("juspross-live-microphone");
-    const tabId = typeof crypto.randomUUID === "function"
-      ? crypto.randomUUID()
-      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const tabId =
+      typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     tabIdRef.current = tabId;
     channelRef.current = channel;
     channel.onmessage = (event: MessageEvent<{ type?: string; tabId?: string }>) => {
@@ -83,6 +91,16 @@ export function useGeminiLive() {
     let userText = "";
     let botText = "";
     const delegatedTurnResults = new Map<string, Record<string, unknown>>();
+    const completedCalls = new Map<
+      string,
+      { id: string; name: string; response: Record<string, unknown> }
+    >();
+    const cancelledCalls = new Set<string>();
+    const toolControllers = new Map<string, AbortController>();
+    const sessionId = crypto.randomUUID();
+    const sourceLinks = new Map<string, string>();
+    let turn = 0;
+    let toolQueue = Promise.resolve();
     let resumeAudio: (() => void) | null = null;
 
     const flushPlayback = () => {
@@ -98,6 +116,7 @@ export function useGeminiLive() {
     const cleanup = () => {
       if (closed) return;
       closed = true;
+      for (const controller of toolControllers.values()) controller.abort();
       cancelAnimationFrame(raf);
       flushPlayback();
       processor?.disconnect();
@@ -147,7 +166,10 @@ export function useGeminiLive() {
       stream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 },
       });
-      if (closed) return;
+      if (closed) {
+        stream.getTracks().forEach((t) => t.stop());
+        return;
+      }
       await initialAudioResume;
 
       const res = await fetch("/api/gemini-live-token", { method: "POST" });
@@ -186,9 +208,10 @@ export function useGeminiLive() {
       };
 
       const startMic = () => {
-        const src = inCtx!.createMediaStreamSource(stream!);
-        processor = inCtx!.createScriptProcessor(4096, 1, 1);
-        const rate = inCtx!.sampleRate;
+        if (!inCtx || !stream || closed) return;
+        const src = inCtx.createMediaStreamSource(stream);
+        processor = inCtx.createScriptProcessor(4096, 1, 1);
+        const rate = inCtx.sampleRate;
         processor.onaudioprocess = (ev) => {
           if (socket.readyState !== 1) return;
           const pcm = floatToPcm16(ev.inputBuffer.getChannelData(0), rate);
@@ -205,30 +228,46 @@ export function useGeminiLive() {
         };
         src.connect(processor);
         // Salida silenciada: ScriptProcessor necesita estar conectado para procesar.
-        const mute = inCtx!.createGain();
+        const mute = inCtx.createGain();
         mute.gain.value = 0;
-        processor.connect(mute).connect(inCtx!.destination);
+        processor.connect(mute).connect(inCtx.destination);
       };
 
-      const handleToolCalls = async (calls: NonNullable<ServerMsg["toolCall"]>["functionCalls"]) => {
+      const handleToolCalls = async (
+        calls: NonNullable<ServerMsg["toolCall"]>["functionCalls"],
+      ) => {
         if (!calls?.length) return;
         const responses: { id: string; name: string; response: Record<string, unknown> }[] = [];
         for (const call of calls) {
+          if (closed || cancelledCalls.has(call.id)) continue;
+          const completed = completedCalls.get(call.id);
+          if (completed) {
+            responses.push(completed);
+            continue;
+          }
           if (call.name === "open_spotify_desktop") {
             // Se ejecuta en el navegador contra el agente local; al modelo solo llega el resultado.
             const result = await openSpotifyDesktop();
             const message = describeLocalResult(result);
             useV2.getState().addMessage({ role: "assistant", text: message, error: !result.ok });
-            responses.push({ id: call.id, name: call.name, response: { ok: result.ok, reason: result.reason, message } });
+            responses.push({
+              id: call.id,
+              name: call.name,
+              response: { ok: result.ok, reason: result.reason, message },
+            });
             continue;
           }
           if (call.name === "inspect_shared_screen") {
             try {
-              const desktop = (window as Window & {
-                jusprossDesktop?: { captureScreenFrame?: () => Promise<string> };
-              }).jusprossDesktop;
+              const desktop = (
+                window as Window & {
+                  jusprossDesktop?: { captureScreenFrame?: () => Promise<string> };
+                }
+              ).jusprossDesktop;
               if (!desktop?.captureScreenFrame) {
-                throw new Error("La visión de pantalla solo está disponible en Juspross Desktop. Abre la aplicación de escritorio.");
+                throw new Error(
+                  "La visión de pantalla solo está disponible en Juspross Desktop. Abre la aplicación de escritorio.",
+                );
               }
               const image = await desktop.captureScreenFrame();
               const response = await fetch("/api/vision", {
@@ -236,24 +275,39 @@ export function useGeminiLive() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ image }),
               });
-              const payload = await response.json().catch(() => ({})) as { ok?: boolean; description?: string; message?: string };
+              const payload = (await response.json().catch(() => ({}))) as {
+                ok?: boolean;
+                description?: string;
+                message?: string;
+              };
               if (!response.ok || !payload.ok || !payload.description) {
-                throw new Error(payload.message || `El análisis visual falló (HTTP ${response.status}).`);
+                throw new Error(
+                  payload.message || `El análisis visual falló (HTTP ${response.status}).`,
+                );
               }
               const description = payload.description;
-              useV2.getState().addMessage({ role: "assistant", text: `Esto es lo que veo en tu pantalla ahora:\\n\\n${description}` });
+              useV2
+                .getState()
+                .addMessage({
+                  role: "assistant",
+                  text: `Esto es lo que veo en tu pantalla ahora:\\n\\n${description}`,
+                });
               responses.push({ id: call.id, name: call.name, response: { ok: true, description } });
             } catch (error) {
-              const message = error instanceof Error ? error.message : "No pude analizar la pantalla.";
+              const message =
+                error instanceof Error ? error.message : "No pude analizar la pantalla.";
               useV2.getState().addMessage({ role: "assistant", text: message, error: true });
               const toolResult = { error: message };
-            delegatedTurnResults.set(taskKey, toolResult);
-            responses.push({ id: call.id, name: call.name, response: toolResult });
+              responses.push({ id: call.id, name: call.name, response: toolResult });
             }
             continue;
           }
           if (call.name !== "delegate_to_nemotron" && call.name !== "spotify_voice_command") {
-            responses.push({ id: call.id, name: call.name, response: { error: "Herramienta no disponible." } });
+            responses.push({
+              id: call.id,
+              name: call.name,
+              response: { error: "Herramienta no disponible." },
+            });
             continue;
           }
           const args = call.args ?? {};
@@ -266,10 +320,17 @@ export function useGeminiLive() {
             continue;
           }
           if (!task) {
-            responses.push({ id: call.id, name: call.name, response: { error: "Nemotron necesita una descripción de la tarea." } });
+            responses.push({
+              id: call.id,
+              name: call.name,
+              response: { error: "Nemotron necesita una descripción de la tarea." },
+            });
             continue;
           }
-          const windowAction = getSpotifyWindowAction(task, call.name === "spotify_voice_command" ? `Spotify ${context}` : context);
+          const windowAction = getSpotifyWindowAction(
+            task,
+            call.name === "spotify_voice_command" ? `Spotify ${context}` : context,
+          );
           if (windowAction) {
             const localResult = await controlSpotifyWindow(windowAction);
             const message = describeSpotifyWindowResult(windowAction, localResult);
@@ -285,13 +346,29 @@ export function useGeminiLive() {
               openedPrefix = describeLocalResult(localResult);
               if (!localResult.ok) throw new Error(openedPrefix);
             }
+            const controller = new AbortController();
+            toolControllers.set(call.id, controller);
             const response = await fetch("/api/agent-delegate", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ task, context, intent: call.name === "spotify_voice_command" ? args["intent"] : undefined }),
+              signal: controller.signal,
+              body: JSON.stringify({
+                task,
+                context,
+                requestId: `${sessionId}_${turn}_${taskKey.length}_${calls.indexOf(call)}`,
+                intent: call.name === "spotify_voice_command" ? args["intent"] : undefined,
+              }),
             });
-            const payload = await response.json().catch(() => ({})) as { ok?: boolean; result?: string; action?: string; message?: string };
-            if (!response.ok || payload.ok === false) throw new Error(payload.message ?? `No se pudo completar la orden (${response.status}).`);
+            const payload = (await response.json().catch(() => ({}))) as {
+              ok?: boolean;
+              result?: string;
+              action?: string;
+              message?: string;
+            };
+            if (!response.ok || payload.ok === false)
+              throw new Error(
+                payload.message ?? `No se pudo completar la orden (${response.status}).`,
+              );
             let result = payload.result ?? "";
             if (payload.action === "open_spotify_desktop") {
               const localResult = await openSpotifyDesktop();
@@ -304,14 +381,20 @@ export function useGeminiLive() {
             delegatedTurnResults.set(taskKey, toolResult);
             responses.push({ id: call.id, name: call.name, response: toolResult });
           } catch (error) {
-            const message = error instanceof Error ? error.message : "No se pudo completar la orden.";
+            const message =
+              error instanceof Error ? error.message : "No se pudo completar la orden.";
             const toolResult = { error: message };
             delegatedTurnResults.set(taskKey, toolResult);
             responses.push({ id: call.id, name: call.name, response: toolResult });
           }
         }
-        if (!closed && socket.readyState === WebSocket.OPEN) {
-          socket.send(JSON.stringify({ toolResponse: { functionResponses: responses } }));
+        for (const response of responses) {
+          completedCalls.set(response.id, response);
+          toolControllers.delete(response.id);
+        }
+        const activeResponses = responses.filter((r) => !cancelledCalls.has(r.id));
+        if (!closed && activeResponses.length && socket.readyState === WebSocket.OPEN) {
+          socket.send(JSON.stringify({ toolResponse: { functionResponses: activeResponses } }));
         }
       };
 
@@ -325,30 +408,43 @@ export function useGeminiLive() {
         }
         const st = useV2.getState();
         if (msg.error) return fail(msg.error.message ?? "Gemini Live devolvió un error.");
+        if (closed) return;
+        if (msg.toolCallCancellation?.ids) {
+          for (const id of msg.toolCallCancellation.ids) {
+            cancelledCalls.add(id);
+            toolControllers.get(id)?.abort();
+          }
+        }
         if (msg.toolCall?.functionCalls?.length) {
-          void handleToolCalls(msg.toolCall.functionCalls);
-          return;
+          const calls = msg.toolCall.functionCalls;
+          toolQueue = toolQueue.then(() => handleToolCalls(calls)).catch(() => {});
         }
         if (msg.setupComplete) {
           startMic();
           setStatus("live");
           setNotice(
-            "Gemini Live activo. Habla con naturalidad; puedes interrumpir en cualquier momento.",
+            "Gemini Live activo. Puedes interrumpir. Si la música activa el micrófono, usa auriculares o desconecta la voz con este botón.",
           );
           st.setState("idle");
           return;
         }
         const sc = msg.serverContent;
         if (!sc) return;
-        if (sc.inputTranscription?.text) {
-          userText += sc.inputTranscription.text;
-          if (!userId) userId = st.addMessage({ role: "user", text: userText.trim() });
-          else st.patchMessage(userId, { text: userText.trim() });
+        if (sc.inputTranscription?.text) userText += sc.inputTranscription.text;
+        for (const chunk of sc.groundingMetadata?.groundingChunks ?? []) {
+          const uri = chunk.web?.uri;
+          if (uri && /^https:\/\//.test(uri)) sourceLinks.set(uri, chunk.web?.title ?? uri);
         }
+        const withSources = () =>
+          botText.trim() +
+          (sourceLinks.size
+            ? `\n\nFuentes · consulta ${new Date().toISOString().slice(0, 10)}:\n` +
+              Array.from(sourceLinks, ([uri, title]) => `${title}: ${uri}`).join("\n")
+            : "");
         if (sc.outputTranscription?.text) {
           botText += sc.outputTranscription.text;
-          if (!botId) botId = st.addMessage({ role: "assistant", text: botText.trim() });
-          else st.patchMessage(botId, { text: botText.trim() });
+          if (!botId) botId = st.addMessage({ role: "assistant", text: withSources() });
+          else st.patchMessage(botId, { text: withSources() });
         }
         for (const part of sc.modelTurn?.parts ?? []) {
           const data = part.inlineData?.data;
@@ -373,7 +469,18 @@ export function useGeminiLive() {
           st.setState("idle");
         }
         if (sc.turnComplete || sc.interrupted) {
-          delegatedTurnResults.clear();
+          if (userText.trim())
+            userId = st.addMessage({
+              role: "user",
+              text: `Transcripción de voz: ${userText.trim()}`,
+            });
+          if (botId && sourceLinks.size) st.patchMessage(botId, { text: withSources() });
+          sourceLinks.clear();
+          // Retain call-id receipts across interruption; a later legitimate turn gets new request IDs.
+          if (sc.turnComplete) {
+            delegatedTurnResults.clear();
+            turn++;
+          }
           userId = botId = null;
           userText = botText = "";
           if (!sc.interrupted && outCtx) {

@@ -10,9 +10,21 @@ export const Route = createFileRoute("/api/spotify")({
     handlers: {
       GET: async ({ request }) => {
         let read;
-        try { read = await readSpotifySession(request); }
-        catch (error) {
-          return Response.json({ configured: spotifyConfigured(), connected: true, temporarilyUnavailable: true, message: error instanceof Error ? error.message : "Spotify no está disponible temporalmente." }, { status: 503, headers: { "Cache-Control": "no-store" } });
+        try {
+          read = await readSpotifySession(request);
+        } catch (error) {
+          return Response.json(
+            {
+              configured: spotifyConfigured(),
+              connected: true,
+              temporarilyUnavailable: true,
+              message:
+                error instanceof Error
+                  ? error.message
+                  : "Spotify no está disponible temporalmente.",
+            },
+            { status: 503, headers: { "Cache-Control": "no-store" } },
+          );
         }
         return Response.json(
           { configured: spotifyConfigured(), connected: Boolean(read.session) },
