@@ -3,20 +3,33 @@ import { AiError, AiUnreachable, chat, chatGemma, chatNemotron, simulate, type A
 import { speak } from "./useSpeech";
 import { unlockSpeechAudio } from "./speechAudio";
 import { useV2 } from "./v2Store";
-import { getSpotifyWindowAction, isOpenSpotifyIntent, isSpotifyRequest, requestsSpotifyOpen } from "./localIntent";
-import { controlSpotifyWindow, describeLocalResult, describeSpotifyWindowResult, openSpotifyDesktop } from "./localAgent";
+import {
+  getSpotifyWindowAction,
+  isOpenSpotifyIntent,
+  isSpotifyRequest,
+  requestsSpotifyOpen,
+} from "./localIntent";
+import {
+  controlSpotifyWindow,
+  describeLocalResult,
+  describeSpotifyWindowResult,
+  openSpotifyDesktop,
+} from "./localAgent";
 
 /** Conversación del lado 2.0: chat normal según el proveedor elegido; órdenes Spotify → Nemotron. */
 export function useV2Chat() {
   const abortRef = useRef<AbortController | null>(null);
   const stopSpeakRef = useRef<(() => void) | null>(null);
 
-  useEffect(() => () => {
-    abortRef.current?.abort();
-    stopSpeakRef.current?.();
-    useV2.getState().setAmplitude(0);
-    useV2.getState().setState("idle");
-  }, []);
+  useEffect(
+    () => () => {
+      abortRef.current?.abort();
+      stopSpeakRef.current?.();
+      useV2.getState().setAmplitude(0);
+      useV2.getState().setState("idle");
+    },
+    [],
+  );
 
   const stop = useCallback(() => {
     abortRef.current?.abort();
@@ -42,10 +55,17 @@ export function useV2Chat() {
         .filter((m) => !m.error && m.text)
         .slice(-12)
         .map((m) => ({ role: m.role, content: m.text }));
-      const context = history.slice(-8).map((message) => `${message.role}: ${message.content}`).join("\n").slice(-12_000);
-      history.push({ role: "user", content: visualContext.trim()
-        ? `${text}\n\nCONTEXTO VISUAL RECIENTE DE LA PANTALLA COMPARTIDA (puede haber cambiado):\n${visualContext.trim().slice(0, 1800)}`
-        : text });
+      const context = history
+        .slice(-8)
+        .map((message) => `${message.role}: ${message.content}`)
+        .join("\n")
+        .slice(-12_000);
+      history.push({
+        role: "user",
+        content: visualContext.trim()
+          ? `${text}\n\nCONTEXTO VISUAL RECIENTE DE LA PANTALLA COMPARTIDA (puede haber cambiado):\n${visualContext.trim().slice(0, 1800)}`
+          : text,
+      });
 
       s.addMessage({ role: "user", text });
       const id = s.addMessage({ role: "assistant", text: "" });
@@ -81,17 +101,25 @@ export function useV2Chat() {
             method: "POST",
             credentials: "same-origin",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ task: text, context, intent: isOpenSpotifyIntent(text) ? "open_spotify_desktop" : undefined }),
+            body: JSON.stringify({
+              task: text,
+              context,
+              requestId: crypto.randomUUID(),
+              intent: isOpenSpotifyIntent(text) ? "open_spotify_desktop" : undefined,
+            }),
             signal: ctrl.signal,
           });
-          const payload = await response.json().catch(() => ({})) as {
+          const payload = (await response.json().catch(() => ({}))) as {
             ok?: boolean;
             result?: string;
             action?: string;
             message?: string;
           };
           if (!response.ok || !payload.ok) {
-            throw new Error(payload.message || `No se pudo completar la orden de Spotify (HTTP ${response.status}).`);
+            throw new Error(
+              payload.message ||
+                `No se pudo completar la orden de Spotify (HTTP ${response.status}).`,
+            );
           }
 
           if (payload.action === "open_spotify_desktop") {
@@ -124,14 +152,16 @@ export function useV2Chat() {
                       onToken,
                     });
             useV2.getState().setAutoConnect(true);
-            useV2.getState().setLink(
-              "online",
-              s.aiProvider === "nemotron"
-                ? "Nemotron (NVIDIA) respondió correctamente."
-                : s.aiProvider === "gemma"
-                  ? "Gemma conectado. La reconexión automática quedó activada."
-                  : "Qwen conectado. La reconexión automática quedó activada.",
-            );
+            useV2
+              .getState()
+              .setLink(
+                "online",
+                s.aiProvider === "nemotron"
+                  ? "Nemotron (NVIDIA) respondió correctamente."
+                  : s.aiProvider === "gemma"
+                    ? "Gemma conectado. La reconexión automática quedó activada."
+                    : "Qwen conectado. La reconexión automática quedó activada.",
+              );
           } catch (e) {
             if ((e as Error).name === "AbortError") throw e;
             if (e instanceof AiUnreachable) {
@@ -167,7 +197,12 @@ export function useV2Chat() {
         }
       } catch (e) {
         if ((e as Error).name === "AbortError") return;
-        const msg = e instanceof AiError ? e.message : e instanceof Error ? e.message : "No se pudo completar la respuesta.";
+        const msg =
+          e instanceof AiError
+            ? e.message
+            : e instanceof Error
+              ? e.message
+              : "No se pudo completar la respuesta.";
         const st = useV2.getState();
         st.patchMessage(id, { text: msg, error: true });
         if (!spotifyTask) st.setLink("offline", msg);

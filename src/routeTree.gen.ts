@@ -16,9 +16,9 @@ import { Route as ApiGeminiLiveTokenRouteImport } from './routes/api/gemini-live
 import { Route as ApiNemotronRouteImport } from './routes/api/nemotron'
 import { Route as ApiSpeechRouteImport } from './routes/api/speech'
 import { Route as ApiSpotifyRouteImport } from './routes/api/spotify'
+import { Route as ApiVisionRouteImport } from './routes/api/vision'
 import { Route as ApiSpotifyCallbackRouteImport } from './routes/api/spotify.callback'
 import { Route as ApiSpotifyConnectRouteImport } from './routes/api/spotify.connect'
-import { Route as ApiVisionRouteImport } from './routes/api/vision'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -50,14 +50,14 @@ const ApiSpeechRoute = ApiSpeechRouteImport.update({
   path: '/api/speech',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ApiVisionRoute = ApiVisionRouteImport.update({
-  id: '/api/vision',
-  path: '/api/vision',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const ApiSpotifyRoute = ApiSpotifyRouteImport.update({
   id: '/api/spotify',
   path: '/api/spotify',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiVisionRoute = ApiVisionRouteImport.update({
+  id: '/api/vision',
+  path: '/api/vision',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ApiSpotifyCallbackRoute = ApiSpotifyCallbackRouteImport.update({
@@ -78,8 +78,8 @@ export interface FileRoutesByFullPath {
   '/api/gemini-live-token': typeof ApiGeminiLiveTokenRoute
   '/api/nemotron': typeof ApiNemotronRoute
   '/api/speech': typeof ApiSpeechRoute
-  '/api/vision': typeof ApiVisionRoute
   '/api/spotify': typeof ApiSpotifyRouteWithChildren
+  '/api/vision': typeof ApiVisionRoute
   '/api/spotify/callback': typeof ApiSpotifyCallbackRoute
   '/api/spotify/connect': typeof ApiSpotifyConnectRoute
 }
@@ -90,8 +90,8 @@ export interface FileRoutesByTo {
   '/api/gemini-live-token': typeof ApiGeminiLiveTokenRoute
   '/api/nemotron': typeof ApiNemotronRoute
   '/api/speech': typeof ApiSpeechRoute
-  '/api/vision': typeof ApiVisionRoute
   '/api/spotify': typeof ApiSpotifyRouteWithChildren
+  '/api/vision': typeof ApiVisionRoute
   '/api/spotify/callback': typeof ApiSpotifyCallbackRoute
   '/api/spotify/connect': typeof ApiSpotifyConnectRoute
 }
@@ -103,8 +103,8 @@ export interface FileRoutesById {
   '/api/gemini-live-token': typeof ApiGeminiLiveTokenRoute
   '/api/nemotron': typeof ApiNemotronRoute
   '/api/speech': typeof ApiSpeechRoute
-  '/api/vision': typeof ApiVisionRoute
   '/api/spotify': typeof ApiSpotifyRouteWithChildren
+  '/api/vision': typeof ApiVisionRoute
   '/api/spotify/callback': typeof ApiSpotifyCallbackRoute
   '/api/spotify/connect': typeof ApiSpotifyConnectRoute
 }
@@ -117,8 +117,8 @@ export interface FileRouteTypes {
     | '/api/gemini-live-token'
     | '/api/nemotron'
     | '/api/speech'
-    | '/api/vision'
     | '/api/spotify'
+    | '/api/vision'
     | '/api/spotify/callback'
     | '/api/spotify/connect'
   fileRoutesByTo: FileRoutesByTo
@@ -129,8 +129,8 @@ export interface FileRouteTypes {
     | '/api/gemini-live-token'
     | '/api/nemotron'
     | '/api/speech'
-    | '/api/vision'
     | '/api/spotify'
+    | '/api/vision'
     | '/api/spotify/callback'
     | '/api/spotify/connect'
   id:
@@ -141,8 +141,8 @@ export interface FileRouteTypes {
     | '/api/gemini-live-token'
     | '/api/nemotron'
     | '/api/speech'
-    | '/api/vision'
     | '/api/spotify'
+    | '/api/vision'
     | '/api/spotify/callback'
     | '/api/spotify/connect'
   fileRoutesById: FileRoutesById
@@ -154,8 +154,8 @@ export interface RootRouteChildren {
   ApiGeminiLiveTokenRoute: typeof ApiGeminiLiveTokenRoute
   ApiNemotronRoute: typeof ApiNemotronRoute
   ApiSpeechRoute: typeof ApiSpeechRoute
-  ApiVisionRoute: typeof ApiVisionRoute
   ApiSpotifyRoute: typeof ApiSpotifyRouteWithChildren
+  ApiVisionRoute: typeof ApiVisionRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -202,18 +202,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiSpeechRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/vision': {
-      id: '/api/vision'
-      path: '/api/vision'
-      fullPath: '/api/vision'
-      preLoaderRoute: typeof ApiVisionRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/api/spotify': {
       id: '/api/spotify'
       path: '/api/spotify'
       fullPath: '/api/spotify'
       preLoaderRoute: typeof ApiSpotifyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/vision': {
+      id: '/api/vision'
+      path: '/api/vision'
+      fullPath: '/api/vision'
+      preLoaderRoute: typeof ApiVisionRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/spotify/callback': {
@@ -254,8 +254,8 @@ const rootRouteChildren: RootRouteChildren = {
   ApiGeminiLiveTokenRoute: ApiGeminiLiveTokenRoute,
   ApiNemotronRoute: ApiNemotronRoute,
   ApiSpeechRoute: ApiSpeechRoute,
-  ApiVisionRoute: ApiVisionRoute,
   ApiSpotifyRoute: ApiSpotifyRouteWithChildren,
+  ApiVisionRoute: ApiVisionRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
