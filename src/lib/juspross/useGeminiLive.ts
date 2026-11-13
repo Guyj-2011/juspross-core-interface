@@ -298,7 +298,9 @@ export function useGeminiLive() {
             responses.push({ id: call.id, name: call.name, response: toolResult });
           } catch (error) {
             const message = error instanceof Error ? error.message : "No se pudo completar la orden.";
-            responses.push({ id: call.id, name: call.name, response: { error: message } });
+            const toolResult = { error: message };
+            delegatedTurnResults.set(taskKey, toolResult);
+            responses.push({ id: call.id, name: call.name, response: toolResult });
           }
         }
         if (!closed && socket.readyState === WebSocket.OPEN) {
