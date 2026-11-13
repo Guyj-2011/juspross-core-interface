@@ -25,7 +25,7 @@ export const Route = createFileRoute("/api/vision")({
         try { input = JSON.parse(raw); } catch { return bad("JSON inválido."); }
         if (!input || typeof input !== "object" || Array.isArray(input)) return bad("Petición inválida.");
         const image = (input as Record<string, unknown>)["image"];
-        if (typeof image !== "string" || !/^data:image\\/jpeg;base64,[A-Za-z0-9+/]+=*$/.test(image)) {
+        if (typeof image !== "string" || !/^data:image\/jpeg;base64,[A-Za-z0-9+/]+=*$/.test(image)) {
           return bad("No se recibió un fotograma JPEG válido.");
         }
 
@@ -66,7 +66,7 @@ export const Route = createFileRoute("/api/vision")({
           const description = typeof rawContent === "string"
             ? rawContent.trim()
             : Array.isArray(rawContent)
-              ? rawContent.map((part) => part.text ?? "").join("\\n").trim()
+              ? rawContent.map((part) => part.text ?? "").join("\n").trim()
               : "";
           if (!description) return bad("El modelo visual no devolvió una descripción.", 502);
           return Response.json(
