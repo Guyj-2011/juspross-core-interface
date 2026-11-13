@@ -29,9 +29,9 @@ function extractRequestedTrackQuery(task: string): string | null {
     .trim();
   if (!target || target.length > 140) return null;
 
-  const artistOnly = target.match(/^(?:(?:la )?m[uú]sica|canciones|temas|rolas|discograf[ií]a|algo)\\s+(?:de|del)\\s+(?:artista\\s+)?(.+)$/i)
-    ?? target.match(/^artista\\s+(.+)$/i)
-    ?? target.match(/^del\\s+artista\\s+(.+)$/i);
+  const artistOnly = target.match(/^(?:(?:la )?m[uú]sica|canciones|temas|rolas|discograf[ií]a|algo)\s+(?:de|del)\s+(?:artista\s+)?(.+)$/i)
+    ?? target.match(/^artista\s+(.+)$/i)
+    ?? target.match(/^del\s+artista\s+(.+)$/i);
   if (artistOnly?.[1]?.trim()) return `artist:${artistOnly[1].trim()}`;
 
   const separator = target.toLocaleLowerCase("es").lastIndexOf(" de ");
