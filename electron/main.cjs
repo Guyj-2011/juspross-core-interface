@@ -144,12 +144,16 @@ ipcMain.handle("screen:capture-frame", async (event) => {
   const displayId = String(screen.getPrimaryDisplay().id);
   const sources = await desktopCapturer.getSources({
     types: ["screen"],
-    thumbnailSize: { width: 1280, height: 720 },
+    thumbnailSize: { width: 960, height: 540 },
     fetchWindowIcons: false,
   });
-  const source = sources.find((item) => item.display_id === displayId) || sources[0];
-  if (!source || source.thumbnail.isEmpty()) throw new Error("No se pudo capturar la pantalla principal.");
-  const jpeg = source.thumbnail.resize({ width: 1280, height: 720, quality: "good" }).toJPEG(62);
+  if (!sources.length) throw new Error("Windows no devolvió ninguna pantalla para capturar.");
+  const source = sources.find((item) => String(item.display_id) === displayId) || sources[0];
+  if (!source || source.thumbnail.isEmpty()) {
+    throw new Error("Windows devolvió la pantalla, pero la imagen está vacía. Comprueba que el escritorio esté desbloqueado.");
+  }
+  const jpeg = source.thumbnail.resize({ width: 960, height: 540, quality: "good" }).toJPEG(48);
+  if (!jpeg.length) throw new Error("La captura de pantalla quedó vacía.");
   return `data:image/jpeg;base64,${jpeg.toString("base64")}`;
 });
 
