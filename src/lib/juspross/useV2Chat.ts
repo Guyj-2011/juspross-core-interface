@@ -28,7 +28,7 @@ export function useV2Chat() {
   }, []);
 
   const send = useCallback(
-    async (raw: string, viaVoice = false) => {
+    async (raw: string, viaVoice = false, visualContext = "") => {
       const text = raw.trim();
       if (!text) return;
       // Desbloquea Web Audio durante el clic de enviar, antes de esperar al modelo.
@@ -43,7 +43,9 @@ export function useV2Chat() {
         .slice(-12)
         .map((m) => ({ role: m.role, content: m.text }));
       const context = history.slice(-8).map((message) => `${message.role}: ${message.content}`).join("\n").slice(-12_000);
-      history.push({ role: "user", content: text });
+      history.push({ role: "user", content: visualContext.trim()
+        ? `${text}\\n\\nCONTEXTO VISUAL RECIENTE DE LA PANTALLA COMPARTIDA (puede haber cambiado):\\n${visualContext.trim().slice(0, 1800)}`
+        : text });
 
       s.addMessage({ role: "user", text });
       const id = s.addMessage({ role: "assistant", text: "" });
