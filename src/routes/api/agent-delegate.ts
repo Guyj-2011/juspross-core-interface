@@ -73,6 +73,7 @@ export const Route = createFileRoute("/api/agent-delegate")({
         ];
 
         let refreshedCookie: string | undefined;
+        let executedTool = false;
         try {
           for (let round = 0; round < 5; round++) {
             const upstream = await fetch(NEMOTRON_URL, {
@@ -104,6 +105,7 @@ export const Route = createFileRoute("/api/agent-delegate")({
             if (!assistant) return bad("Nemotron no devolvió una respuesta utilizable.", 502);
             const calls = assistant.tool_calls ?? [];
             if (calls.length === 0) {
+              if (!executedTool) return bad("Nemotron no ejecutó ninguna herramienta de Spotify, así que no puedo confirmar que haya realizado la acción.", 502);
               const result = assistant.content?.trim();
               if (!result) return bad("Nemotron no devolvió una respuesta utilizable.", 502);
               const headers = new Headers({ "Cache-Control": "no-store" });
@@ -149,6 +151,8 @@ export const Route = createFileRoute("/api/agent-delegate")({
                 continue;
               }
 
+              executedTool = true;
+
               // El servidor no puede lanzar procesos en el PC del usuario. Devuelve la acción
               // solicitada por Nemotron para que el navegador la ejecute mediante el agente local.
               if (name === "open_spotify_desktop") {
@@ -164,6 +168,11 @@ export const Route = createFileRoute("/api/agent-delegate")({
 
               const result = await executeSpotifyTool(request, name, args);
               if (result.setCookie) refreshedCookie = result.setCookie;
+              if (!result.ok) {
+                const headers = new Headers({ "Cache-Control": "no-store" });
+                if (refreshedCookie) headers.append("Set-Cookie", refreshedCookie);
+                return Response.json({ ok: false, message: result.message }, { status: 502, headers });
+              }
               messages.push({
                 role: "tool",
                 tool_call_id: call.id,
