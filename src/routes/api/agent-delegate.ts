@@ -19,6 +19,8 @@ const bad = (message: string, status = 400) => Response.json({ message }, { stat
 
 function extractRequestedTrackQuery(task: string): string | null {
   const clean = task.trim().replace(/[.!?]+$/, "");
+  // No conviertas peticiones genéricas en el título literal "una canción".
+  if (/^(?:(?:oye|por favor)\\s+)*(?:pon(?:me|gas)?|reproduce|toca|play)\\s+(?:(?:la|una|un)\\s+)?(?:m[uú]sica|canci[oó]n|tema|rola)(?:\\s+(?:por favor|ahora))?$/i.test(clean)) return null;
   const artistAlias = (value: string) => {
     const name = value.trim().replace(/^[\"'“”‘’]+|[\"'“”‘’]+$/g, "").trim();
     // El reconocimiento de voz suele transcribir VIUS como "Views".
@@ -91,7 +93,16 @@ export const Route = createFileRoute("/api/agent-delegate")({
         const task = typeof body["task"] === "string" ? body["task"].trim() : "";
         const context = typeof body["context"] === "string" ? body["context"].trim() : "";
         const openOnly = body["intent"] === "open_spotify_desktop";
-        const requestedTrackQuery = openOnly ? null : extractRequestedTrackQuery(task);
+        const normalizedTask = task.toLocaleLowerCase("es").normalize("NFD").replace(/[\\u0300-\\u036f]/g, "");
+        const volumeDirection = /\\b(sub(e|ir)|aumenta|s[uú]bele)\\b.*\\bvolumen\\b/.test(normalizedTask)
+          ? "up"
+          : /\\b(baj(a|ar)|disminuye|reduce)\\b.*\\bvolumen\\b/.test(normalizedTask)
+            ? "down"
+            : null;
+        const genericMusic = !openOnly && !extractRequestedTrackQuery(task) &&
+          /\\b(pon|ponme|reproduce|toca|play|ponle play)\\b/.test(normalizedTask) &&
+          /\\b(m[uú]sica|canci[oó]n|tema|rola)\\b/.test(normalizedTask);
+        const requestedTrackQuery = openOnly || volumeDirection || genericMusic ? null : extractRequestedTrackQuery(task);
         if (!task || task.length > MAX_TASK) return bad("La tarea debe tener entre 1 y 8000 caracteres.");
         if (context.length > MAX_CONTEXT) return bad("El contexto es demasiado largo.");
 
@@ -134,9 +145,13 @@ export const Route = createFileRoute("/api/agent-delegate")({
                 tools: TOOLS,
                 tool_choice: openOnly
                   ? { type: "function", function: { name: "open_spotify_desktop" } }
-                  : requestedTrackQuery
-                    ? { type: "function", function: { name: "spotify_search_and_play" } }
-                    : "auto",
+                  : volumeDirection
+                    ? { type: "function", function: { name: "spotify_volume" } }
+                    : genericMusic
+                      ? { type: "function", function: { name: "spotify_play_personalized" } }
+                      : requestedTrackQuery
+                        ? { type: "function", function: { name: "spotify_search_and_play" } }
+                        : "auto",
                 messages
               })
             });
@@ -216,6 +231,9 @@ export const Route = createFileRoute("/api/agent-delegate")({
 
               if (name === "spotify_search_and_play" && requestedTrackQuery) {
                 args = { ...args, query: requestedTrackQuery, kind: "track" };
+              }
+              if (name === "spotify_volume" && volumeDirection) {
+                args = { direction: volumeDirection };
               }
               const result = await executeSpotifyTool(request, name, args);
               if (result.setCookie) refreshedCookie = result.setCookie;
