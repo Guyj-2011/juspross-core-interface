@@ -148,7 +148,9 @@ export const Route = createFileRoute("/api/agent-delegate")({
             ? volumeTarget !== null ? { target: volumeTarget } : { direction: volumeDirection }
             : directTool === "spotify_search_and_play"
               ? { query: requestedTrackQuery, kind: "track" }
-              : {};
+              : directTool === "spotify_play_personalized"
+                ? { different_artist: otherArtistRequest }
+                : {};
           const result = await executeSpotifyTool(request, directTool, args);
           const headers = new Headers({ "Cache-Control": "no-store" });
           if (result.setCookie) headers.append("Set-Cookie", result.setCookie);
