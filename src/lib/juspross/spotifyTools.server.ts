@@ -109,9 +109,10 @@ export async function executeSpotifyTool(request: Request, name: string, args: R
           playlists?: { items?: { uri?: string }[] };
         };
         const normalize = (value: string) => value.toLocaleLowerCase("es").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
-        const trackQuery = query.match(/^track:(.*?)\s+artist:(.+)$/i);
-        const requestedTitle = trackQuery?.[1]?.trim() ?? query.replace(/^track:/i, "").trim();
-        const requestedArtist = trackQuery?.[2]?.trim() ?? "";
+        const trackQuery = query.match(/^track:(.*?)\\s+artist:(.+)$/i);
+        const artistQuery = query.match(/^artist:(.+)$/i);
+        const requestedTitle = trackQuery?.[1]?.trim() ?? (artistQuery ? "" : query.replace(/^track:/i, "").trim());
+        const requestedArtist = trackQuery?.[2]?.trim() ?? artistQuery?.[1]?.trim() ?? "";
         const tracks = payload.tracks?.items ?? [];
         const wantedTitle = normalize(requestedTitle);
         const wantedArtist = normalize(requestedArtist);
@@ -126,7 +127,7 @@ export async function executeSpotifyTool(request: Request, name: string, args: R
           return { item, score, titleExact, artistExact };
         }).sort((a, b) => b.score - a.score);
         const bestTrack = rankedTracks[0];
-        const track = kind === "track" && bestTrack?.titleExact && bestTrack.artistExact
+        const track = kind === "track" && bestTrack?.artistExact && (artistQuery ? true : bestTrack.titleExact)
           ? bestTrack.item
           : undefined;
         const uri = kind === "track" ? track?.uri : payload.playlists?.items?.[0]?.uri;
@@ -154,8 +155,11 @@ export async function executeSpotifyTool(request: Request, name: string, args: R
             kind === "track" ? uri : undefined,
             kind === "playlist" ? uri : undefined,
           );
+          const playedLabel = artistQuery
+            ? `Spotify está reproduciendo “${track?.name ?? "una canción"}” de ${(track?.artists ?? []).map((artist) => artist.name).filter(Boolean).join(", ") || requestedArtist}.`
+            : "Spotify está reproduciendo la canción solicitada.";
           return confirmed
-            ? { ok: true, message: "Spotify está reproduciendo el contenido solicitado.", setCookie: search.setCookie }
+            ? { ok: true, message: playedLabel, setCookie: search.setCookie }
             : { ok: false, message: "Spotify aceptó la orden, pero no pude confirmar que la música haya empezado. Comprueba que la aplicación esté abierta y que haya un dispositivo activo.", setCookie: search.setCookie };
         }
         return { ok: false, message: playbackError(playedResponse.status), setCookie: search.setCookie };
