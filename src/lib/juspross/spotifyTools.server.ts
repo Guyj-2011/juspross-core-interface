@@ -168,7 +168,7 @@ export async function executeSpotifyTool(request: Request, name: string, args: R
         const requestedArtist = trackQuery?.[2]?.trim() ?? artistQuery?.[1]?.trim() ?? "";
         // Spotify interpreta peor los operadores de búsqueda con ciertos signos (AC/DC).
         // Buscamos con texto normal y validamos título/artista sobre los resultados.
-        const searchTerm = artistQuery ? requestedArtist : [requestedTitle, requestedArtist].filter(Boolean).join(" ");
+        const searchTerm = (artistQuery ? requestedArtist : [requestedTitle, requestedArtist].filter(Boolean).join(" ")).replace(/[\/&]/g, " ").replace(/\s+/g, " ").trim();
         const search = await spotifyRequest(request, `/search?${new URLSearchParams({ q: searchTerm, type: kind, limit: "20" }).toString()}`, "GET");
         if (!search.response.ok) return { ok: false, message: `Spotify no pudo realizar la búsqueda (HTTP ${search.response.status}).`, setCookie: search.setCookie };
         const payload = await search.response.json().catch(() => ({})) as {
