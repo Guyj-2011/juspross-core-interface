@@ -41,7 +41,7 @@ export const Route = createFileRoute("/api/gemini-live-token")({
                     voiceConfig: { prebuiltVoiceConfig: { voiceName: GEMINI_LIVE_VOICE } },
                   },
                 },
-                systemInstruction: { parts: [{ text: GEMINI_LIVE_SYSTEM, LIVE_ACTIVITY_CONFIG }] },
+                systemInstruction: { parts: [{ text: GEMINI_LIVE_SYSTEM }] },
                 inputAudioTranscription: {},
                 outputAudioTranscription: {},
                 realtimeInputConfig: LIVE_ACTIVITY_CONFIG,
