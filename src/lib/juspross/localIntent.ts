@@ -7,6 +7,18 @@ function normalize(text: string): string {
   return text.toLocaleLowerCase("es").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }
 
+export type SpotifyWindowAction = "minimize" | "maximize" | "close";
+
+/** Detecta órdenes explícitas para controlar la ventana de Spotify en Windows. */
+export function getSpotifyWindowAction(text: string): SpotifyWindowAction | null {
+  const value = normalize(text);
+  if (!/\bspotify\b/.test(value)) return null;
+  if (/\b(minimiza\w*|oculta\w*|reduce la ventana)\b/.test(value)) return "minimize";
+  if (/\b(maximiza\w*|pantalla completa|a pantalla completa|agranda la ventana)\b/.test(value)) return "maximize";
+  if (/\b(cierra\w*|cerrar|salir de|sal del)\b/.test(value)) return "close";
+  return null;
+}
+
 /** Solo detecta abrir la aplicación; no confunde «abre Spotify y reproduce…» con abrir solamente. */
 export function isOpenSpotifyIntent(text: string): boolean {
   const value = normalize(text);
@@ -18,6 +30,7 @@ export function isOpenSpotifyIntent(text: string): boolean {
 /** Envía a Nemotron tanto la apertura de Spotify como sus órdenes de reproducción. */
 export function isSpotifyRequest(text: string): boolean {
   const value = normalize(text);
+  if (getSpotifyWindowAction(text)) return true;
   if (isOpenSpotifyIntent(text)) return true;
   if (SHORT_PLAYBACK.test(value)) return true;
   const action = /\b(reproduc\w*|pon|ponme|poner|play|pausa\w*|para|deten|siguiente|anterior|avanza|retrocede|salta|reanuda\w*|sube|baja|aumenta|disminuye|abre|abrir|inicia|iniciar|lanza|lanzar|arranca|arrancar|ejecuta|open|launch|start|que suena|que esta sonando)\b/.test(value);
