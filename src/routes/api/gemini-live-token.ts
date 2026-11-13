@@ -49,6 +49,10 @@ export const Route = createFileRoute("/api/gemini-live-token")({
                     name: "open_spotify_desktop",
                     description: "Abre la aplicación de escritorio de Spotify en el PC Windows del usuario mediante el agente local de Juspross. Úsala solo cuando pida abrir/iniciar la app. No reproduce ni controla música. Comunica exactamente el resultado devuelto.",
                     parameters: { type: "OBJECT", properties: {} }
+                  }, {
+                    name: "inspect_shared_screen",
+                    description: "Analiza el fotograma actual de toda la pantalla principal del usuario. Úsala cuando el usuario pregunte qué aparece en pantalla, qué canción o aplicación se ve, o pida que mires su escritorio. Solo úsala como respuesta a una petición explícita del usuario.",
+                    parameters: { type: "OBJECT", properties: {} }
                   }]
                 }]
               },
