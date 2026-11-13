@@ -17,6 +17,25 @@ const TOOLS = [OPEN_SPOTIFY_TOOL, ...SPOTIFY_TOOL_DEFINITIONS];
 const ALLOWED_TOOLS: ReadonlySet<string> = new Set(TOOLS.map((tool) => tool.function.name));
 const bad = (message: string, status = 400) => Response.json({ message }, { status });
 
+function extractRequestedTrackQuery(task: string): string | null {
+  const clean = task.trim().replace(/[.!?]+$/, "");
+  const match = clean.match(/^(?:(?:oye|por favor|puedes|podrías|podrias|quiero que)\\s+)*(?:pon(?:me)?|reproduce|reprodúceme|reproduceme|toca|escucha|play)\\s+(?:(?:la|el)\\s+(?:canción|cancion|tema|rola)\\s+)?(.+)$/i)
+    ?? clean.match(/^quiero escuchar\\s+(.+)$/i);
+  if (!match?.[1]) return null;
+
+  let target = match[1].replace(/\\s+(?:en spotify|por favor|ahora|cuando puedas)$/i, "").trim();
+  if (!target || target.length > 140) return null;
+
+  const separator = target.toLocaleLowerCase("es").lastIndexOf(" de ");
+  if (separator > 0) {
+    const title = target.slice(0, separator).trim();
+    const artist = target.slice(separator + 4).trim();
+    if (title && artist) return `track:${title} artist:${artist}`;
+  }
+  return `track:${target}`;
+}
+
+
 type ToolCall = {
   id?: string;
   type?: string;
@@ -46,6 +65,7 @@ export const Route = createFileRoute("/api/agent-delegate")({
         const task = typeof body["task"] === "string" ? body["task"].trim() : "";
         const context = typeof body["context"] === "string" ? body["context"].trim() : "";
         const openOnly = body["intent"] === "open_spotify_desktop";
+        const requestedTrackQuery = openOnly ? null : extractRequestedTrackQuery(task);
         if (!task || task.length > MAX_TASK) return bad("La tarea debe tener entre 1 y 8000 caracteres.");
         if (context.length > MAX_CONTEXT) return bad("El contexto es demasiado largo.");
 
@@ -60,7 +80,7 @@ export const Route = createFileRoute("/api/agent-delegate")({
               "Eres Nemotron, el agente ejecutor de Juspross. Gemini Live o el chat principal te delega tareas.",
               "Cuando el usuario pida abrir o iniciar la aplicación de Spotify en su PC, debes llamar a open_spotify_desktop. Esta herramienta solicita al navegador que use el agente local emparejado para abrir la aplicación; no afirmes que se abrió hasta recibir el resultado local.",
               "No uses open_spotify_desktop para órdenes de reproducción.",
-              "Para reproducir una canción o artista usa spotify_search_and_play con kind=track; para una playlist usa kind=playlist.",
+              "Para reproducir una canción, copia literalmente el título y el artista mencionados en la petición actual al argumento query de spotify_search_and_play. No uses el contexto ni la canción que ya suena para completar o sustituir el pedido. Si no identificas claramente el título, pregunta antes de ejecutar. Para canciones usa kind=track; para playlists usa kind=playlist.",
               "Para pausar, reanudar, avanzar o retroceder usa la herramienta correspondiente.",
               "No afirmes que una acción de Spotify se realizó hasta recibir una respuesta exitosa de su herramienta.",
               "Si Spotify no está conectado, indica que el usuario debe conectarlo desde Ajustes. Si no hay dispositivo activo, indícale que abra Spotify en un dispositivo.",
@@ -88,7 +108,9 @@ export const Route = createFileRoute("/api/agent-delegate")({
                 tools: TOOLS,
                 tool_choice: openOnly
                   ? { type: "function", function: { name: "open_spotify_desktop" } }
-                  : "auto",
+                  : requestedTrackQuery
+                    ? { type: "function", function: { name: "spotify_search_and_play" } }
+                    : "auto",
                 messages
               })
             });
@@ -166,6 +188,9 @@ export const Route = createFileRoute("/api/agent-delegate")({
                 }, { headers });
               }
 
+              if (name === "spotify_search_and_play" && requestedTrackQuery) {
+                args = { ...args, query: requestedTrackQuery, kind: "track" };
+              }
               const result = await executeSpotifyTool(request, name, args);
               if (result.setCookie) refreshedCookie = result.setCookie;
               if (!result.ok) {
