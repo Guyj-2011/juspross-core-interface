@@ -44,7 +44,7 @@ function playbackError(status: number): string {
 
 /** Spotify puede responder 204 al aceptar una orden sin que eso confirme el estado real del reproductor. */
 async function waitForPlaybackState(accessToken: string, expectedPlaying: boolean, expectedTrackUri?: string, expectedContextUri?: string): Promise<boolean> {
-  for (let attempt = 0; attempt < 6; attempt++) {
+  for (let attempt = 0; attempt < 10; attempt++) {
     const response = await fetch("https://api.spotify.com/v1/me/player", {
       method: "GET",
       signal: AbortSignal.timeout(5_000),
@@ -63,7 +63,7 @@ async function waitForPlaybackState(accessToken: string, expectedPlaying: boolea
       const contextMatches = !expectedContextUri || payload.context?.uri === expectedContextUri;
       if (playingMatches && trackMatches && contextMatches) return true;
     }
-    if (attempt < 5) await new Promise((resolve) => setTimeout(resolve, 500));
+    if (attempt < 9) await new Promise((resolve) => setTimeout(resolve, 700));
   }
   return false;
 }
@@ -211,7 +211,11 @@ export async function executeSpotifyTool(request: Request, name: string, args: R
             : "Spotify está reproduciendo la canción solicitada.";
           return confirmed
             ? { ok: true, message: playedLabel, setCookie: search.setCookie }
-            : { ok: false, message: "Spotify aceptó la orden, pero no pude confirmar que la música haya empezado. Comprueba que la aplicación esté abierta y que haya un dispositivo activo.", setCookie: search.setCookie };
+            : {
+                ok: true,
+                message: `Spotify aceptó la orden de reproducción de ${artistQuery ? `“${track?.name ?? "la canción elegida"}” de ${requestedArtist}` : `“${requestedTitle}”`}, pero su estado tardó en actualizarse. No repetiré la orden para evitar reiniciar o saltar canciones.`,
+                setCookie: search.setCookie,
+              };
         }
         return { ok: false, message: playbackError(playedResponse.status), setCookie: search.setCookie };
       }
