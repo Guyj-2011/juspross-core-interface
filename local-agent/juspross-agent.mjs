@@ -10,7 +10,7 @@ import { spawn, execFile } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 export const PORT = 47821;
-export const VERSION = "1.0.0";
+export const VERSION = "1.1.0";
 export const PUBLISHED_ORIGIN = "https://juspross.lovable.app";
 export const PREVIEW_ORIGIN = "https://id-preview--87c1cdc9-dc13-4e05-88dd-b9b811c3a25d.lovable.app";
 const MAX_BODY = 4096;
@@ -68,6 +68,51 @@ exit 2
 }
 
 /** Acción fija: iniciar Spotify y ajustar su ventana a un tamaño compacto. */
+/** Ejecuta únicamente controles de ventana permitidos; cerrar es un cierre normal, nunca un kill forzado. */
+export function controlSpotifyWindow(action) {
+  const scripts = {
+    minimize: String.raw`
+Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public static class JusprossWindowControl {
+  [DllImport("user32.dll")] public static extern bool ShowWindowAsync(IntPtr hWnd, int nCmdShow);
+}
+'@
+$window = Get-Process -Name Spotify -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1
+if (-not $window) { exit 2 }
+if ([JusprossWindowControl]::ShowWindowAsync($window.MainWindowHandle, 6)) { exit 0 }
+exit 3
+`,
+    maximize: String.raw`
+Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+public static class JusprossWindowControl {
+  [DllImport("user32.dll")] public static extern bool ShowWindowAsync(IntPtr hWnd, int nCmdShow);
+}
+'@
+$window = Get-Process -Name Spotify -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1
+if (-not $window) { exit 2 }
+if ([JusprossWindowControl]::ShowWindowAsync($window.MainWindowHandle, 3)) { exit 0 }
+exit 3
+`,
+    close: String.raw`
+$window = Get-Process -Name Spotify -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 } | Select-Object -First 1
+if (-not $window) { exit 2 }
+if ($window.CloseMainWindow()) { exit 0 }
+exit 3
+`,
+  };
+  const script = scripts[action];
+  if (!script) return Promise.resolve("invalid_action");
+  return new Promise((resolve) => {
+    execFile("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], {
+      shell: false, windowsHide: true, timeout: 8_000,
+    }, (error) => resolve(error ? (error.code === 2 ? "window_not_found" : "window_action_failed") : "window_action_completed"));
+  });
+}
+
 export function launchSpotifyWindows() {
   const candidates = [
     process.env.APPDATA && path.join(process.env.APPDATA, "Spotify", "Spotify.exe"),
@@ -234,6 +279,18 @@ export function createAgent(opts = {}) {
       launch();
       log("Se pidió a Windows abrir Spotify.");
       return send(res, 200, { ok: true, reason: "launch_requested" }, origin);
+    }
+    if (url.pathname === "/v1/tools/spotify_window") {
+      const action = typeof body.action === "string" ? body.action : "";
+      if (!["minimize", "maximize", "close"].includes(action))
+        return send(res, 400, { ok: false, reason: "invalid_action" }, origin);
+      const result = await controlSpotifyWindow(action);
+      if (result === "window_not_found")
+        return send(res, 200, { ok: false, reason: "window_not_found" }, origin);
+      if (result !== "window_action_completed")
+        return send(res, 200, { ok: false, reason: "window_action_failed" }, origin);
+      log(`Se ejecutó el control de ventana Spotify: ${action}.`);
+      return send(res, 200, { ok: true, reason: "window_action_completed", action }, origin);
     }
     return send(res, 404, { ok: false, reason: "not_found" }, origin);
   }
