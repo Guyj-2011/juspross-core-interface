@@ -116,7 +116,7 @@ export const Route = createFileRoute("/api/agent-delegate")({
           /\b(otro|otra)\s+artista\b/.test(normalizedTask);
         let requestedTrackQuery = openOnly || volumeIntent || otherArtistRequest ? null : extractRequestedTrackQuery(task);
         if (!openOnly && !volumeIntent && voiceIntent === "artist") {
-          const artist = task.trim().replace(/[.!?]+$/, "").replace(/^(?:oye\\s+)?(?:pon(?:me|gas)?|reproduce|toca|quiero escuchar)\\s+/i, "").replace(/^(?:al artista|artista)\\s+/i, "").trim();
+          const artist = task.trim().replace(/[.!?]+$/, "").replace(/^(?:oye\s+)?(?:pon(?:me|gas)?|reproduce|toca|quiero escuchar)\s+/i, "").replace(/^(?:al artista|artista)\\s+/i, "").trim();
           if (artist && artist.length <= 100) requestedTrackQuery = `artist:${artist}`;
         }
         if (!openOnly && !volumeIntent && voiceIntent === "current_artist") {
