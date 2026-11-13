@@ -28,7 +28,7 @@ export function parseSpotifyCommands(task: string, intent = "auto"): SpotifyComm
   const clean = task
     .trim()
     .replace(/[.!?]+$/, "")
-    .replace(/^(?:oye\s+|por favor\s+|puedes\s+|podr[ií]as\s+)+/i, "")
+    .replace(/^(?:(?:oye|ahora|por favor|puedes|podr[ií]as)\s+)+/i, "")
     .replace(/^(?:abre|inicia|lanza)\s+spotify\s+y\s+/i, "");
   // Split only before explicit command verbs, not titles such as "X y Y".
   const parts = clean.split(
@@ -50,7 +50,7 @@ export function parseSpotifyCommands(task: string, intent = "auto"): SpotifyComm
         "spotify_pause",
       ],
       [
-        /^(?:siguiente|cambia a la siguiente|cambia la cancion a la siguiente|cambia la pista a la siguiente|pasa a la siguiente|salta a la siguiente|avanza)(?: cancion| pista)?$/,
+        /^(?:siguiente|cambiala|cambia la cancion|cambia de cancion|cambia a la siguiente|cambia la cancion a la siguiente|cambia la pista a la siguiente|pasa a la siguiente|salta a la siguiente|avanza)(?: cancion| pista)?$/,
         "spotify_next",
       ],
       [/^(?:anterior|vuelve a la anterior|cambia a la anterior|cambia la cancion a la anterior|pon la cancion anterior|retrocede)(?: cancion| pista)?$/, "spotify_previous"],
