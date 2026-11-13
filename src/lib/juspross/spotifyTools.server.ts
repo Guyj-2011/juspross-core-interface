@@ -1,6 +1,8 @@
 import { spotifyApi } from "@/lib/juspross/spotify.server";
 
 export const SPOTIFY_TOOL_DEFINITIONS = [
+  { type: "function", function: { name: "spotify_play_personalized", description: "Reproduce una canción que encaje con los gustos reales del usuario, usando sus canciones más escuchadas de Spotify. Úsala cuando diga simplemente pon una canción, pon música o elige algo que me guste sin nombrar artista ni título.", parameters: { type: "object", properties: {}, additionalProperties: false } } },
+  { type: "function", function: { name: "spotify_volume", description: "Sube o baja el volumen del dispositivo Spotify actual en pasos de 10 puntos porcentuales. Usa direction=up o direction=down.", parameters: { type: "object", properties: { direction: { type: "string", enum: ["up", "down"] } }, required: ["direction"], additionalProperties: false } } },
   { type: "function", function: { name: "spotify_search_and_play", description: "Busca la canción o playlist que el usuario pidió explícitamente. Para canciones, respeta exactamente el título y el artista indicados; no sustituyas por una canción parecida, la que ya suena ni un resultado de conversaciones anteriores. Si no hay coincidencia clara, informa que no la encontraste en vez de reproducir otra.", parameters: { type: "object", properties: { query: { type: "string", description: "Nombre de canción, artista o playlist." }, kind: { type: "string", enum: ["track", "playlist"] } }, required: ["query", "kind"], additionalProperties: false } } },
   { type: "function", function: { name: "spotify_resume", description: "Reanuda la reproducción de Spotify en el dispositivo disponible.", parameters: { type: "object", properties: {}, additionalProperties: false } } },
   { type: "function", function: { name: "spotify_pause", description: "Pausa la reproducción actual de Spotify.", parameters: { type: "object", properties: {}, additionalProperties: false } } },
@@ -98,6 +100,39 @@ async function playbackAction(request: Request, path: string, method: string, bo
 export async function executeSpotifyTool(request: Request, name: string, args: Record<string, unknown>): Promise<ToolResult> {
   try {
     switch (name) {
+      case "spotify_play_personalized": {
+        const top = await spotifyRequest(request, "/me/top/tracks?time_range=medium_term&limit=20", "GET");
+        if (!top.response.ok) {
+          if (top.response.status === 403) return { ok: false, message: "Spotify no permite leer tus canciones más escuchadas. Desconecta y vuelve a conectar Spotify para autorizar el permiso de gustos musicales.", setCookie: top.setCookie };
+          return { ok: false, message: `No pude consultar tus gustos musicales en Spotify (HTTP ${top.response.status}).`, setCookie: top.setCookie };
+        }
+        const data = await top.response.json().catch(() => ({})) as { items?: { name?: string; artists?: { name?: string }[] }[] };
+        const favorites = (data.items ?? []).filter((item) => item.name && item.artists?.[0]?.name);
+        if (!favorites.length) return { ok: false, message: "Todavía no tengo suficientes datos de tus canciones más escuchadas. Pídeme un artista o una canción concreta, o escucha música un tiempo y vuelve a intentarlo.", setCookie: top.setCookie };
+        const chosen = favorites[Math.floor(Math.random() * Math.min(favorites.length, 10))]!;
+        const artist = chosen.artists![0]!.name!;
+        const played = await executeSpotifyTool(request, "spotify_search_and_play", { query: `track:${chosen.name} artist:${artist}`, kind: "track" });
+        return { ...played, message: played.ok ? `Elegí una canción de tus favoritas: ${chosen.name} de ${artist}. ${played.message}` : played.message, setCookie: played.setCookie ?? top.setCookie };
+      }
+      case "spotify_volume": {
+        const direction = args["direction"] === "up" ? "up" : args["direction"] === "down" ? "down" : "";
+        if (!direction) return { ok: false, message: "Indica si quieres subir o bajar el volumen." };
+        const current = await spotifyRequest(request, "/me/player", "GET");
+        if (current.response.status === 204) return { ok: false, message: "No hay ningún dispositivo Spotify activo para ajustar el volumen.", setCookie: current.setCookie };
+        if (!current.response.ok) return { ok: false, message: playbackError(current.response.status), setCookie: current.setCookie };
+        const player = await current.response.json().catch(() => ({})) as { device?: { id?: string; volume_percent?: number | null } };
+        const deviceId = player.device?.id;
+        const volume = player.device?.volume_percent;
+        if (!deviceId || typeof volume !== "number") return { ok: false, message: "Spotify no informó el volumen del dispositivo actual. Puede que el dispositivo no permita ajustarlo desde la API.", setCookie: current.setCookie };
+        const nextVolume = Math.max(0, Math.min(100, volume + (direction === "up" ? 10 : -10)));
+        if (nextVolume === volume) return { ok: true, message: direction === "up" ? "El volumen ya está al máximo." : "El volumen ya está al mínimo.", setCookie: current.setCookie };
+        const changed = await fetch(`https://api.spotify.com/v1/me/player/volume?volume_percent=${nextVolume}&device_id=${encodeURIComponent(deviceId)}`, {
+          method: "PUT", signal: AbortSignal.timeout(12_000),
+          headers: { Authorization: `Bearer ${current.accessToken}` },
+        });
+        if (!changed.ok && changed.status !== 204) return { ok: false, message: playbackError(changed.status), setCookie: current.setCookie };
+        return { ok: true, message: `Volumen de Spotify ajustado a ${nextVolume}%.`, setCookie: current.setCookie };
+      }
       case "spotify_search_and_play": {
         const query = typeof args["query"] === "string" ? args["query"].trim().slice(0, 160) : "";
         const kind = args["kind"] === "playlist" ? "playlist" : args["kind"] === "track" ? "track" : "";
