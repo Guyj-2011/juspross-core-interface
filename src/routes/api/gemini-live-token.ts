@@ -35,6 +35,10 @@ export const Route = createFileRoute("/api/gemini-live-token")({
                 outputAudioTranscription: {},
                 tools: [{
                   functionDeclarations: [{
+                    name: "spotify_voice_command",
+                    description: "Herramienta directa para todas las órdenes habituales de Spotify. Úsala siempre que el usuario pida reproducir, buscar, artista, canción, play/pausa, siguiente/anterior, volumen, canción actual o controlar la ventana. No delegues estas órdenes a Nemotron.",
+                    parameters: { type: "OBJECT", properties: { task: { type: "STRING", description: "Orden exacta del usuario." }, intent: { type: "STRING", enum: ["auto", "artist", "generic", "current_artist"], description: "artist si nombra solo un artista; generic si pide canción sin especificar; current_artist si pide otra del artista actual; auto en los demás casos." }, context: { type: "STRING", description: "Contexto reciente de la conversación." } }, required: ["task", "intent"] }
+                  }, {
                     name: "delegate_to_nemotron",
                     description: "Delegar a Nemotron tareas de razonamiento y acciones de Spotify. Úsala cuando el usuario pida reproducir música, pausar, reanudar o cambiar canciones, así como para tareas complejas. Nemotron puede ejecutar las herramientas de Spotify autorizadas y devolver el resultado real.",
                     parameters: {
