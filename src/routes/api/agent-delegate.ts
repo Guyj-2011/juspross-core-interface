@@ -19,12 +19,12 @@ const bad = (message: string, status = 400) => Response.json({ message }, { stat
 
 function extractRequestedTrackQuery(task: string): string | null {
   const clean = task.trim().replace(/[.!?]+$/, "");
-  const match = clean.match(/^(?:(?:oye|por favor|puedes|podrías|podrias|quiero que)\\s+)*(?:pon(?:me|gas)?|reproduce|reproduzcas|reprodúceme|reproduceme|toca|escucha|play)\\s+(?:(?:(?:la|el)\\s+)?(?:canción|cancion|tema|rola)\\s+)?(.+)$/i)
-    ?? clean.match(/^quiero escuchar\\s+(.+)$/i);
+  const match = clean.match(/^(?:(?:oye|por favor|puedes|podrías|podrias|quiero que)\s+)*(?:pon(?:me|gas)?|reproduce|reproduzcas|reprodúceme|reproduceme|toca|escucha|play)\s+(?:(?:(?:la|el)\s+)?(?:canción|cancion|tema|rola)\s+)?(.+)$/i)
+    ?? clean.match(/^quiero escuchar\s+(.+)$/i);
   if (!match?.[1]) return null;
 
   const target = match[1]
-    .replace(/\\s+(?:en spotify|por favor|ahora|cuando puedas)$/i, "")
+    .replace(/\s+(?:en spotify|por favor|ahora|cuando puedas)$/i, "")
     .replace(/^["'“”‘’]+|["'“”‘’]+$/g, "")
     .trim();
   if (!target || target.length > 140) return null;
