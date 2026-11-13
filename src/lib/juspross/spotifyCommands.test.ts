@@ -30,6 +30,12 @@ describe("parseSpotifyCommands", () => {
     ]);
   });
 
+  test("routes a same-artist follow-up to a dedicated playback action", () => {
+    expect(parseSpotifyCommands("pon otra canción de este mismo artista", "current_artist")).toEqual([
+      { name: "spotify_play_current_artist", args: {} },
+    ]);
+  });
+
   test("does not interpret a song title as a transport command", () => {
     expect(parseSpotifyCommands("pon la canción The Next Episode")).toEqual([
       { name: "spotify_search_and_play", args: { query: "track:The Next Episode", kind: "track" } },
