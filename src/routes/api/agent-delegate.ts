@@ -28,28 +28,28 @@ function extractRequestedTrackQuery(task: string): string | null {
   // Detecta primero peticiones de música por artista para que "música"
   // nunca se convierta accidentalmente en el título de una canción.
   const artistPatterns = [
-    /^(?:(?:oye|por favor|puedes|podrías|podrias|quiero que)\\s+)*(?:pon(?:me|gas)?|reproduce|reproduzcas|toca|play)\\s+(?:(?:la|el)\\s+)?(?:m[uú]sica|canciones|temas|rolas)\\s+(?:de|del)\\s+(?:el\\s+)?(?:artista\\s+)?(.+?)(?:\\s+en spotify)?$/i,
-    /^(?:(?:oye|por favor|puedes|podrías|podrias)\\s+)*(?:pon|ponme|pongas|reproduce|toca)\\s+(?:algo|canciones|temas)\\s+de\\s+(.+?)(?:\\s+en spotify)?$/i,
-    /^quiero escuchar (?:m[uú]sica|canciones|temas) de (.+?)(?:\\s+en spotify)?$/i
+    /^(?:(?:oye|por favor|puedes|podrías|podrias|quiero que)\s+)*(?:pon(?:me|gas)?|reproduce|reproduzcas|toca|play)\s+(?:(?:la|el)\s+)?(?:m[uú]sica|canciones|temas|rolas)\s+(?:de|del)\s+(?:el\s+)?(?:artista\s+)?(.+?)(?:\s+en spotify)?$/i,
+    /^(?:(?:oye|por favor|puedes|podrías|podrias)\s+)*(?:pon|ponme|pongas|reproduce|toca)\s+(?:algo|canciones|temas)\s+de\s+(.+?)(?:\s+en spotify)?$/i,
+    /^quiero escuchar (?:m[uú]sica|canciones|temas) de (.+?)(?:\s+en spotify)?$/i
   ];
   for (const pattern of artistPatterns) {
     const artistMatch = clean.match(pattern);
     if (artistMatch?.[1]?.trim()) return `artist:${artistAlias(artistMatch[1])}`;
   }
 
-  const match = clean.match(/^(?:(?:oye|por favor|puedes|podrías|podrias|quiero que)\\s+)*(?:pon(?:me|gas)?|reproduce|reproduzcas|reprodúceme|reproduceme|toca|escucha|play)\\s+(?:(?:(?:la|el)\\s+)?(?:canción|cancion|tema|rola)\\s+)?(.+)$/i)
-    ?? clean.match(/^quiero escuchar\\s+(.+)$/i);
+  const match = clean.match(/^(?:(?:oye|por favor|puedes|podrías|podrias|quiero que)\s+)*(?:pon(?:me|gas)?|reproduce|reproduzcas|reprodúceme|reproduceme|toca|escucha|play)\s+(?:(?:(?:la|el)\s+)?(?:canción|cancion|tema|rola)\s+)?(.+)$/i)
+    ?? clean.match(/^quiero escuchar\s+(.+)$/i);
   if (!match?.[1]) return null;
 
   const target = match[1]
-    .replace(/\\s+(?:en spotify|por favor|ahora|cuando puedas)$/i, "")
+    .replace(/\s+(?:en spotify|por favor|ahora|cuando puedas)$/i, "")
     .replace(/^[\"'“”‘’]+|[\"'“”‘’]+$/g, "")
     .trim();
   if (!target || target.length > 140) return null;
 
-  const artistOnly = target.match(/^(?:(?:la )?m[uú]sica|canciones|temas|rolas|discograf[ií]a|algo)\\s+(?:de|del)\\s+(?:artista\\s+)?(.+)$/i)
-    ?? target.match(/^artista\\s+(.+)$/i)
-    ?? target.match(/^del\\s+artista\\s+(.+)$/i);
+  const artistOnly = target.match(/^(?:(?:la )?m[uú]sica|canciones|temas|rolas|discograf[ií]a|algo)\s+(?:de|del)\s+(?:artista\s+)?(.+)$/i)
+    ?? target.match(/^artista\s+(.+)$/i)
+    ?? target.match(/^del\s+artista\s+(.+)$/i);
   if (artistOnly?.[1]?.trim()) return `artist:${artistAlias(artistOnly[1])}`;
 
   const separator = target.toLocaleLowerCase("es").lastIndexOf(" de ");
