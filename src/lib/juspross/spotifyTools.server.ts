@@ -103,7 +103,7 @@ export async function executeSpotifyTool(request: Request, name: string, args: R
       case "spotify_play_personalized": {
         const top = await spotifyRequest(request, "/me/top/tracks?time_range=medium_term&limit=20", "GET");
         if (!top.response.ok) {
-          if (top.response.status === 403) return { ok: false, message: top.scope.split(/\\s+/).includes("user-top-read") ? "Spotify mantiene tu cuenta conectada, pero ha rechazado la consulta de tus canciones más escuchadas. Puedes pedirme un artista o una canción concreta; no hace falta desconectar la cuenta." : "Tu cuenta de Spotify sigue conectada, pero la autorización actual no incluye el permiso para consultar tus canciones más escuchadas. Vuelve a conectar Spotify desde Ajustes y acepta el permiso adicional.", setCookie: top.setCookie };
+          if (top.response.status === 403) return { ok: false, message: top.scope.split(/\s+/).includes("user-top-read") ? "Spotify mantiene tu cuenta conectada, pero ha rechazado la consulta de tus canciones más escuchadas. Puedes pedirme un artista o una canción concreta; no hace falta desconectar la cuenta." : "Tu cuenta de Spotify sigue conectada, pero la autorización actual no incluye el permiso para consultar tus canciones más escuchadas. Vuelve a conectar Spotify desde Ajustes y acepta el permiso adicional.", setCookie: top.setCookie };
           return { ok: false, message: `No pude consultar tus gustos musicales en Spotify (HTTP ${top.response.status}).`, setCookie: top.setCookie };
         }
         const data = await top.response.json().catch(() => ({})) as { items?: { name?: string; artists?: { name?: string }[] }[] };
@@ -149,7 +149,7 @@ export async function executeSpotifyTool(request: Request, name: string, args: R
         const query = typeof args["query"] === "string" ? args["query"].trim().slice(0, 160) : "";
         const kind = args["kind"] === "playlist" ? "playlist" : args["kind"] === "track" ? "track" : "";
         if (!query || !kind) return { ok: false, message: "Falta una búsqueda válida y su tipo (canción o playlist)." };
-        const trackQuery = query.match(/^track:(.*?)\\s+artist:(.+)$/i);
+        const trackQuery = query.match(/^track:(.*?)\s+artist:(.+)$/i);
         const artistQuery = query.match(/^artist:(.+)$/i);
         const requestedTitle = trackQuery?.[1]?.trim() ?? (artistQuery ? "" : query.replace(/^track:/i, "").trim());
         const requestedArtist = trackQuery?.[2]?.trim() ?? artistQuery?.[1]?.trim() ?? "";
@@ -162,7 +162,7 @@ export async function executeSpotifyTool(request: Request, name: string, args: R
           tracks?: { items?: { name?: string; uri?: string; popularity?: number; artists?: { name?: string }[]; album?: { uri?: string } }[] };
           playlists?: { items?: { uri?: string }[] };
         };
-        const normalize = (value: string) => value.toLocaleLowerCase("es").normalize("NFD").replace(/[\\u0300-\\u036f]/g, "").replace(/[^a-z0-9 ]/g, " ").replace(/\\s+/g, " ").trim();
+        const normalize = (value: string) => value.toLocaleLowerCase("es").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
         const wantedTitle = normalize(requestedTitle);
         const wantedArtist = normalize(requestedArtist);
         const tracks = payload.tracks?.items ?? [];
