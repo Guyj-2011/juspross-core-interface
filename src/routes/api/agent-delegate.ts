@@ -20,7 +20,7 @@ const bad = (message: string, status = 400) => Response.json({ message }, { stat
 function extractRequestedTrackQuery(task: string): string | null {
   const clean = task.trim().replace(/[.!?]+$/, "");
   // No conviertas peticiones genéricas en el título literal "una canción".
-  if (/^(?:(?:oye|por favor)\\s+)*(?:pon(?:me|gas)?|reproduce|toca|play)\\s+(?:(?:la|una|un)\\s+)?(?:m[uú]sica|canci[oó]n|tema|rola)(?:\\s+(?:por favor|ahora))?$/i.test(clean)) return null;
+  if (/^(?:(?:oye|por favor)\s+)*(?:pon(?:me|gas)?|reproduce|toca|play)\s+(?:(?:la|una|un)\s+)?(?:m[uú]sica|canci[oó]n|tema|rola)(?:\s+(?:por favor|ahora))?$/i.test(clean)) return null;
   const artistAlias = (value: string) => {
     const name = value.trim().replace(/^[\"'“”‘’]+|[\"'“”‘’]+$/g, "").trim();
     // El reconocimiento de voz suele transcribir VIUS como "Views".
@@ -30,6 +30,7 @@ function extractRequestedTrackQuery(task: string): string | null {
   // Detecta primero peticiones de música por artista para que "música"
   // nunca se convierta accidentalmente en el título de una canción.
   const artistPatterns = [
+    /^(?:(?:oye|por favor|puedes|podrías|podrias)\s+)*(?:pon(?:me|gas)?|reproduce|toca|play)\s+(?:(?:una|la)\s+)?(?:canci[oó]n|tema|rola)\s+(?:de|del)\s+(.+?)(?:\s+en spotify)?$/i,
     /^(?:(?:oye|por favor|puedes|podrías|podrias|quiero que)\s+)*(?:pon(?:me|gas)?|reproduce|reproduzcas|toca|play)\s+(?:(?:la|el)\s+)?(?:m[uú]sica|canciones|temas|rolas)\s+(?:de|del)\s+(?:el\s+)?(?:artista\s+)?(.+?)(?:\s+en spotify)?$/i,
     /^(?:(?:oye|por favor|puedes|podrías|podrias)\s+)*(?:pon|ponme|pongas|reproduce|toca)\s+(?:algo|canciones|temas)\s+de\s+(.+?)(?:\s+en spotify)?$/i,
     /^quiero escuchar (?:m[uú]sica|canciones|temas) de (.+?)(?:\s+en spotify)?$/i
@@ -39,7 +40,7 @@ function extractRequestedTrackQuery(task: string): string | null {
     if (artistMatch?.[1]?.trim()) return `artist:${artistAlias(artistMatch[1])}`;
   }
 
-  const match = clean.match(/^(?:(?:oye|por favor|puedes|podrías|podrias|quiero que)\s+)*(?:pon(?:me|gas)?|reproduce|reproduzcas|reprodúceme|reproduceme|toca|escucha|play)\s+(?:(?:(?:la|el)\s+)?(?:canción|cancion|tema|rola)\s+)?(.+)$/i)
+  const match = clean.match(/^(?:(?:oye|por favor|puedes|podrías|podrias|quiero que)\s+)*(?:pon(?:me|gas)?|reproduce|reproduzcas|reprodúceme|reproduceme|toca|escucha|play)\s+(?:(?:(?:la|el|una|un)\s+)?(?:canción|cancion|tema|rola)\s+)?(.+)$/i)
     ?? clean.match(/^quiero escuchar\s+(.+)$/i);
   if (!match?.[1]) return null;
 
@@ -93,16 +94,21 @@ export const Route = createFileRoute("/api/agent-delegate")({
         const task = typeof body["task"] === "string" ? body["task"].trim() : "";
         const context = typeof body["context"] === "string" ? body["context"].trim() : "";
         const openOnly = body["intent"] === "open_spotify_desktop";
-        const normalizedTask = task.toLocaleLowerCase("es").normalize("NFD").replace(/[\\u0300-\\u036f]/g, "");
-        const volumeDirection = /\\b(sub(e|ir)|aumenta|s[uú]bele)\\b.*\\bvolumen\\b/.test(normalizedTask)
+        const normalizedTask = task.toLocaleLowerCase("es").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        const volumeDirection = /\b(sub(e|ir)|aumenta|s[uú]bele)\b.*\bvolumen\b/.test(normalizedTask)
           ? "up"
-          : /\\b(baj(a|ar)|disminuye|reduce)\\b.*\\bvolumen\\b/.test(normalizedTask)
+          : /\b(baj(a|ar)|disminuye|reduce)\b.*\bvolumen\b/.test(normalizedTask)
             ? "down"
             : null;
         const genericMusic = !openOnly && !extractRequestedTrackQuery(task) &&
-          /\\b(pon|ponme|reproduce|toca|play|ponle play)\\b/.test(normalizedTask) &&
-          /\\b(m[uú]sica|canci[oó]n|tema|rola)\\b/.test(normalizedTask);
-        const requestedTrackQuery = openOnly || volumeDirection || genericMusic ? null : extractRequestedTrackQuery(task);
+          /\b(pon|ponme|reproduce|toca|play|ponle play)\b/.test(normalizedTask) &&
+          /\b(m[uú]sica|canci[oó]n|tema|rola)\b/.test(normalizedTask);
+        const transportTool =
+          /\b(pausa|pausar|deten|detener|para)\b/.test(normalizedTask) ? "spotify_pause" :
+          /\b(ponle play|dale play|play|reanuda|reanudar|continua|continuar)\b/.test(normalizedTask) ? "spotify_resume" :
+          /\b(siguiente|avanza|avanzar|salta a la siguiente)\b/.test(normalizedTask) ? "spotify_next" :
+          /\b(anterior|retrocede|retroceder|vuelve a la anterior)\b/.test(normalizedTask) ? "spotify_previous" : null;
+        const requestedTrackQuery = openOnly || volumeDirection || genericMusic || transportTool ? null : extractRequestedTrackQuery(task);
         if (!task || task.length > MAX_TASK) return bad("La tarea debe tener entre 1 y 8000 caracteres.");
         if (context.length > MAX_CONTEXT) return bad("El contexto es demasiado largo.");
 
@@ -149,9 +155,11 @@ export const Route = createFileRoute("/api/agent-delegate")({
                     ? { type: "function", function: { name: "spotify_volume" } }
                     : genericMusic
                       ? { type: "function", function: { name: "spotify_play_personalized" } }
-                      : requestedTrackQuery
-                        ? { type: "function", function: { name: "spotify_search_and_play" } }
-                        : "auto",
+                      : transportTool
+                        ? { type: "function", function: { name: transportTool } }
+                        : requestedTrackQuery
+                          ? { type: "function", function: { name: "spotify_search_and_play" } }
+                          : "auto",
                 messages
               })
             });
@@ -234,6 +242,9 @@ export const Route = createFileRoute("/api/agent-delegate")({
               }
               if (name === "spotify_volume" && volumeDirection) {
                 args = { direction: volumeDirection };
+              }
+              if (transportTool && name === transportTool) {
+                args = {};
               }
               const result = await executeSpotifyTool(request, name, args);
               if (result.setCookie) refreshedCookie = result.setCookie;
