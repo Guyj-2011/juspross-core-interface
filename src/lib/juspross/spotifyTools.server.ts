@@ -185,7 +185,7 @@ export async function executeSpotifyTool(request: Request, name: string, args: R
           const artists = (item.artists ?? []).map((artist) => normalizeArtist(artist.name ?? ""));
           const titleExact = Boolean(wantedTitle) && title === wantedTitle;
           // Permite títulos oficiales con subtítulos entre paréntesis, como Waka Waka (This Time for Africa).
-          const titleMatch = Boolean(wantedTitle) && (titleExact || title.startsWith(`${wantedTitle} (`) || title.startsWith(`${wantedTitle} -`));
+          const titleMatch = Boolean(wantedTitle) && (titleExact || title.startsWith(`${wantedTitle} `));
           const artistExact = !wantedArtist || artists.some((artist) => artist === wantedArtist);
           const artistClose = !wantedArtist || artists.some((artist) => artist.includes(wantedArtist) || wantedArtist.includes(artist));
           const score = (titleExact ? 110 : titleMatch ? 90 : 0) + (artistExact && wantedArtist ? 100 : artistClose && wantedArtist ? 35 : 0) + (item.popularity ?? 0) / 100;
