@@ -176,21 +176,24 @@ export async function executeSpotifyTool(request: Request, name: string, args: R
           playlists?: { items?: { uri?: string }[] };
         };
         const normalize = (value: string) => value.toLocaleLowerCase("es").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
+        const normalizeArtist = (value: string) => normalize(value).replace(/\\s/g, "");
         const wantedTitle = normalize(requestedTitle);
-        const wantedArtist = normalize(requestedArtist);
+        const wantedArtist = normalizeArtist(requestedArtist);
         const tracks = payload.tracks?.items ?? [];
         const ranked = tracks.map((item) => {
           const title = normalize(item.name ?? "");
-          const artists = (item.artists ?? []).map((artist) => normalize(artist.name ?? ""));
+          const artists = (item.artists ?? []).map((artist) => normalizeArtist(artist.name ?? ""));
           const titleExact = Boolean(wantedTitle) && title === wantedTitle;
+          // Permite títulos oficiales con subtítulos entre paréntesis, como Waka Waka (This Time for Africa).
+          const titleMatch = Boolean(wantedTitle) && (titleExact || title.startsWith(`${wantedTitle} (`) || title.startsWith(`${wantedTitle} -`));
           const artistExact = !wantedArtist || artists.some((artist) => artist === wantedArtist);
           const artistClose = !wantedArtist || artists.some((artist) => artist.includes(wantedArtist) || wantedArtist.includes(artist));
-          const score = (titleExact ? 100 : 0) + (artistExact && wantedArtist ? 100 : artistClose && wantedArtist ? 35 : 0) + (item.popularity ?? 0) / 100;
-          return { item, score, titleExact, artistExact, artistClose };
+          const score = (titleExact ? 110 : titleMatch ? 90 : 0) + (artistExact && wantedArtist ? 100 : artistClose && wantedArtist ? 35 : 0) + (item.popularity ?? 0) / 100;
+          return { item, score, titleExact, titleMatch, artistExact, artistClose };
         }).sort((a, b) => b.score - a.score);
         const best = ranked.find((candidate) => {
           if (artistQuery) return candidate.artistExact || candidate.artistClose;
-          if (!candidate.titleExact) return false;
+          if (!candidate.titleMatch) return false;
           return !wantedArtist || candidate.artistExact || candidate.artistClose;
         });
         const track = kind === "track" ? best?.item : undefined;
