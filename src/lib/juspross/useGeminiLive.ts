@@ -82,6 +82,7 @@ export function useGeminiLive() {
     let botId: string | null = null;
     let userText = "";
     let botText = "";
+    const delegatedTurnResults = new Map<string, Record<string, unknown>>();
     let resumeAudio: (() => void) | null = null;
 
     const flushPlayback = () => {
@@ -245,7 +246,9 @@ export function useGeminiLive() {
             } catch (error) {
               const message = error instanceof Error ? error.message : "No pude analizar la pantalla.";
               useV2.getState().addMessage({ role: "assistant", text: message, error: true });
-              responses.push({ id: call.id, name: call.name, response: { error: message } });
+              const toolResult = { error: message };
+            delegatedTurnResults.set(taskKey, toolResult);
+            responses.push({ id: call.id, name: call.name, response: toolResult });
             }
             continue;
           }
@@ -256,6 +259,12 @@ export function useGeminiLive() {
           const args = call.args ?? {};
           const task = typeof args["task"] === "string" ? args["task"].trim() : "";
           const context = typeof args["context"] === "string" ? args["context"].trim() : "";
+          const taskKey = task.toLocaleLowerCase("es").replace(/\s+/g, " ").trim();
+          const previousResult = delegatedTurnResults.get(taskKey);
+          if (previousResult) {
+            responses.push({ id: call.id, name: call.name, response: previousResult });
+            continue;
+          }
           if (!task) {
             responses.push({ id: call.id, name: call.name, response: { error: "Nemotron necesita una descripción de la tarea." } });
             continue;
@@ -264,7 +273,9 @@ export function useGeminiLive() {
           if (windowAction) {
             const localResult = await controlSpotifyWindow(windowAction);
             const message = describeSpotifyWindowResult(windowAction, localResult);
-            responses.push({ id: call.id, name: call.name, response: { ok: localResult.ok, result: message } });
+            const toolResult = { ok: localResult.ok, result: message };
+            delegatedTurnResults.set(taskKey, toolResult);
+            responses.push({ id: call.id, name: call.name, response: toolResult });
             continue;
           }
           try {
@@ -282,7 +293,9 @@ export function useGeminiLive() {
               if (!localResult.ok) throw new Error(result);
             }
             if (!result) throw new Error(payload.message ?? "Nemotron no devolvió un resultado.");
-            responses.push({ id: call.id, name: call.name, response: { ok: true, result } });
+            const toolResult = { ok: true, result };
+            delegatedTurnResults.set(taskKey, toolResult);
+            responses.push({ id: call.id, name: call.name, response: toolResult });
           } catch (error) {
             const message = error instanceof Error ? error.message : "No se pudo completar la orden.";
             responses.push({ id: call.id, name: call.name, response: { error: message } });
@@ -351,6 +364,7 @@ export function useGeminiLive() {
           st.setState("idle");
         }
         if (sc.turnComplete || sc.interrupted) {
+          delegatedTurnResults.clear();
           userId = botId = null;
           userText = botText = "";
           if (!sc.interrupted && outCtx) {
