@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Agente local de Juspross — abre Spotify en Windows y NADA más.
+// Agente local de Juspross — abre Spotify y controla únicamente su ventana en Windows.
 // Sin dependencias. Escucha solo en 127.0.0.1. No acepta comandos arbitrarios ni accede a archivos del usuario.
 import http from "node:http";
 import crypto from "node:crypto";
@@ -67,7 +67,6 @@ exit 2
   }, () => {});
 }
 
-/** Acción fija: iniciar Spotify y ajustar su ventana a un tamaño compacto. */
 /** Ejecuta únicamente controles de ventana permitidos; cerrar es un cierre normal, nunca un kill forzado. */
 export function controlSpotifyWindow(action) {
   const scripts = {
@@ -113,6 +112,7 @@ exit 3
   });
 }
 
+/** Acción fija: iniciar Spotify y ajustar su ventana a un tamaño compacto. */
 export function launchSpotifyWindows() {
   const candidates = [
     process.env.APPDATA && path.join(process.env.APPDATA, "Spotify", "Spotify.exe"),
