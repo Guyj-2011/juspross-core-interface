@@ -130,7 +130,6 @@ export const Route = createFileRoute("/api/agent-delegate")({
         if (openOnly) {
           return Response.json({
             ok: true,
-            delegatedTo: NEMOTRON_MODEL,
             action: "open_spotify_desktop",
             result: "Solicitud de apertura enviada al agente local."
           }, { headers: { "Cache-Control": "no-store" } });
