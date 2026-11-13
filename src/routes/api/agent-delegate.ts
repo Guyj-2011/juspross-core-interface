@@ -98,14 +98,14 @@ export const Route = createFileRoute("/api/agent-delegate")({
           (/\\b(abre|abrir|inicia|iniciar|lanza|lanzar|arranca|arrancar|open|launch|start)\\b/.test(normalizedTask) &&
             /\\bspotify\\b/.test(normalizedTask) &&
             !/\\b(reproduc\\w*|pon|play|pausa\\w*|siguiente|anterior|reanuda\\w*|cancion|tema|playlist|musica|artista)\\b/.test(normalizedTask));
-        const volumeTargetMatch = normalizedTask.match(/\\b(?:al|a|hasta|en)\\s+(?:el\\s+)?(\\d{1,3})\\s*(?:%|por ciento)?\\b/);
+        const volumeTargetMatch = normalizedTask.match(/\\b(?:al|a|hasta|en)\\s+(?:el\\s+)?(\\d{1,3})(?:\\s*%|\\s+por ciento|(?=\\s|$|[.,!?]))/);
         const mentionsVolume = /\\bvolumen\\b/.test(normalizedTask) ||
-          /\\b(sub(e|ir)|baj(a|ar)|ajusta|ajustar|pon|ponlo|dejalo)\\b.*\\b(?:al|a|hasta|en)\\s+(?:el\\s+)?\\d{1,3}/.test(normalizedTask);
+          /\\b(sub\\w*|baj\\w*|ajusta\\w*|ponlo|dejalo)\\b.*\\b(?:al|a|hasta|en)\\s+(?:el\\s+)?\\d{1,3}/.test(normalizedTask);
         const volumeTarget = mentionsVolume && volumeTargetMatch ? Math.max(0, Math.min(100, Number(volumeTargetMatch[1]))) : null;
         const volumeDirection = mentionsVolume && volumeTarget === null
-          ? /\\b(sub(e|ir)|aumenta|s[uú]bele)\\b/.test(normalizedTask)
+          ? /\\b(sub\\w*|aumenta|suele|s[uú]bele)\\b/.test(normalizedTask)
             ? "up"
-            : /\\b(baj(a|ar)|disminuye|reduce)\\b/.test(normalizedTask)
+            : /\\b(baj\\w*|disminuye|reduce)\\b/.test(normalizedTask)
               ? "down"
               : null
           : null;
