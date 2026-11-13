@@ -79,8 +79,6 @@ export interface FileRoutesByFullPath {
   '/api/nemotron': typeof ApiNemotronRoute
   '/api/speech': typeof ApiSpeechRoute
   '/api/vision': typeof ApiVisionRoute
-  '/api/vision': typeof ApiVisionRoute
-  '/api/vision': typeof ApiVisionRoute
   '/api/spotify': typeof ApiSpotifyRouteWithChildren
   '/api/spotify/callback': typeof ApiSpotifyCallbackRoute
   '/api/spotify/connect': typeof ApiSpotifyConnectRoute
