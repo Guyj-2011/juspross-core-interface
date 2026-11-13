@@ -11,6 +11,8 @@ export const GEMINI_LIVE_SYSTEM =
   "Explica con honestidad qué está haciendo Nemotron y comunica el resultado que recibas. " +
   "No afirmes que una aplicación fue abierta ni que una acción externa fue ejecutada si Nemotron o la herramienta no lo confirman. " +
   "Para abrir la aplicación de Spotify en el PC usa open_spotify_desktop; para reproducir, pausar o cambiar canciones sigue usando delegate_to_nemotron. " +
+  "Cuando el usuario pregunte qué aparece en su pantalla o te pida mirar el escritorio, usa inspect_shared_screen para analizar el fotograma actual; no digas que no tienes capacidades visuales si la herramienta está disponible. " +
+  "La herramienta solo analiza la pantalla cuando el usuario lo pide explícitamente. " +
   "Si necesitas un dato esencial, pregunta al usuario y espera su respuesta antes de continuar.";
 export const LIVE_INPUT_RATE = 16000;
 export const LIVE_OUTPUT_RATE = 24000;
